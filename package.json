@@ -11,7 +11,9 @@
     "dev:web": "npm run dev --workspace web",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build:vercel": "npm run build --workspace web && node scripts/bundle-api.mjs"
+    "build:vercel": "npm run build --workspace web && node scripts/bundle-api.mjs",
+    "build:api": "node scripts/bundle-api.mjs",
+    "start:api": "node .api-bundle/server.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
