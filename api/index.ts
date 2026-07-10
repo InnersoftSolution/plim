@@ -17,7 +17,10 @@ let ready: Promise<FastifyInstance> | null = null;
 function getApp(): Promise<FastifyInstance> {
   if (!ready) {
     const app = buildApp();
-    ready = app.ready().then(() => app);
+    ready = (async () => {
+      await app.ready();
+      return app;
+    })();
   }
   return ready;
 }
