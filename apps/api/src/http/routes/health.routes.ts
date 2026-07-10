@@ -5,7 +5,7 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async () => ({
     service: 'plim-api',
     status: 'ok',
-    message: 'API do Plim no ar. Use o app em http://localhost:5180.',
+    message: 'API do Plim no ar.',
   }));
   app.get('/health', async () => ({ status: 'ok', service: 'plim-api' }));
 }

@@ -1,12 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:vercel",
+  "buildCommand": "npm run build --workspace web",
   "outputDirectory": "apps/web/dist",
   "installCommand": "npm install",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "https://api-production-7e38f.up.railway.app/$1"
     },
     {
       "source": "/((?!api/).*)",
