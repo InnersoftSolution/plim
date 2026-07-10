@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build --workspace web",
+  "buildCommand": "npm run build --workspace web && npx esbuild apps/api/src/app.ts --bundle --platform=node --format=esm --target=node20 --external:fastify --external:zod --external:@supabase/supabase-js --external:@anthropic-ai/sdk --external:dotenv --outfile=.api-bundle/app.mjs",
   "outputDirectory": "apps/web/dist",
   "installCommand": "npm install",
   "rewrites": [
