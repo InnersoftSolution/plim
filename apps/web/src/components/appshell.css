@@ -1,0 +1,243 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-bg-default);
+}
+
+/* ── barra lateral ───────────────────────── */
+.shell-sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border-default);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.shell-sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.shell-brand {
+  padding: 4px 8px 20px;
+}
+/* elementos só do mobile — escondidos no desktop */
+.shell-mobilebar,
+.shell-backdrop,
+.shell-close {
+  display: none;
+}
+.shell-burger,
+.shell-close {
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  color: var(--color-text-default);
+  cursor: pointer;
+}
+.shell-burger:hover,
+.shell-close:hover {
+  background: var(--color-bg-elevated);
+}
+.shell-close {
+  margin-bottom: 16px;
+}
+.shell-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.shell-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--radius-nav-item);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.shell-nav__item:hover {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-text-default);
+}
+.shell-nav__item.is-active {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+}
+.shell-nav__item svg {
+  flex-shrink: 0;
+}
+.shell-nav__soon {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-elevated);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+/* ── grupo com submenu ───────────────────── */
+.shell-nav__group {
+  display: flex;
+  flex-direction: column;
+}
+.shell-nav__item--group {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.shell-nav__chev {
+  margin-left: auto;
+  color: var(--color-text-subtle);
+  transition: transform 160ms ease;
+}
+.shell-nav__chev.is-open {
+  transform: rotate(180deg);
+}
+.shell-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 2px 15px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border-default);
+}
+.shell-subnav__item {
+  padding: 8px 12px;
+  border-radius: var(--radius-nav-item);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.shell-subnav__item:hover {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-text-default);
+}
+.shell-subnav__item.is-active {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+}
+
+.shell-foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shell-foot__user {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── área de conteúdo ────────────────────── */
+.shell-content {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* ── placeholder "em breve" ──────────────── */
+.shell-placeholder {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 80px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.shell-placeholder__icon {
+  font-size: 40px;
+}
+.shell-placeholder h1 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text-default);
+}
+.shell-placeholder p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* ── responsivo: hambúrguer + drawer ─────── */
+@media (max-width: 720px) {
+  .shell {
+    flex-direction: column;
+  }
+  /* barra superior fixa com o hambúrguer */
+  .shell-mobilebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border-default);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  /* a barra lateral vira um drawer que desliza da esquerda */
+  .shell-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 268px;
+    max-width: 82vw;
+    padding: 18px 16px;
+    transform: translateX(-100%);
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 50;
+    box-shadow: 0 0 60px rgba(13, 17, 36, 0.28);
+  }
+  .shell--menu-open .shell-sidebar {
+    transform: translateX(0);
+  }
+  .shell-close {
+    display: flex;
+  }
+  .shell-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(13, 17, 36, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+    animation: shell-fade 160ms ease;
+  }
+}
+
+@keyframes shell-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

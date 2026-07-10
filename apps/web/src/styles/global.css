@@ -1,0 +1,19 @@
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-default);
+  color: var(--color-text-default);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-financial] {
+  font-family: var(--font-mono);
+}

@@ -1,0 +1,78 @@
+/*
+ * Tokens do design system Plim — paleta oficial (Figma, Indigo).
+ * Estrutura: primitivas → semânticas. Componentes usam SEMPRE as semânticas
+ * (--color-*, --radius-*); nunca hex direto.
+ */
+:root {
+  /* ── primitivas: cores ─────────────────────────────── */
+  --indigo-50: #eef0ff;
+  --indigo-100: #dee2ff;
+  --indigo-300: #aab4ff;
+  --indigo-500: #5b6cff; /* Plim Indigo */
+  --indigo-600: #4a57f0; /* Indigo 600 (hover) */
+  --indigo-700: #3a46d9;
+  --coral-400: #ff8a70;
+  --coral-500: #ff6b4a; /* Faísca Coral */
+  --rose-500: #f43f5e; /* Rosa Plim */
+  --rose-600: #e11d48;
+  --green-500: #15b377; /* Pago / Recebido */
+  --amber-500: #f5a623; /* Pendente */
+  --ink-900: #0d1124; /* Ink / Neutral 900 */
+  --ink-800: #1e2547; /* Neutral 800 */
+  --ink-700: #3a4067;
+  --ink-600: #5b6079; /* Neutral 600 */
+  --ink-400: #8a8fa6; /* Neutral 400 */
+  --paper-0: #ffffff; /* White */
+  --paper-100: #f6f7fb; /* Neutral 100 */
+  --paper-200: #edeff6; /* Neutral 200 */
+  --paper-300: #e2e6f0;
+
+  /* ── semânticas: cores ─────────────────────────────── */
+  --color-brand-primary: var(--indigo-500);
+  --color-brand-primary-hover: var(--indigo-600);
+  --color-brand-primary-deep: var(--indigo-700);
+  --color-brand-accent: var(--coral-500);
+  --color-brand-accent-soft: var(--coral-400);
+  --color-brand-rose: var(--rose-500);
+  --gradient-hero: linear-gradient(120deg, var(--rose-500) 0%, var(--rose-600) 42%, var(--indigo-600) 100%);
+  --color-text-default: var(--ink-900);
+  --color-text-muted: var(--ink-600);
+  --color-text-subtle: var(--ink-400);
+  --color-text-inverse: var(--paper-0);
+  --color-bg-default: var(--paper-100);
+  --color-bg-surface: var(--paper-0);
+  --color-bg-elevated: var(--paper-200);
+  --color-bg-dark: var(--ink-900);
+  --color-bg-dark-2: var(--ink-800);
+  --color-bg-brand: var(--indigo-500);
+  --color-bg-brand-soft: var(--indigo-50);
+  --color-bg-brand-tint: var(--indigo-100);
+  --color-border-default: var(--paper-200);
+  --color-border-dark: var(--ink-700);
+  --color-border-brand: var(--indigo-100);
+  --color-status-positive: var(--green-500);
+  --color-status-positive-bg: #e6f8f1;
+  --color-status-warning: var(--amber-500);
+  --color-status-warning-bg: #fef5e4;
+
+  /* ── tipografia ────────────────────────────────────── */
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ── radius ────────────────────────────────────────── */
+  --radius-card: 22px;
+  --radius-card-lg: 24px;
+  --radius-modal: 24px;
+  --radius-button: 999px;
+  --radius-pill: 999px;
+  --radius-input: 11px;
+  --radius-nav-item: 11px;
+  --radius-avatar: 999px;
+
+  /* ── sombras (base Ink #0d1124) ────────────────────── */
+  --shadow-sm: 0 14px 34px -16px rgba(13, 17, 36, 0.16);
+  --shadow-md: 0 20px 40px -26px rgba(13, 17, 36, 0.22);
+  --shadow-lg: 0 26px 50px -24px rgba(13, 17, 36, 0.28);
+  --shadow-xl: 0 34px 70px -34px rgba(13, 17, 36, 0.2);
+  --shadow-brand: 0 14px 34px -12px rgba(91, 108, 255, 0.55);
+}

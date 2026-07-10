@@ -1,0 +1,343 @@
+/* ── Módulo Atividades — MOBILE FIRST ──────────────────────
+   Base = mobile (≤640px): lista agrupada por status, grupos colapsáveis.
+   Tablet (641–1024px): 2 colunas. Desktop (>1024px): kanban de 4 colunas.
+──────────────────────────────────────────────────────────── */
+.act {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 16px 64px; /* respiro lateral no mobile */
+}
+.act-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* ── header: mobile empilha (título → texto → botão full width) ── */
+.act .fin-head--row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.act .fin-head--row > div {
+  min-width: 0;
+}
+.act .fin-head--row .btn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+}
+
+/* ── plano da semana: compacto no mobile ── */
+.act-week {
+  border: 1px solid var(--color-border-subtle, #eee);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--color-surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.act-week__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.act-week__title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 8px;
+}
+.act-week__range {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.act-week__sub {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+.act-week__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 44px; /* área de toque confortável */
+  padding: 0 2px;
+}
+.act-week__toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand-primary);
+}
+.act-summary {
+  display: flex;
+  flex-wrap: wrap; /* badges quebram linha naturalmente */
+  gap: 6px;
+}
+.act-summary__pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--indigo-50, #eef0ff);
+  color: var(--color-brand-primary);
+}
+.act-summary__pill.is-overdue { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
+.act-summary__pill.is-done { background: #e9f7ef; color: #1a7f4b; }
+
+/* ── lista por sócio: MOBILE = grupos empilhados, cada linha vira cartão ── */
+.act-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.act-group {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border-subtle, #eee);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.act-group__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-subtle, #eee);
+  background: var(--color-surface-subtle, #f7f7fb);
+}
+.act-group__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.act-group__name { font-weight: 700; font-size: 15px; color: var(--ink-900); }
+.act-group__count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* tabela div-based: mobile-first (cada linha = cartão empilhado) */
+.act-table { display: flex; flex-direction: column; }
+.act-table__head { display: none; } /* cabeçalho só aparece no desktop */
+
+.act-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-border-subtle, #f0f0f4);
+  cursor: pointer;
+  padding: 14px;
+}
+.act-row:first-child { border-top: none; }
+.act-row:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+.act-row__title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink-900);
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* mobile: célula mostra o rótulo do campo antes do valor */
+.act-row__cell {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  display: flex;
+  gap: 6px;
+}
+.act-row__cell::before {
+  content: attr(data-label) ':';
+  font-weight: 600;
+  color: var(--color-text-subtle, #98a2b3);
+}
+.act-row__cell.is-overdue { color: var(--rose-600); font-weight: 600; }
+.act-row__cell.is-overdue::before { color: var(--rose-600); }
+
+/* estado vazio genérico (reaproveitado no detalhe/checklist) */
+.act-col__empty {
+  color: var(--color-text-subtle, #aaa);
+  font-size: 13px;
+  padding: 6px 0;
+  margin: 0;
+}
+
+/* ── badge de status ── */
+.act-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.act-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.act-status--todo { background: #eef1f4; color: #64748b; }
+.act-status--in_progress { background: var(--indigo-50, #eef0ff); color: var(--color-brand-primary); }
+.act-status--blocked { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
+.act-status--done { background: #e9f7ef; color: #1a7f4b; }
+.act-status--cancelled { background: #eef1f4; color: #94a3b8; }
+
+/* ── prioridade / badges ── */
+.act-prio {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.act-prio--low { background: #eef1f4; color: #64748b; }
+.act-prio--medium { background: var(--indigo-50, #eef0ff); color: var(--color-brand-primary); }
+.act-prio--high { background: #fff4e5; color: #b76e00; }
+.act-prio--urgent { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
+
+.act-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+.act-badge--overdue { background: var(--rose-600); color: #fff; }
+
+/* ── formulário (mobile: 1 coluna) ── */
+.act-form { display: flex; flex-direction: column; gap: 14px; }
+.act-form__row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.act-cllist { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.act-cllist li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-surface-subtle, #f7f7fb);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.act-cllist li button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  min-width: 40px;
+  min-height: 40px; /* toque */
+}
+.act-cllist li button:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.act-cllist--interactive label { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 28px; }
+.act-cllist--interactive input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--color-brand-primary); }
+.act-cllist--interactive .is-done { text-decoration: line-through; color: var(--color-text-muted); }
+.act-cladd { display: flex; gap: 8px; }
+.act-cladd .field__input { flex: 1; min-height: 44px; }
+
+/* ── detalhe ── */
+.act-detail { display: flex; flex-direction: column; gap: 14px; }
+.act-detail__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.act-detail__status { font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+.act-detail__title { font-size: 18px; font-weight: 700; margin: 0; line-height: 1.3; }
+.act-detail__desc { color: var(--color-text-muted); font-size: 14px; margin: 0; }
+.act-detail__alert {
+  background: var(--rose-50, #fff1f2);
+  color: var(--rose-600);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.act-detail__alert--soft {
+  background: var(--color-status-warning-bg, #fff8e6);
+  color: var(--color-status-warning, #a8760a);
+}
+.act-detail__section { display: flex; flex-direction: column; gap: 8px; }
+.act-statusbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-statusbtn {
+  border: 1px solid var(--color-border-subtle, #ddd);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0 16px;
+  min-height: 44px; /* toque confortável */
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+.act-statusbtn:disabled { opacity: 0.5; cursor: default; }
+.act-statusbtn.is-active { background: var(--color-brand-primary); color: #fff; border-color: var(--color-brand-primary); }
+.act-statusbtn:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* ── TABLET / DESKTOP (≥641px): tabela real com cabeçalho ── */
+@media (min-width: 641px) {
+  .act { gap: 20px; padding: 28px 24px 72px; }
+  .act-week { padding: 16px; }
+  .act-week__title { font-size: 16px; }
+  .act-week__range { font-size: 14px; }
+  .act-form__row { grid-template-columns: 1fr 1fr; }
+  /* header: título e botão na mesma linha a partir do tablet */
+  .act .fin-head--row {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .act .fin-head--row .btn { width: auto; }
+
+  /* colunas: Atividade | Início | Prazo | Status */
+  .act-table__head,
+  .act-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2.4fr) 90px 90px minmax(120px, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+  .act-table__head {
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-subtle, #98a2b3);
+    border-bottom: 1px solid var(--color-border-subtle, #eee);
+    background: var(--color-surface, #fff);
+  }
+  .act-row { padding: 12px 16px; }
+  .act-row__title { font-size: 14px; }
+  .act-row__cell { font-size: 13px; color: var(--color-text-default, #475467); }
+  /* no desktop os rótulos ::before somem — o cabeçalho já nomeia as colunas */
+  .act-row__cell::before { content: none; }
+}

@@ -1,0 +1,162 @@
+/* Gráfico mensal da Central de Movimentações (CSS puro, design system). */
+.fchart-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  padding: 18px 20px 12px;
+}
+.fchart {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 170px;
+}
+.fchart__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.fchart__value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+.fchart__value.is-strong {
+  color: var(--color-text-default);
+  font-weight: 700;
+}
+.fchart__track {
+  flex: 1;
+  width: 100%;
+  max-width: 46px;
+  display: flex;
+  align-items: flex-end;
+}
+.fchart__bar {
+  width: 100%;
+  border-radius: 8px 8px 3px 3px;
+  background: var(--indigo-100);
+  transition: height 300ms ease;
+}
+.fchart__bar--current {
+  background: var(--color-brand-primary);
+}
+.fchart__bar--proj {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-bg-brand-soft),
+    var(--color-bg-brand-soft) 5px,
+    var(--indigo-100) 5px,
+    var(--indigo-100) 10px
+  );
+  border: 1.5px dashed var(--indigo-300);
+}
+.fchart__label {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  text-transform: capitalize;
+}
+.fchart__label.is-current {
+  color: var(--color-brand-primary-deep);
+  font-weight: 700;
+}
+.fchart__caption {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+}
+.fchart__empty {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  text-align: center;
+  padding: 40px 16px;
+}
+/* mobile: valores só no mês atual e na projeção (senão vira poluição) */
+@media (max-width: 560px) {
+  .fchart {
+    gap: 6px;
+    height: 140px;
+  }
+  .fchart__value:not(.is-strong) {
+    visibility: hidden;
+  }
+}
+
+/* cabeçalho do gráfico (título + legenda Real/Projeção) */
+.fchart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.fchart-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text-default);
+}
+.fchart-subtitle {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  max-width: 460px;
+}
+.fchart-legend {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.fchart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.fchart-legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+.fchart-legend__swatch--real { background: var(--color-brand-primary); }
+.fchart-legend__swatch--proj {
+  background: repeating-linear-gradient(-45deg,
+    var(--color-bg-brand-soft), var(--color-bg-brand-soft) 3px,
+    var(--indigo-100) 3px, var(--indigo-100) 6px);
+  border: 1.5px dashed var(--indigo-300);
+}
+/* aviso cauteloso/adaptativo abaixo da fórmula */
+.fchart__note {
+  margin-top: 6px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+}
+
+/* bloco "Como funciona a projeção?" */
+.fin-projexplain {
+  background: var(--color-bg-elevated);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.fin-projexplain__title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-default);
+  margin-bottom: 3px;
+}
+.fin-projexplain p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}

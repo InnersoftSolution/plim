@@ -1,0 +1,55 @@
+import type {
+  ConfirmationStatus,
+  ExpenseSplitMode,
+  MovementKind,
+  PaymentMethod,
+  PaymentStatus,
+} from '@plim/shared';
+
+/** Pagamento de acerto entre sócios (quitação total ou parcial). */
+export interface SettlementPayment {
+  id: string;
+  companyId: string;
+  fromMemberId: string;
+  toMemberId: string;
+  amountCents: number;
+  /** Data do pagamento (YYYY-MM-DD). */
+  paidOn: string;
+  method: PaymentMethod | null;
+  note: string | null;
+  status: 'confirmed' | 'cancelled';
+  createdAt: Date;
+}
+
+export interface ExpenseShare {
+  memberId: string;
+  shareCents: number;
+}
+
+export interface Expense {
+  id: string;
+  companyId: string;
+  /** expense = gasto (divide entre sócios); contribution = aporte (não divide). */
+  kind: MovementKind;
+  description: string;
+  /** Valor total em centavos inteiros. */
+  amountCents: number;
+  currencyCode: string | null;
+  /** Sócio que pagou a despesa. */
+  paidByMemberId: string;
+  /** Data do gasto (YYYY-MM-DD). */
+  spentOn: string;
+  splitMode: ExpenseSplitMode;
+  /** Parte de cada sócio (soma = amountCents). */
+  shares: ExpenseShare[];
+  note: string | null;
+  /** Só 'paid' entra nos cálculos; 'unpaid' = conta a pagar (só lembrete). */
+  paymentStatus: PaymentStatus;
+  /** Vencimento (YYYY-MM-DD) quando 'unpaid'; nulo quando já paga. */
+  dueDate: string | null;
+  /** Só 'confirmed' entra nos cálculos (total gasto, acertos, projeção). */
+  confirmationStatus: ConfirmationStatus;
+  /** Sócio que cadastrou (pode ≠ pagador). Nulo em dados antigos / modo dev. */
+  createdByMemberId: string | null;
+  createdAt: Date;
+}

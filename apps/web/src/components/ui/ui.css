@@ -1,0 +1,206 @@
+/* Componentes base — espelham os componentes do Figma (02 Components). */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-button);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn--primary {
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-brand-primary-hover);
+}
+.btn--secondary {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+  color: var(--color-text-default);
+}
+.btn--secondary:hover:not(:disabled) {
+  background: var(--color-bg-elevated);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--color-brand-primary);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--color-bg-brand-soft);
+}
+.btn--ghostInverse {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.btn--ghostInverse:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.26);
+}
+.btn--block {
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.field__control {
+  position: relative;
+  display: flex;
+}
+.field__input {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  width: 100%;
+  min-height: 48px;
+  color: var(--color-text-default);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 12px 15px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.field__input--with-action {
+  padding-right: 44px;
+}
+.field__reveal {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.field__reveal:hover {
+  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+}
+.field__input::placeholder {
+  color: var(--color-text-subtle);
+}
+.field__input:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
+}
+.field--error .field__input {
+  border-color: var(--color-brand-accent);
+  box-shadow: 0 0 0 1px var(--color-brand-accent);
+}
+.field__error {
+  font-size: 12px;
+  color: var(--color-brand-accent);
+}
+.field__hint {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.pw-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -8px;
+}
+.pw-strength__bars {
+  display: flex;
+  gap: 5px;
+}
+.pw-strength__bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  transition: background-color 160ms ease;
+}
+.pw-strength__label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.pw-strength__label strong {
+  font-weight: 700;
+}
+/* cores por nível */
+.pw--weak .pw-strength__bar--on { background: var(--color-brand-accent); }
+.pw--weak .pw-strength__label strong { color: var(--color-brand-accent); }
+.pw--fair .pw-strength__bar--on { background: var(--color-status-warning); }
+.pw--fair .pw-strength__label strong { color: var(--color-status-warning); }
+.pw--good .pw-strength__bar--on { background: var(--color-brand-primary); }
+.pw--good .pw-strength__label strong { color: var(--color-brand-primary); }
+.pw--strong .pw-strength__bar--on { background: var(--color-status-positive); }
+.pw--strong .pw-strength__label strong { color: var(--color-status-positive); }
+
+.form-error {
+  background: var(--color-status-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--color-status-warning) 35%, transparent);
+  border-radius: var(--radius-input);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-text-default);
+}
+
+/* select nativo estilizado (componente Select) — mesma cara dos inputs,
+   com seta própria do design system (consistente entre navegadores) */
+.field__select {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  width: 100%;
+  min-height: 48px;
+  color: var(--color-text-default);
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 12px 42px 12px 15px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6079' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* placeholder ("Selecione") em tom suave, como nos inputs */
+.field__select:has(option[value='']:checked) {
+  color: var(--color-text-subtle);
+}
+.field__select:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
+}
+.field--error .field__select {
+  border-color: var(--color-brand-accent);
+  box-shadow: 0 0 0 1px var(--color-brand-accent);
+}

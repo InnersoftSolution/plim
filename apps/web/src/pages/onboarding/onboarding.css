@@ -1,0 +1,552 @@
+.ob-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 32px 24px;
+  background: var(--color-bg-default);
+}
+
+.ob-brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ob-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  padding: 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+@media (max-width: 540px) {
+  .ob-card {
+    padding: 26px 20px;
+  }
+}
+
+/* progresso em pontos */
+.ob-steps {
+  display: flex;
+  gap: 8px;
+  align-self: center;
+}
+.ob-steps__dot {
+  width: 26px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-border-default);
+  transition: background-color 160ms ease;
+}
+.ob-steps__dot--active {
+  background: var(--color-brand-primary);
+}
+.ob-steps__dot--done {
+  background: var(--color-brand-primary-deep);
+}
+
+.ob-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ob-head h1 {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.ob-head h1 .ob-accent {
+  color: var(--color-brand-accent);
+}
+.ob-head p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.ob-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ob-textarea {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--color-text-default);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  outline: none;
+  resize: vertical;
+  min-height: 76px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ob-textarea:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
+}
+
+/* chips de modelo de negócio */
+.ob-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ob-chip {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.ob-chip:hover {
+  border-color: var(--color-brand-primary);
+  color: var(--color-text-default);
+}
+.ob-chip--active {
+  background: var(--color-bg-brand-soft);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary-deep);
+}
+
+/* importância de fazer agora */
+.ob-nudge {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--color-bg-brand-soft);
+  border: 1px solid var(--color-border-brand);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--color-text-default);
+  line-height: 1.45;
+}
+.ob-nudge__icon {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+/* lista de sócios */
+.ob-members {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ob-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+}
+.ob-member__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-avatar);
+  background: var(--color-bg-brand-tint);
+  color: var(--color-brand-primary-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ob-member__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.ob-member__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.ob-member__meta {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ob-member__pct {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.ob-member__pct-input {
+  width: 78px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-align: right;
+  color: var(--color-text-default);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 9px;
+  padding: 7px 10px;
+  outline: none;
+}
+.ob-member__pct-input:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
+}
+.ob-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+/* barra de total alocado */
+.ob-total {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ob-total__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.ob-total__value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.ob-total__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+}
+.ob-total__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  transition: width 200ms ease;
+}
+.ob-total__fill--full {
+  background: var(--color-status-positive);
+}
+
+/* form de adicionar sócio */
+.ob-add {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px dashed var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 16px;
+}
+.ob-add__grid {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  gap: 12px;
+}
+@media (max-width: 480px) {
+  .ob-add__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ob-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ob-skip {
+  align-self: center;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.ob-skip:hover {
+  color: var(--color-text-default);
+}
+
+/* tela final */
+.ob-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.ob-done__icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 999px;
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+}
+
+/* ── Fase 1: cards de seleção, select, checkbox, revisão ── */
+.ob-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ob-card-option {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-surface);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+  font-family: var(--font-sans);
+}
+.ob-card-option:hover {
+  border-color: var(--color-brand-primary);
+}
+.ob-card-option--active {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+.ob-card-option__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.ob-card-option__desc {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ob-select {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  width: 100%;
+  color: var(--color-text-default);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ob-select:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
+}
+
+.ob-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 480px) {
+  .ob-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ob-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.ob-check input {
+  accent-color: var(--color-brand-primary);
+}
+
+/* revisão */
+.ob-review {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  overflow: hidden;
+}
+.ob-review__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+.ob-review__row:last-child {
+  border-bottom: none;
+}
+.ob-review__label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.ob-review__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-default);
+  text-align: right;
+}
+.ob-review__value--muted {
+  color: var(--color-text-subtle);
+  font-weight: 500;
+}
+
+/* botão voltar (topo do card) */
+.ob-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 -6px;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.ob-back:hover {
+  color: var(--color-brand-primary);
+}
+
+.ob-disclaimer {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  background: var(--color-bg-elevated);
+  border-radius: 10px;
+}
+
+/* ── participação humanizada (etapa Sócios) ── */
+.ob-equity {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-default);
+}
+.ob-equity__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.ob-equity__row strong {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.ob-equity__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+}
+.ob-equity__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  transition: width 300ms ease;
+}
+.ob-equity__fill--full {
+  background: var(--color-status-positive);
+}
+.ob-equity__hint {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+.ob-equity__hint--ok {
+  color: var(--color-status-positive);
+  font-weight: 600;
+}
+
+/* ── bloco "sozinho por enquanto?" ── */
+.ob-solo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-brand);
+  border-radius: 12px;
+  background: var(--color-bg-brand-soft);
+}
+.ob-solo__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.ob-solo p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.ob-solo__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* ── intro do formulário + "por que isso importa?" ── */
+.ob-add__intro {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 4px 0 -4px;
+}
+.ob-why {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--color-bg-elevated);
+}
+.ob-why__title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-default);
+  margin-bottom: 3px;
+}
+.ob-why p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
