@@ -10,7 +10,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // Porta fixa e dedicada do Plim (CityFurnace usa a 3000, api usa a 3333).
+    // strictPort: falha em vez de escorregar pra outra porta — evita confusão.
+    port: 5180,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3333',
