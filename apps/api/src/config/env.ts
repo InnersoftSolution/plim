@@ -6,8 +6,15 @@ const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3333),
+  // Vazio → default (o Railway injeta NODE_ENV="" e .default() só cobre undefined).
+  NODE_ENV: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['development', 'test', 'production']).default('development'),
+  ),
+  PORT: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(3333),
+  ),
   // Supabase (opcionais): quando presentes, a API usa Postgres + valida JWT.
   // Ausentes → modo dev com repositório in-memory e owner vindo do corpo.
   SUPABASE_URL: emptyToUndefined(z.string().url()),
