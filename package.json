@@ -10,7 +10,8 @@
     "dev:api": "npm run dev --workspace api",
     "dev:web": "npm run dev --workspace web",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:vercel": "npm run build --workspace web && node scripts/bundle-api.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
