@@ -167,11 +167,34 @@ leitura para membros. Escrita só via **service role** (a API).
 ---
 
 ## 9. Como rodar
+
+### Local (desenvolvimento)
 - **Servidores:** o Plim tem 2 configs em `~/.claude/launch.json` (`plim-web` e
   `plim-api`). Subir os dois (via preview ou `npm run dev:web` / `npm run dev:api`).
-- **Portas:** Web `5173`, API `3333`. O front faz proxy `/api → 3333`.
+- **Portas:** Web `5180` (fixa no `vite.config.ts`, `strictPort`), API `3333`.
+  O front faz proxy `/api → 3333`. CityFurnace usa a 3000 — sem colisão.
 - **Modo do banco:** com `apps/api/.env` preenchido (Supabase) → Postgres + JWT;
   sem preencher → in-memory (dev).
+
+### Produção (desde 10 jul 2026)
+```
+usuário → plim-api.vercel.app ── Vercel: site React estático (CDN, grátis)
+              └── /api/* ──proxy──→ Railway: Fastify 24h (~US$5/mês)
+                                        └──→ Supabase (Postgres + Auth)
+```
+- **Deploy automático:** `git push` na `main` → Vercel rebuilda o site e o
+  Railway rebuilda a API, cada um por conta própria (~2 min).
+- **Vercel** (projeto `plim-api`, team `plimwork`): `vercel.json` na raiz define
+  build do web e o rewrite `/api/(.*) → api-production-7e38f.up.railway.app` —
+  proxy server-side, mesma origem, sem CORS.
+- **Railway** (projeto `PLIM`, serviço `api`): `railway.json` define
+  `npm install && npm run build:api` (bundle esbuild → `.api-bundle/server.mjs`),
+  start `npm run start:api`, healthcheck `/health`. Variáveis: `PORT=3333`,
+  `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (chaves novas `sb_...`).
+- **Armadilhas já resolvidas (não repetir):** Root Directory na Vercel deve ser a
+  raiz do repo (importado errado como `apps/api` = build sem o web); Railway
+  injeta `NODE_ENV=""` (string vazia — o env schema trata); Fastify 5 exige
+  Node ≥20 (`engines` no package.json raiz).
 
 ---
 
@@ -207,6 +230,16 @@ leitura para membros. Escrita só via **service role** (a API).
 ---
 
 ### Registro de atualizações
+- **10 jul 2026** — **🚀 PLIM EM PRODUÇÃO** — primeira publicação. Arquitetura
+  separada: site na Vercel (estático/CDN), API no Railway (Fastify 24h via
+  bundle esbuild), banco/auth no Supabase. URL: `plim-api.vercel.app`, com
+  `/api/*` proxiado ao Railway (sem CORS). Deploy automático via push na `main`
+  nos dois. Chaves do Supabase migradas para o formato novo (`sb_publishable_`/
+  `sb_secret_`); a `service_role` legada vazada foi neutralizada. Migração
+  `0016_atividade_inicio` (start_date) aplicada. Correções no caminho: porta do
+  web fixada em 5180 (strictPort); typecheck desacoplado do build de produção
+  (`build` = vite, `build:check` = tsc+vite); env schema tolera `NODE_ENV`/`PORT`
+  vazios (Railway injeta `""`); `engines.node >=20` (Fastify 5).
 - **10 jul 2026** — **Performance: metade das idas ao banco por request**. Diagnóstico: rota sem
   banco responde em 4ms, mas cada endpoint autenticado levava 450–680ms — tudo em queries ao Supabase.
   Causa: `getOverview` (roda em toda rota) fazia **4 idas ao banco em série** — `assertMembership`
