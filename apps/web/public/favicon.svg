@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ícone plim.work: as ondas do "plim" (o som de começar) + o ponto rosa (a origem). -->
+  <rect width="64" height="64" rx="15" fill="#5B63EE"/>
+  <g stroke="#FFFFFF" stroke-width="4.2" stroke-linecap="round" fill="none">
+    <path d="M27.785 21.106 A9 9 0 0 1 27.785 34.894"/>
+    <path d="M32.606 15.361 A16.5 16.5 0 0 1 32.606 40.639"/>
+    <path d="M37.427 9.615 A24 24 0 0 1 37.427 46.385"/>
+  </g>
+  <circle cx="22" cy="28" r="4.4" fill="#F43F5E"/>
+</svg>
