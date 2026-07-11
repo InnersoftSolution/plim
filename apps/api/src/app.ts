@@ -10,6 +10,7 @@ import { guideRoutes } from './http/routes/guide.routes';
 import { recurringRoutes } from './http/routes/recurring.routes';
 import { partnerRoutes } from './http/routes/partner.routes';
 import { activityRoutes } from './http/routes/activity.routes';
+import { adminRoutes } from './http/routes/admin.routes';
 import { CompanyService } from './services/company.service';
 import { AdvisorService } from './services/advisor.service';
 import { JourneyService } from './services/journey.service';
@@ -17,6 +18,7 @@ import { FinanceService } from './services/finance.service';
 import { PartnerService } from './services/partner.service';
 import { RecurringService } from './services/recurring.service';
 import { ActivityService } from './services/activity.service';
+import { AdminService } from './services/admin.service';
 import type { CompanyRepository } from './repositories/company.repository';
 import type { JourneyRepository } from './repositories/journey.repository';
 import type { FinanceRepository } from './repositories/finance.repository';
@@ -24,6 +26,7 @@ import type { GuideRepository } from './repositories/guide.repository';
 import type { PartnerRepository } from './repositories/partner.repository';
 import type { RecurringRepository } from './repositories/recurring.repository';
 import type { ActivityRepository } from './repositories/activity.repository';
+import type { AdminRepository } from './repositories/admin.repository';
 import { InMemoryCompanyRepository } from './repositories/in-memory/company.repository.memory';
 import { InMemoryJourneyRepository } from './repositories/in-memory/journey.repository.memory';
 import { InMemoryFinanceRepository } from './repositories/in-memory/finance.repository.memory';
@@ -31,6 +34,7 @@ import { InMemoryGuideRepository } from './repositories/in-memory/guide.reposito
 import { InMemoryPartnerRepository } from './repositories/in-memory/partner.repository.memory';
 import { InMemoryRecurringRepository } from './repositories/in-memory/recurring.repository.memory';
 import { InMemoryActivityRepository } from './repositories/in-memory/activity.repository.memory';
+import { InMemoryAdminRepository } from './repositories/in-memory/admin.repository.memory';
 import { SupabaseCompanyRepository } from './repositories/supabase/company.repository.supabase';
 import { SupabaseJourneyRepository } from './repositories/supabase/journey.repository.supabase';
 import { SupabaseFinanceRepository } from './repositories/supabase/finance.repository.supabase';
@@ -38,6 +42,7 @@ import { SupabaseGuideRepository } from './repositories/supabase/guide.repositor
 import { SupabasePartnerRepository } from './repositories/supabase/partner.repository.supabase';
 import { SupabaseRecurringRepository } from './repositories/supabase/recurring.repository.supabase';
 import { SupabaseActivityRepository } from './repositories/supabase/activity.repository.supabase';
+import { SupabaseAdminRepository } from './repositories/supabase/admin.repository.supabase';
 import { env, isSupabaseConfigured, isLlmConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
 import type { LlmProvider } from './ai/llm.provider';
@@ -83,6 +88,12 @@ export function buildApp(): FastifyInstance {
     : new InMemoryActivityRepository();
   const activityService = new ActivityService(companyService, activityRepository);
 
+  // Painel Administrativo interno (equipe do Plim): permissão validada no service.
+  const adminRepository: AdminRepository = isSupabaseConfigured
+    ? new SupabaseAdminRepository(getSupabaseAdmin())
+    : new InMemoryAdminRepository();
+  const adminService = new AdminService(adminRepository);
+
   // Copiloto: LLM real só quando há chave; senão, Noop (insights sem custo).
   const llm: LlmProvider = isLlmConfigured
     ? new AnthropicLlmProvider(env.ANTHROPIC_API_KEY!, env.PLIM_ADVISOR_MODEL)
@@ -109,6 +120,7 @@ export function buildApp(): FastifyInstance {
   app.register(partnerRoutes, { service: partnerService });
   app.register(recurringRoutes, { service: recurringService });
   app.register(activityRoutes, { service: activityService });
+  app.register(adminRoutes, { service: adminService });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {

@@ -3,6 +3,7 @@ import type { LoginInput, SignupInput } from '@plim/shared';
 import type { AuthUser, SignupResult } from './types';
 import { authService } from './service';
 import { clearApiCache } from '../lib/api';
+import { clearAdminMeCache } from '../admin/useAdminMe';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await authService.logout();
     clearApiCache();
+    clearAdminMeCache();
     setUser(null);
   }, []);
 

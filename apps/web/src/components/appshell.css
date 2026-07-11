@@ -241,3 +241,20 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* entrada do Painel Admin (só aparece para admins internos) */
+.shell-foot__admin {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px dashed rgba(69, 72, 201, 0.5);
+  border-radius: 8px;
+  color: #4548c9;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.shell-foot__admin:hover {
+  background: rgba(69, 72, 201, 0.08);
+}

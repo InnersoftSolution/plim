@@ -230,6 +230,18 @@ usuário → plim-api.vercel.app ── Vercel: site React estático (CDN, grát
 ---
 
 ### Registro de atualizações
+- **11 jul 2026** — **Painel Administrativo (fase 1)** — área interna da equipe
+  em `/admin` (layout próprio, sidebar escura): Dashboard (empresas, usuários,
+  movimentações, atividades, plano Beta), Empresas (lista com busca/filtros +
+  detalhe com responsável, sócios, uso e plano) e Usuários (lista + detalhe +
+  "Enviar link de redefinição de senha" — fluxo seguro via provedor; a API
+  nunca vê senha). Migração `0017_admin_painel` cria `admin_users`
+  (super_admin/admin/support, RLS sem policies = só service role). Permissão
+  validada NA API em toda rota (`AdminService.assertAdmin` → 403 NOT_ADMIN);
+  menu no app só aparece para admin (cortesia, não segurança). Primeiro admin:
+  `insert into admin_users (user_id, role) select id, 'super_admin' from
+  auth.users where email = '...'`. Fora do escopo: cobrança real, auditoria
+  completa, impersonate, exclusões. 7 testes novos (94 no total).
 - **10 jul 2026** — **🚀 PLIM EM PRODUÇÃO** — primeira publicação. Arquitetura
   separada: site na Vercel (estático/CDN), API no Railway (Fastify 24h via
   bundle esbuild), banco/auth no Supabase. URL: `plim-api.vercel.app`, com

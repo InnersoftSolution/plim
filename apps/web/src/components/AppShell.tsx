@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useAdminMe } from '../admin/useAdminMe';
 import { Logo } from './Logo';
 import { Button } from './ui/Button';
 import './appshell.css';
@@ -39,6 +40,7 @@ const NAV: NavEntry[] = [
 /** Casca do app autenticado: menu lateral + conteúdo (via <Outlet/>). */
 export function AppShell() {
   const { user, logout } = useAuth();
+  const { role: adminRole } = useAdminMe();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
@@ -85,6 +87,11 @@ export function AppShell() {
           )}
         </nav>
         <div className="shell-foot">
+          {adminRole && (
+            <NavLink to="/admin" className="shell-foot__admin" onClick={closeMenu}>
+              Painel admin
+            </NavLink>
+          )}
           <span className="shell-foot__user">{user?.email}</span>
           <Button variant="ghost" onClick={() => logout()}>
             Sair

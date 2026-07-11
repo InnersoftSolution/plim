@@ -1,4 +1,5 @@
 export * from './contracts/activity';
+export * from './contracts/admin';
 export * from './contracts/auth';
 export * from './contracts/catalogs';
 export * from './contracts/company';

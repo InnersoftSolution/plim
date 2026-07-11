@@ -14,6 +14,12 @@ import { HomeRedirect } from './pages/HomeRedirect';
 import { SociedadePage } from './pages/SociedadePage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { AppShell } from './components/AppShell';
+import { AdminLayout } from './admin/AdminLayout';
+import { AdminDashboardPage } from './admin/AdminDashboardPage';
+import { AdminCompaniesPage } from './admin/AdminCompaniesPage';
+import { AdminCompanyDetailPage } from './admin/AdminCompanyDetailPage';
+import { AdminUsersPage } from './admin/AdminUsersPage';
+import { AdminUserDetailPage } from './admin/AdminUserDetailPage';
 import { POST_AUTH_REDIRECT } from './routes';
 
 function AuthGate() {
@@ -67,6 +73,15 @@ export function App() {
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
             <Route path="/socios" element={<SociedadePage />} />
             <Route path="/atividades" element={<ActivitiesPage />} />
+          </Route>
+
+          {/* Painel Administrativo interno — layout próprio; permissão validada na API */}
+          <Route path="/admin" element={<RequireAuth><AdminLayout /></RequireAuth>}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="companies" element={<AdminCompaniesPage />} />
+            <Route path="companies/:companyId" element={<AdminCompanyDetailPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="users/:userId" element={<AdminUserDetailPage />} />
           </Route>
 
           <Route path="/" element={<RequireAuth><HomeRedirect /></RequireAuth>} />
