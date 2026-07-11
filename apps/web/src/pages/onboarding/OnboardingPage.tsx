@@ -464,6 +464,9 @@ function LegalStructureStep({
       ? 'needs_accountant'
       : company?.legalStructure ?? '';
   const [choice, setChoice] = useState<LegalStructure | 'needs_accountant' | ''>(initial);
+  // Se a pessoa já indicou ter CNPJ, a empresa JÁ existe: perguntamos a
+  // natureza jurídica atual, não "o que pretende abrir".
+  const alreadyRegistered = company?.hasFormalRegistration === 'yes';
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -491,10 +494,15 @@ function LegalStructureStep({
   return (
     <>
       <div className="ob-head">
-        <h1>Você já sabe qual tipo de empresa pretende abrir?</h1>
+        <h1>
+          {alreadyRegistered
+            ? 'Qual a natureza jurídica da sua empresa?'
+            : 'Você já sabe qual tipo de empresa pretende abrir?'}
+        </h1>
         <p>
-          Se ainda não sabe, tudo bem — o Plim registra essa pendência e pode indicar um contador
-          parceiro para te ajudar a decidir.
+          {alreadyRegistered
+            ? 'Você indicou que já tem CNPJ. Selecione o tipo de registro atual da sua empresa — na dúvida, confirme com seu contador.'
+            : 'Se ainda não sabe, tudo bem — o Plim registra essa pendência e pode indicar um contador parceiro para te ajudar a decidir.'}
         </p>
       </div>
       {error && <div className="form-error">{error}</div>}
@@ -516,12 +524,13 @@ function LegalStructureStep({
             setChoice((prev) => (prev === 'needs_accountant' ? '' : 'needs_accountant'))
           }
         >
-          Preciso falar com um contador
+          {alreadyRegistered ? 'Preciso confirmar com meu contador' : 'Preciso falar com um contador'}
         </button>
       </div>
       <p className="ob-disclaimer">
-        Essa informação ajuda você a se organizar. Para decidir o melhor tipo de empresa, confirme com
-        um contador — o Plim pode indicar um parceiro.
+        {alreadyRegistered
+          ? 'Essa informação ajuda o Plim a organizar sua empresa. Na dúvida sobre o enquadramento atual, confirme com seu contador.'
+          : 'Essa informação ajuda você a se organizar. Para decidir o melhor tipo de empresa, confirme com um contador — o Plim pode indicar um parceiro.'}
       </p>
       <div className="ob-actions">
         <Button block onClick={handleContinue} disabled={saving}>
