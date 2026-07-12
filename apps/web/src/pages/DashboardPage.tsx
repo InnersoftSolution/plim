@@ -203,14 +203,11 @@ function DashboardReady({
             <img className="dash-companylogo" src={company.logoUrl} alt={`Logo de ${company.name}`} />
           )}
           <div>
-          <p className="dash-greeting">
-            olá, <strong>{firstName || 'por aqui'}</strong>
-          </p>
-          <h1 className="dash-page__title">Visão geral</h1>
+          <h1 className="dash-page__title">olá, {firstName || 'por aqui'}</h1>
           <p className="dash-page__subtitle">
             {recommended
-              ? 'O estado atual do seu negócio — e o que fazer agora.'
-              : 'Tudo em dia por aqui — siga registrando os gastos do mês.'}
+              ? 'O estado atual do seu negócio e o que fazer agora.'
+              : 'Tudo em dia por aqui. Siga registrando os gastos do mês.'}
           </p>
           </div>
         </div>
@@ -242,7 +239,7 @@ function DashboardReady({
                 : `${awaitingMine} pagamentos aguardam sua confirmação`}
             </h2>
             <p className="dash-recommend__reason">
-              Confirme se você realmente pagou — só depois disso a movimentação entra nos cálculos.
+              Confirme se você realmente pagou. Só depois disso a movimentação entra nos cálculos.
             </p>
           </div>
           <div className="dash-recommend__actions">
@@ -269,7 +266,7 @@ function DashboardReady({
             </h2>
             <p className="dash-recommend__reason">
               {overdueBills.length > 0
-                ? 'Contas vencidas podem gerar juros e multa — marque como paga assim que quitar.'
+                ? 'Contas vencidas podem gerar juros e multa. Marque como paga assim que quitar.'
                 : 'Programe-se para pagar e mantenha as contas em dia.'}
             </p>
           </div>
@@ -321,7 +318,7 @@ function DashboardReady({
             tone="indigo"
             label="Custo mensal"
             value={formatMoney(recurring.monthlyTotalCents, company.currencyCode)}
-            hint={`${activeCosts.length} ${activeCosts.length === 1 ? 'custo ativo' : 'custos ativos'} — o que custa manter a empresa por mês.`}
+            hint={`${activeCosts.length} ${activeCosts.length === 1 ? 'custo ativo' : 'custos ativos'}, o que custa manter a empresa por mês.`}
           />
         ) : (
           <StatCard
@@ -343,7 +340,7 @@ function DashboardReady({
           value={formatMoney(acertosCents, company.currencyCode)}
           hint={
             acertosCents > 0
-              ? 'Alguém pagou mais do que a parte dele — veja quem acerta com quem.'
+              ? 'Alguém pagou mais do que a parte dele. Veja quem acerta com quem.'
               : 'Tudo quite entre os sócios.'
           }
         />
@@ -354,7 +351,7 @@ function DashboardReady({
           value={`${members.length} ${members.length === 1 ? 'sócio' : 'sócios'}`}
           hint={
             pendingEquity === 0
-              ? 'Participação 100% definida — os acertos saem exatos.'
+              ? 'Participação 100% definida, os acertos saem exatos.'
               : `Quase lá: ${formatPct(allocated)} definidos, faltam ${formatPct(pendingEquity)}. Completar deixa os acertos exatos.`
           }
           onClick={() => onNavigate('/socios')}
@@ -531,7 +528,7 @@ function DashboardReady({
               ))}
             </div>
             <p className="dash-panel__note">
-              Estimativa mensal: {formatMoney(recurring.monthlyTotalCents, company.currencyCode)} — soma
+              Estimativa mensal: {formatMoney(recurring.monthlyTotalCents, company.currencyCode)}. Soma
               dos custos ativos (anuais ÷12, semanais ×52÷12, trimestrais ÷3). Custos inativos não contam.
             </p>
           </>
@@ -541,7 +538,7 @@ function DashboardReady({
       {/* ── pendências inteligentes (Jornada 1) ── */}
       <Panel title="Pendências da empresa">
         {pendencias.length === 0 ? (
-          <EmptyRow text="Sua empresa está organizada — nada pendente. Continue registrando os gastos que o Plim cuida dos cálculos." />
+          <EmptyRow text="Sua empresa está organizada, nada pendente. Continue registrando os gastos que o Plim cuida dos cálculos." />
         ) : (
           <div className="dash-pending">
             {pendencias.map((p) => (
@@ -577,7 +574,7 @@ function DashboardReady({
       <Modal
         open={modalOpen}
         title="Adicionar movimentação"
-        subtitle="O Plim te guia passo a passo — e explica como cada registro afeta os cálculos."
+        subtitle="O Plim te guia passo a passo, e explica como cada registro afeta os cálculos."
         onClose={() => setModalOpen(false)}
       >
         {/* key força o wizard a reiniciar do passo 1 a cada abertura */}
@@ -599,7 +596,7 @@ function DashboardReady({
       <Modal
         open={recurringOpen}
         title="Adicionar custo recorrente"
-        subtitle="Assinaturas e serviços que se repetem — o Plim calcula o custo mensal de manter a empresa."
+        subtitle="Assinaturas e serviços que se repetem. O Plim calcula o custo mensal de manter a empresa."
         onClose={() => setRecurringOpen(false)}
       >
         {recurringOpen && (

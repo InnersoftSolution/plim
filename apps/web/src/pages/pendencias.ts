@@ -154,7 +154,7 @@ export function buildPendencias(
       id: 'formalization-undefined',
       title: 'Formalização ainda indefinida',
       description:
-        'Você ainda não informou se a empresa já possui CNPJ ou registro formal — pode completar quando estiver pronto.',
+        'Você ainda não informou se a empresa já possui CNPJ ou registro formal, pode completar quando estiver pronto.',
       reason: 'Essa informação ajuda o Plim a organizar os próximos passos da empresa.',
       priority: 'media',
       action: { label: 'Atualizar formalização', kind: 'navigate', to: '/onboarding?step=formalization' },
@@ -174,7 +174,7 @@ export function buildPendencias(
       title: 'Escolha da natureza jurídica pendente',
       description:
         'Você ainda não definiu o tipo de empresa (MEI, LTDA…). Essa decisão pode impactar faturamento, impostos e obrigações.',
-      reason: 'Considere conversar com um contador — o Plim pode indicar um parceiro.',
+      reason: 'Considere conversar com um contador. O Plim pode indicar um parceiro.',
       priority: 'media',
       action: { label: 'Ver opções', kind: 'navigate', to: '/empresa/dados' },
       secondary: { label: 'Falar com contador', kind: 'navigate', to: '/empresa/dados' },
@@ -215,7 +215,7 @@ export function buildPendencias(
       id: 'no-description',
       title: 'Explique melhor sua ideia',
       description:
-        'Uma descrição curta ajuda o Plim a entender o que você está criando — você pode completar depois.',
+        'Uma descrição curta ajuda o Plim a entender o que você está criando. Você pode completar depois.',
       reason: 'Com a ideia clara, o Plim organiza melhor os próximos passos.',
       priority: 'baixa',
       action: { label: 'Completar descrição', kind: 'navigate', to: '/empresa/dados' },
@@ -229,7 +229,7 @@ export function buildPendencias(
       id: 'no-contact',
       title: 'Adicione um contato da empresa',
       description:
-        'Você ainda não adicionou telefone ou e-mail da empresa — útil para clientes, bancos e fornecedores.',
+        'Você ainda não adicionou telefone ou e-mail da empresa, útil para clientes, bancos e fornecedores.',
       reason: 'Separar o contato da empresa do pessoal deixa tudo mais profissional.',
       priority: 'baixa',
       action: { label: 'Completar contato', kind: 'navigate', to: '/empresa/dados' },
