@@ -198,7 +198,7 @@ function DashboardReady({
     <div className="dash">
       {/* ── título ── */}
       <div className="dash-home-head">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {company.logoUrl && (
             <img className="dash-companylogo" src={company.logoUrl} alt={`Logo de ${company.name}`} />
           )}
@@ -753,7 +753,7 @@ function freqLabel(id: string): string {
 }
 
 /**
- * Bloco "Proximos passos da empresa" na Home. Mostra ate 3 itens do checklist
+ * Bloco "Próximos passos da empresa" na Home. Mostra ate 3 itens do checklist
  * ainda nao concluidos, com atalho para a tela completa. Busca o checklist por
  * conta propria (cache do apiFetch evita chamada repetida).
  */
@@ -783,9 +783,9 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
     <section className="dash-panel dash-nextsteps">
       <div className="dash-panel__head">
         <div>
-          <h2 className="dash-panel__title">Proximos passos da empresa</h2>
+          <h2 className="dash-panel__title">Próximos passos da empresa</h2>
           <p className="dash-nextsteps__sub">
-            Voce concluiu {view.summary.completed} de {view.summary.total} itens essenciais.
+            Você concluiu {view.summary.completed} de {view.summary.total} itens essenciais.
           </p>
         </div>
         <button className="dash-panel__action" onClick={() => navigate('/empresa/checklist')}>
