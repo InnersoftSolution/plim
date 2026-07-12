@@ -100,3 +100,16 @@ export function messageForError(err: unknown): string {
   }
   return 'Algo deu errado. Tente novamente.';
 }
+
+/** Logo da empresa (identidade visual). Base64 no corpo; API valida e armazena. */
+export const logoApi = {
+  upload(companyId: string, dataBase64: string, contentType: string): Promise<Company> {
+    return apiFetch<Company>(`/companies/${companyId}/logo`, {
+      method: 'POST',
+      body: JSON.stringify({ dataBase64, contentType }),
+    });
+  },
+  remove(companyId: string): Promise<Company> {
+    return apiFetch<Company>(`/companies/${companyId}/logo`, { method: 'DELETE' });
+  },
+};

@@ -167,8 +167,16 @@ export const companySchema = z.object({
   streetNumber: z.string().nullable(),
   complement: z.string().nullable(),
   neighborhood: z.string().nullable(),
+  logoUrl: z.string().nullable().default(null),
   onboardingStatus: onboardingStatusSchema,
   onboardingStep: onboardingStepSchema.nullable(),
   createdAt: z.string().datetime(),
 });
 export type Company = z.infer<typeof companySchema>;
+
+/** Upload de logo (Entrega 2 do checklist): imagem pequena em base64. */
+export const uploadLogoSchema = z.object({
+  dataBase64: z.string().min(1),
+  contentType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+});
+export type UploadLogoInput = z.infer<typeof uploadLogoSchema>;

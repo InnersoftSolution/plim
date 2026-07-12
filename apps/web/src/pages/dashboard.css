@@ -1419,3 +1419,78 @@
 .dash-nextsteps__go:hover {
   text-decoration: underline;
 }
+
+/* Painel de logo da empresa (Dados da empresa) */
+.logo-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo-panel__img,
+.logo-panel__placeholder {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+}
+.logo-panel__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--color-brand-primary);
+}
+.logo-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.logo-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.logo-panel__upload input {
+  display: none;
+}
+.logo-panel__upload span {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 18px;
+  border-radius: var(--radius-button);
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.logo-panel__remove {
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  min-height: 32px;
+}
+.logo-panel__remove:hover {
+  text-decoration: underline;
+}
+
+/* Logo pequena da empresa no cabecalho da Home */
+.dash-companylogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  flex-shrink: 0;
+}

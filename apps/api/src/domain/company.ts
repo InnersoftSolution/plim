@@ -27,6 +27,7 @@ export interface Company {
   region: string | null;
   city: string | null;
   currencyCode: string | null;
+  logoUrl: string | null;
   /** Formalização: registro formal (CNPJ/equivalente), natureza jurídica e status. */
   hasFormalRegistration: HasFormalRegistration | null;
   registrationCountry: string | null;
@@ -64,6 +65,7 @@ export type CompanyUpdate = Partial<
     | 'city'
     | 'businessModelType'
     | 'currencyCode'
+    | 'logoUrl'
     | 'hasFormalRegistration'
     | 'registrationCountry'
     | 'registrationNumber'

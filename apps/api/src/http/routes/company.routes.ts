@@ -4,6 +4,7 @@ import {
   createCompanySchema,
   updateCompanySchema,
   updateMemberSchema,
+  uploadLogoSchema,
 } from '@plim/shared';
 import { z } from 'zod';
 import type { ActingOwner, CompanyService } from '../../services/company.service';
@@ -58,6 +59,22 @@ export async function companyRoutes(app: FastifyInstance, opts: { service: Compa
     const { companyId } = companyParamsSchema.parse(request.params);
     const patch = updateCompanySchema.parse(request.body);
     return service.updateCompany(companyId, patch, request.user?.id ?? null);
+  });
+
+  // Logo (base64; ~5MB decodificados viram ~7MB no corpo, dai o bodyLimit).
+  app.post(
+    '/companies/:companyId/logo',
+    { bodyLimit: 8 * 1024 * 1024 },
+    async (request) => {
+      const { companyId } = companyParamsSchema.parse(request.params);
+      const { dataBase64, contentType } = uploadLogoSchema.parse(request.body);
+      return service.setLogo(companyId, dataBase64, contentType, request.user?.id ?? null);
+    },
+  );
+
+  app.delete('/companies/:companyId/logo', async (request) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    return service.removeLogo(companyId, request.user?.id ?? null);
   });
 
   app.post('/companies/:companyId/complete-onboarding', async (request) => {

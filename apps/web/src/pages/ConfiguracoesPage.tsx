@@ -20,7 +20,7 @@ import { Button } from '../components/ui/Button';
 import { Drawer } from '../components/ui/Drawer';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { companyApi, messageForError } from '../company/companyApi';
+import { companyApi, logoApi, messageForError } from '../company/companyApi';
 import { IconArrowRight, IconUsers } from './dashIcons';
 import './dashboard.css';
 
@@ -107,6 +107,8 @@ export function ConfiguracoesPage() {
           já tiver — o resto pode ficar para depois.
         </p>
       </div>
+
+      <LogoPanel company={company} onSaved={handleSaved} />
 
       <CompanyDataPanel company={company} onSaved={handleSaved} />
 
@@ -626,4 +628,106 @@ function MembersPanel({
       )}
     </section>
   );
+}
+
+/* ── Logo da empresa (identidade visual) ─────────────────────────────── */
+
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+
+function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Company) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setError('');
+    if (!LOGO_TYPES.includes(file.type)) {
+      setError('Formato nao suportado. Use PNG, JPG ou WEBP.');
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setError('A imagem passa de 5MB. Escolha uma versao menor.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const updated = await logoApi.upload(company.id, dataBase64, file.type);
+      onSaved(updated);
+    } catch (err) {
+      setError(messageForError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    setError('');
+    setBusy(true);
+    try {
+      const updated = await logoApi.remove(company.id);
+      onSaved(updated);
+    } catch (err) {
+      setError(messageForError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="dash-panel">
+      <div className="dash-panel__head">
+        <h2>Logo da empresa</h2>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+      <div className="logo-panel">
+        {company.logoUrl ? (
+          <img className="logo-panel__img" src={company.logoUrl} alt={`Logo de ${company.name}`} />
+        ) : (
+          <div className="logo-panel__placeholder" aria-hidden="true">
+            {initials(company.name)}
+          </div>
+        )}
+        <div className="logo-panel__body">
+          <p className="dash-panel__hint">
+            {company.logoUrl
+              ? 'Sua logo aparece na Home e nos dados da empresa.'
+              : 'Adicione uma logo para deixar o ambiente da empresa mais personalizado. PNG, JPG ou WEBP, ate 5MB.'}
+          </p>
+          <div className="logo-panel__actions">
+            <label className="logo-panel__upload">
+              <input
+                type="file"
+                accept={LOGO_TYPES.join(',')}
+                disabled={busy}
+                onChange={(e) => {
+                  void handleFile(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+              <span>{busy ? 'Enviando...' : company.logoUrl ? 'Trocar logo' : 'Adicionar logo'}</span>
+            </label>
+            {company.logoUrl && !busy && (
+              <button type="button" className="logo-panel__remove" onClick={() => void handleRemove()}>
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.slice(result.indexOf(',') + 1)); // tira o prefixo data:...;base64,
+    };
+    reader.onerror = () => reject(new Error('Nao consegui ler o arquivo.'));
+    reader.readAsDataURL(file);
+  });
 }

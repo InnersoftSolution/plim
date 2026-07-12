@@ -27,6 +27,7 @@ interface CompanyRow {
   region: string | null;
   city: string | null;
   currency_code: string | null;
+  logo_url: string | null;
   has_formal_registration: string | null;
   registration_country: string | null;
   registration_number: string | null;
@@ -73,6 +74,7 @@ function toCompany(row: CompanyRow): Company {
     region: row.region,
     city: row.city,
     currencyCode: row.currency_code,
+    logoUrl: row.logo_url,
     hasFormalRegistration: row.has_formal_registration as HasFormalRegistration | null,
     registrationCountry: row.registration_country,
     registrationNumber: row.registration_number,
@@ -123,6 +125,7 @@ function companyPatchToRow(patch: CompanyUpdate): Record<string, unknown> {
     region: 'region',
     city: 'city',
     currencyCode: 'currency_code',
+    logoUrl: 'logo_url',
     hasFormalRegistration: 'has_formal_registration',
     registrationCountry: 'registration_country',
     registrationNumber: 'registration_number',

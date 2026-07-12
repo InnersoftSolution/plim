@@ -7,6 +7,10 @@ import type {
 import type { Company, CompanyMember, CompanyUpdate } from '../domain/company';
 import type { CompanyRepository } from '../repositories/company.repository';
 import { DomainError, NotFoundError } from '../lib/errors';
+import type { LogoStorage } from '../lib/logo-storage';
+
+/** Limite da logo: 5MB ja decodificados. */
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Quem está criando/agindo. `id` nulo no modo dev (sem autenticação real). */
 export interface ActingOwner {
@@ -20,7 +24,44 @@ export interface ActingOwner {
  * Estas regras existem SOMENTE aqui — o front apenas exibe o resultado.
  */
 export class CompanyService {
-  constructor(private readonly repo: CompanyRepository) {}
+  constructor(
+    private readonly repo: CompanyRepository,
+    private readonly logoStorage?: LogoStorage,
+  ) {}
+
+  /**
+   * Logo da empresa (identidade visual, nao comprovante). Valida membro,
+   * tipo e tamanho; sobe no storage e grava a URL publica na empresa.
+   */
+  async setLogo(
+    companyId: string,
+    dataBase64: string,
+    contentType: string,
+    actingUserId?: string | null,
+  ): Promise<Company> {
+    if (!this.logoStorage) {
+      throw new DomainError('LOGO_NOT_CONFIGURED', 'Upload de logo indisponivel neste ambiente.');
+    }
+    await this.assertMembership(companyId, actingUserId);
+    const data = Buffer.from(dataBase64, 'base64');
+    if (data.byteLength === 0) {
+      throw new DomainError('LOGO_EMPTY', 'A imagem veio vazia. Tente escolher o arquivo de novo.');
+    }
+    if (data.byteLength > LOGO_MAX_BYTES) {
+      throw new DomainError('LOGO_TOO_LARGE', 'A imagem passa de 5MB. Escolha uma versao menor.');
+    }
+    const logoUrl = await this.logoStorage.upload(companyId, data, contentType);
+    return this.repo.updateCompany(companyId, { logoUrl });
+  }
+
+  async removeLogo(companyId: string, actingUserId?: string | null): Promise<Company> {
+    if (!this.logoStorage) {
+      throw new DomainError('LOGO_NOT_CONFIGURED', 'Upload de logo indisponivel neste ambiente.');
+    }
+    await this.assertMembership(companyId, actingUserId);
+    await this.logoStorage.remove(companyId);
+    return this.repo.updateCompany(companyId, { logoUrl: null });
+  }
 
   async createCompany(
     input: CreateCompanyInput,
@@ -39,6 +80,7 @@ export class CompanyService {
       region: null,
       city: null,
       currencyCode: null,
+      logoUrl: null,
       businessModelType: null,
       hasFormalRegistration: null,
       registrationCountry: null,

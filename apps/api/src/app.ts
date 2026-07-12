@@ -50,6 +50,7 @@ import type { ChecklistRepository } from './repositories/checklist.repository';
 import { SupabaseAdminRepository } from './repositories/supabase/admin.repository.supabase';
 import { env, isSupabaseConfigured, isLlmConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
+import { InMemoryLogoStorage, SupabaseLogoStorage } from './lib/logo-storage';
 import type { LlmProvider } from './ai/llm.provider';
 import { NoopLlmProvider } from './ai/llm.provider';
 import { AnthropicLlmProvider } from './ai/anthropic.provider';
@@ -62,7 +63,10 @@ export function buildApp(): FastifyInstance {
   const repository: CompanyRepository = isSupabaseConfigured
     ? new SupabaseCompanyRepository(getSupabaseAdmin())
     : new InMemoryCompanyRepository();
-  const companyService = new CompanyService(repository);
+  const logoStorage = isSupabaseConfigured
+    ? new SupabaseLogoStorage(getSupabaseAdmin())
+    : new InMemoryLogoStorage();
+  const companyService = new CompanyService(repository, logoStorage);
 
   const journeyRepository: JourneyRepository = isSupabaseConfigured
     ? new SupabaseJourneyRepository(getSupabaseAdmin())

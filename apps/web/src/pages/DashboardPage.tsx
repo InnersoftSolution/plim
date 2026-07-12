@@ -198,7 +198,11 @@ function DashboardReady({
     <div className="dash">
       {/* ── título ── */}
       <div className="dash-home-head">
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {company.logoUrl && (
+            <img className="dash-companylogo" src={company.logoUrl} alt={`Logo de ${company.name}`} />
+          )}
+          <div>
           <p className="dash-greeting">
             olá, <strong>{firstName || 'por aqui'}</strong>
           </p>
@@ -208,6 +212,7 @@ function DashboardReady({
               ? 'O estado atual do seu negócio — e o que fazer agora.'
               : 'Tudo em dia por aqui — siga registrando os gastos do mês.'}
           </p>
+          </div>
         </div>
         <div className="dash-monthnav">
           <button className="dash-monthnav__arrow" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">
