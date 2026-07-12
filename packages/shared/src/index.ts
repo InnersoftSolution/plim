@@ -2,6 +2,7 @@ export * from './contracts/activity';
 export * from './contracts/admin';
 export * from './contracts/auth';
 export * from './contracts/catalogs';
+export * from './contracts/checklist';
 export * from './contracts/company';
 export * from './contracts/finance';
 export * from './contracts/guides';

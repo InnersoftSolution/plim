@@ -21,6 +21,8 @@ import { financeApi, formatMoney } from '../finance/financeApi';
 import { buildPendencias, dismissPendencia, isDismissed, type Pendencia } from './pendencias';
 import { dueBucket, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
+import { checklistApi } from '../company/checklistApi';
+import type { ChecklistView } from '@plim/shared';
 import {
   IconArrowRight,
   IconChevronLeft,
@@ -290,6 +292,8 @@ function DashboardReady({
           </div>
         </section>
       )}
+
+      <ChecklistNextSteps companyId={company.id} />
 
       {/* ── cards principais ── */}
       <div className="dash-cards">
@@ -741,4 +745,60 @@ function catLabel(id: string): string {
 }
 function freqLabel(id: string): string {
   return recurringFrequencyCatalog.find((f) => f.id === id)?.label ?? id;
+}
+
+/**
+ * Bloco "Proximos passos da empresa" na Home. Mostra ate 3 itens do checklist
+ * ainda nao concluidos, com atalho para a tela completa. Busca o checklist por
+ * conta propria (cache do apiFetch evita chamada repetida).
+ */
+function ChecklistNextSteps({ companyId }: { companyId: string }) {
+  const navigate = useNavigate();
+  const [view, setView] = useState<ChecklistView | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    checklistApi
+      .get(companyId)
+      .then((v) => alive && setView(v))
+      .catch(() => alive && setView(null));
+    return () => {
+      alive = false;
+    };
+  }, [companyId]);
+
+  if (!view) return null;
+  const pending = view.items.filter(
+    (i) => i.status === 'not_started' || i.status === 'in_progress',
+  );
+  if (pending.length === 0) return null;
+  const top = pending.slice(0, 3);
+
+  return (
+    <section className="dash-panel dash-nextsteps">
+      <div className="dash-panel__head">
+        <div>
+          <h2 className="dash-panel__title">Proximos passos da empresa</h2>
+          <p className="dash-nextsteps__sub">
+            Voce concluiu {view.summary.completed} de {view.summary.total} itens essenciais.
+          </p>
+        </div>
+        <button className="dash-panel__action" onClick={() => navigate('/empresa/checklist')}>
+          Ver checklist completo
+        </button>
+      </div>
+      <ul className="dash-nextsteps__list">
+        {top.map((item) => (
+          <li key={item.id} className="dash-nextsteps__item">
+            <span>{item.title}</span>
+            {item.actionRoute && (
+              <button className="dash-nextsteps__go" onClick={() => navigate(item.actionRoute!)}>
+                {item.actionLabel ?? 'Abrir'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

@@ -30,6 +30,7 @@ const NAV: NavEntry[] = [
     children: [
       { to: '/empresa/dados', label: 'Dados da empresa' },
       { to: '/socios', label: 'Sócios' },
+      { to: '/empresa/checklist', label: 'Checklist da empresa' },
     ],
   },
   { to: '/financeiro', label: 'Movimentações', icon: <IconWallet /> },

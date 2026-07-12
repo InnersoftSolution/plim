@@ -1,0 +1,199 @@
+/* Checklist da empresa. Mobile-first: cards empilhados, progresso no topo. */
+
+.chk {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.chk-head h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--color-text-default);
+}
+.chk-head p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Progresso */
+.chk-progress {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+}
+.chk-progress__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.chk-progress__top strong {
+  display: block;
+  color: var(--color-text-default);
+  font-size: 15px;
+}
+.chk-progress__count {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.chk-progress__pct {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-brand-primary);
+}
+.chk-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+  margin: 12px 0 10px;
+}
+.chk-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-primary);
+  transition: width 0.3s ease;
+}
+.chk-progress__hint {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 12.5px;
+}
+
+.chk-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Fases */
+.chk-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chk-phase__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chk-phase__head h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-text-default);
+}
+.chk-phase__count {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.chk-phase__help {
+  margin: -4px 0 4px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* Cards de item */
+.chk-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chk-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chk-card.is-completed {
+  border-color: var(--color-status-positive);
+  background: var(--color-status-positive-bg);
+}
+.chk-card.is-na,
+.chk-card.is-skipped {
+  opacity: 0.72;
+}
+.chk-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.chk-card__desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.chk-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* Badge de status */
+.chk-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.chk-badge.is-completed {
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+}
+.chk-badge.is-in-progress {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+}
+.chk-badge.is-skipped {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+
+/* Botoes de acao leves */
+.chk-link {
+  background: none;
+  border: none;
+  padding: 6px 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+  min-height: 32px;
+}
+.chk-link--muted {
+  color: var(--color-text-subtle);
+  font-weight: 500;
+}
+.chk-link:hover {
+  text-decoration: underline;
+}
+
+/* Desktop: um pouco mais de respiro */
+@media (min-width: 720px) {
+  .chk {
+    padding: 28px 24px 72px;
+  }
+  .chk-head h1 {
+    font-size: 26px;
+  }
+}

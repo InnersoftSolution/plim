@@ -230,6 +230,17 @@ usuário → plim-api.vercel.app ── Vercel: site React estático (CDN, grát
 ---
 
 ### Registro de atualizações
+- **11 jul 2026** — **Checklist inteligente da empresa (Entrega 1)**. Nova jornada
+  em `/empresa/checklist`: itens guiados por 6 fases (ideia, marca, sociedade,
+  financeiro, produto, rotina), status por item (nao iniciado/em andamento/
+  concluido/fazer depois/nao se aplica), item personalizado, progresso geral e
+  bloco "Proximos passos da empresa" na Home. Catalogo dos itens vive no codigo
+  (`services/checklist.catalog.ts`); geracao idempotente por `template_key`;
+  auto-conclusao a partir de dados reais (nome, descricao, participacao 100%,
+  primeira movimentacao, custo recorrente, atividades da semana). Deterministico,
+  R$0 de IA. Migracao `0018_checklist_empresa` (`company_checklist_items` +
+  `companies.logo_url`). Entregas 2 (upload de logo) e 3 (checklist vira
+  atividade, parceiros, personalizacao por tipo de negocio) ficam para depois.
 - **11 jul 2026** — **Painel Administrativo (fase 1)** — área interna da equipe
   em `/admin` (layout próprio, sidebar escura): Dashboard (empresas, usuários,
   movimentações, atividades, plano Beta), Empresas (lista com busca/filtros +
