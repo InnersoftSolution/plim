@@ -1,8 +1,8 @@
 <!--
-  Template do Supabase: "Confirm signup" (confirmação de e-mail no cadastro).
-  Cole em: Supabase → Authentication → Emails → Templates → Confirm signup.
+  Template do Supabase: "Confirm signup" (confirmacao de e-mail no cadastro).
+  Cole em: Supabase, Authentication, Emails, Templates, Confirm signup.
   Assunto sugerido:  Confirme seu e-mail e comece no plim
-  Variável usada: {{ .ConfirmationURL }}
+  Variavel usada: {{ .ConfirmationURL }}
 -->
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <tr>
@@ -15,36 +15,28 @@
         </tr>
         <tr>
           <td style="padding:8px 32px 4px;">
-            <h1 style="margin:0;font-size:20px;color:#111827;">Falta um passo pra começar 👋</h1>
+            <h1 style="margin:0;font-size:20px;color:#111827;">Falta um passo pra comecar</h1>
           </td>
         </tr>
         <tr>
           <td style="padding:8px 32px 4px;">
             <p style="margin:0;font-size:15px;line-height:1.6;color:#4b5563;">
-              Que bom ter você aqui. Confirme seu e-mail para ativar sua conta e cadastrar sua primeira empresa no plim.
+              Que bom ter voce aqui. Confirme seu e-mail para ativar sua conta e cadastrar sua primeira empresa no plim.
             </p>
           </td>
         </tr>
         <tr>
-          <td style="padding:24px 32px 8px;">
+          <td style="padding:24px 32px 28px;">
             <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#4548C9;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 26px;border-radius:10px;">
               Confirmar meu e-mail
             </a>
           </td>
         </tr>
         <tr>
-          <td style="padding:8px 32px 24px;">
-            <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
-              Se o botão não funcionar, copie e cole este link no navegador:<br />
-              <a href="{{ .ConfirmationURL }}" style="color:#4548C9;word-break:break-all;">{{ .ConfirmationURL }}</a>
-            </p>
-          </td>
-        </tr>
-        <tr>
           <td style="padding:16px 32px;border-top:1px solid #f0f1f7;">
             <p style="margin:0;font-size:12px;line-height:1.6;color:#9ca3af;">
-              Se você não criou uma conta no plim, pode ignorar este e-mail com segurança.<br />
-              plim — tudo começa com um plim.
+              Se voce nao criou uma conta no plim, pode ignorar este e-mail com seguranca.
+              <br />tudo comeca com um plim.
             </p>
           </td>
         </tr>

@@ -1,8 +1,8 @@
 <!--
-  Template do Supabase: "Magic Link" (login sem senha) e base para "Invite".
-  Cole em: Supabase → Authentication → Emails → Templates → Magic Link.
+  Template do Supabase: "Magic Link" (login por link).
+  Cole em: Supabase, Authentication, Emails, Templates, Magic Link.
   Assunto sugerido:  Seu acesso ao plim
-  Variável usada: {{ .ConfirmationURL }}
+  Variavel usada: {{ .ConfirmationURL }}
 -->
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <tr>
@@ -21,12 +21,12 @@
         <tr>
           <td style="padding:8px 32px 4px;">
             <p style="margin:0;font-size:15px;line-height:1.6;color:#4b5563;">
-              Clique no botão abaixo para entrar no plim. O link é pessoal e expira em pouco tempo.
+              Clique no botao abaixo para entrar no plim. O link e pessoal e expira em pouco tempo.
             </p>
           </td>
         </tr>
         <tr>
-          <td style="padding:24px 32px 8px;">
+          <td style="padding:24px 32px 28px;">
             <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#4548C9;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 26px;border-radius:10px;">
               Entrar no plim
             </a>
@@ -35,8 +35,8 @@
         <tr>
           <td style="padding:16px 32px;border-top:1px solid #f0f1f7;">
             <p style="margin:0;font-size:12px;line-height:1.6;color:#9ca3af;">
-              Se você não pediu este acesso, pode ignorar este e-mail.<br />
-              plim — tudo começa com um plim.
+              Se voce nao pediu este acesso, pode ignorar este e-mail com seguranca.
+              <br />tudo comeca com um plim.
             </p>
           </td>
         </tr>
