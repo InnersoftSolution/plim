@@ -146,10 +146,26 @@
   flex-direction: column;
   gap: 8px;
 }
+.shell-foot__profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-nav-item);
+  color: var(--color-text-subtle);
+  text-decoration: none;
+  min-width: 0;
+}
+.shell-foot__profile:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-default);
+}
+.shell-foot__profile.is-active {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+}
 .shell-foot__user {
   font-size: 12px;
-  color: var(--color-text-subtle);
-  padding: 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

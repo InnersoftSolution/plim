@@ -95,4 +95,16 @@ export const demoAuthService: AuthService = {
     listeners.add(callback);
     return () => listeners.delete(callback);
   },
+
+  async updateName(fullName: string): Promise<AuthUser> {
+    await delay(250);
+    const current = readSession() ?? { id: crypto.randomUUID(), email: 'demo@plim.work', fullName: '' };
+    const user: AuthUser = { ...current, fullName };
+    saveSession(user);
+    return user;
+  },
+
+  async updatePassword(): Promise<void> {
+    await delay(300);
+  },
 };

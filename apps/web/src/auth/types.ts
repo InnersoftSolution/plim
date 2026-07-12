@@ -28,6 +28,10 @@ export interface AuthService {
   getAccessToken(): Promise<string | null>;
   /** Notifica mudanças de sessão (login, logout, refresh). Retorna unsubscribe. */
   onAuthStateChange(callback: (user: AuthUser | null) => void): () => void;
+  /** Atualiza o nome do usuário logado (perfil). */
+  updateName(fullName: string): Promise<AuthUser>;
+  /** Troca a senha do usuário logado (exige sessão válida). */
+  updatePassword(newPassword: string): Promise<void>;
 }
 
 export class AuthError extends Error {

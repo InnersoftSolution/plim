@@ -93,7 +93,14 @@ export function AppShell() {
               Painel admin
             </NavLink>
           )}
-          <span className="shell-foot__user">{user?.email}</span>
+          <NavLink
+            to="/perfil"
+            className={({ isActive }) => 'shell-foot__profile' + (isActive ? ' is-active' : '')}
+            onClick={closeMenu}
+          >
+            <IconUser />
+            <span className="shell-foot__user">{user?.email}</span>
+          </NavLink>
           <Button variant="ghost" onClick={() => logout()}>
             Sair
           </Button>
@@ -208,6 +215,14 @@ function IconClose() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+function IconUser() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }

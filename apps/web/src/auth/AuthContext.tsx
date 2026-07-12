@@ -14,6 +14,8 @@ interface AuthContextValue {
   signup(input: SignupInput): Promise<SignupResult>;
   requestPasswordReset(email: string): Promise<void>;
   logout(): Promise<void>;
+  updateName(fullName: string): Promise<void>;
+  updatePassword(newPassword: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -57,9 +59,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateName = useCallback(async (fullName: string) => {
+    const updated = await authService.updateName(fullName);
+    setUser(updated);
+  }, []);
+
+  const updatePassword = useCallback((newPassword: string) => authService.updatePassword(newPassword), []);
+
   const value = useMemo(
-    () => ({ user, loading, login, loginWithGoogle, signup, requestPasswordReset, logout }),
-    [user, loading, login, loginWithGoogle, signup, requestPasswordReset, logout],
+    () => ({
+      user,
+      loading,
+      login,
+      loginWithGoogle,
+      signup,
+      requestPasswordReset,
+      logout,
+      updateName,
+      updatePassword,
+    }),
+    [user, loading, login, loginWithGoogle, signup, requestPasswordReset, logout, updateName, updatePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

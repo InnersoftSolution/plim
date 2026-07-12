@@ -14,6 +14,7 @@ import { HomeRedirect } from './pages/HomeRedirect';
 import { SociedadePage } from './pages/SociedadePage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ChecklistPage } from './pages/ChecklistPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { AppShell } from './components/AppShell';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminDashboardPage } from './admin/AdminDashboardPage';
@@ -74,6 +75,7 @@ export function App() {
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
             <Route path="/socios" element={<SociedadePage />} />
             <Route path="/empresa/checklist" element={<ChecklistPage />} />
+            <Route path="/perfil" element={<ProfilePage />} />
             <Route path="/atividades" element={<ActivitiesPage />} />
           </Route>
 

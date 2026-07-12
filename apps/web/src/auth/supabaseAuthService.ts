@@ -99,4 +99,24 @@ export const supabaseAuthService: AuthService = {
     });
     return () => data.subscription.unsubscribe();
   },
+
+  async updateName(fullName: string): Promise<AuthUser> {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.auth.updateUser({ data: { full_name: fullName } });
+    if (error) throw new AuthError('UNKNOWN', 'Não foi possível salvar seu nome. Tente de novo.');
+    const user = toAuthUser(data.user);
+    if (!user) throw new AuthError('UNKNOWN', 'Não foi possível atualizar o perfil.');
+    return user;
+  },
+
+  async updatePassword(newPassword: string): Promise<void> {
+    const supabase = requireSupabase();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      const msg = error.message.toLowerCase().includes('different')
+        ? 'A nova senha precisa ser diferente da atual.'
+        : 'Não foi possível alterar a senha. Tente de novo.';
+      throw new AuthError('UNKNOWN', msg);
+    }
+  },
 };
