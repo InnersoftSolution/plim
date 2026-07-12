@@ -3,6 +3,7 @@ import { weekStartOf, type ChecklistPhase, type ChecklistPriority, type Checklis
 import type { ChecklistItemRecord } from '../../domain/checklist';
 import type {
   ChecklistExtraSignals,
+  ChecklistItemPatch,
   ChecklistRepository,
   NewChecklistItem,
 } from '../checklist.repository';
@@ -21,13 +22,14 @@ interface Row {
   recommended_partner_category: string | null;
   is_custom: boolean;
   is_system_generated: boolean;
+  note: string | null;
   completed_at: string | null;
   skipped_at: string | null;
   created_at: string;
 }
 
 const COLS =
-  'id, company_id, template_key, title, description, phase, status, priority, action_label, action_route, recommended_partner_category, is_custom, is_system_generated, completed_at, skipped_at, created_at';
+  'id, company_id, template_key, title, description, phase, status, priority, action_label, action_route, recommended_partner_category, is_custom, is_system_generated, note, completed_at, skipped_at, created_at';
 
 function toRecord(row: Row): ChecklistItemRecord {
   return {
@@ -44,6 +46,7 @@ function toRecord(row: Row): ChecklistItemRecord {
     recommendedPartnerCategory: row.recommended_partner_category,
     isCustom: row.is_custom,
     isSystemGenerated: row.is_system_generated,
+    note: row.note,
     completedAt: row.completed_at,
     skippedAt: row.skipped_at,
     createdAt: row.created_at,
@@ -94,15 +97,15 @@ export class SupabaseChecklistRepository implements ChecklistRepository {
     return data ? toRecord(data) : null;
   }
 
-  async updateStatus(
-    itemId: string,
-    status: ChecklistStatus,
-    completedAt: string | null,
-    skippedAt: string | null,
-  ): Promise<ChecklistItemRecord> {
+  async updateItem(itemId: string, patch: ChecklistItemPatch): Promise<ChecklistItemRecord> {
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.status !== undefined) payload.status = patch.status;
+    if (patch.completedAt !== undefined) payload.completed_at = patch.completedAt;
+    if (patch.skippedAt !== undefined) payload.skipped_at = patch.skippedAt;
+    if (patch.note !== undefined) payload.note = patch.note;
     const { data, error } = await this.db
       .from('company_checklist_items')
-      .update({ status, completed_at: completedAt, skipped_at: skippedAt, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', itemId)
       .select(COLS)
       .single<Row>();

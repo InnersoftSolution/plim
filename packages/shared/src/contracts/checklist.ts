@@ -25,12 +25,12 @@ export const checklistPhaseCatalog: ReadonlyArray<{
   label: string;
   help: string;
 }> = [
-  { id: 'idea', label: 'Ideia e posicionamento', help: 'O que a empresa e, para quem existe e qual problema resolve.' },
-  { id: 'brand', label: 'Marca e presenca', help: 'Identidade e presenca minima para o negocio.' },
-  { id: 'partnership', label: 'Sociedade e formalizacao', help: 'Socios, participacao e estrutura legal inicial.' },
-  { id: 'finance', label: 'Financeiro inicial', help: 'Gastos, aportes, custos e organizacao financeira basica.' },
-  { id: 'product', label: 'Produto, operacao e vendas', help: 'Oferta, MVP, clientes, vendas e operacao.' },
-  { id: 'routine', label: 'Rotina e acompanhamento', help: 'Tarefas, responsaveis e ritmo semanal.' },
+  { id: 'idea', label: 'Ideia e posicionamento', help: 'O que a empresa é, para quem existe e qual problema resolve.' },
+  { id: 'brand', label: 'Marca e presença', help: 'Identidade e presença mínima para o negócio.' },
+  { id: 'partnership', label: 'Sociedade e formalização', help: 'Sócios, participação e estrutura legal inicial.' },
+  { id: 'finance', label: 'Financeiro inicial', help: 'Gastos, aportes, custos e organização financeira básica.' },
+  { id: 'product', label: 'Produto, operação e vendas', help: 'Oferta, MVP, clientes, vendas e operação.' },
+  { id: 'routine', label: 'Rotina e acompanhamento', help: 'Tarefas, responsáveis e ritmo semanal.' },
 ];
 
 /** Status de um item. Nem todo item se aplica a toda empresa. */
@@ -44,11 +44,11 @@ export const checklistStatusSchema = z.enum([
 export type ChecklistStatus = z.infer<typeof checklistStatusSchema>;
 
 export const checklistStatusCatalog: ReadonlyArray<{ id: ChecklistStatus; label: string }> = [
-  { id: 'not_started', label: 'Nao iniciado' },
+  { id: 'not_started', label: 'Não iniciado' },
   { id: 'in_progress', label: 'Em andamento' },
-  { id: 'completed', label: 'Concluido' },
+  { id: 'completed', label: 'Concluído' },
   { id: 'skipped', label: 'Fazer depois' },
-  { id: 'not_applicable', label: 'Nao se aplica' },
+  { id: 'not_applicable', label: 'Não se aplica' },
 ];
 
 export const checklistPrioritySchema = z.enum(['low', 'medium', 'high']);
@@ -71,6 +71,8 @@ export interface CompanyChecklistItem {
   isSystemGenerated: boolean;
   /** Itens com regra automatica nao podem ser editados na mao pelo usuario. */
   isAuto: boolean;
+  /** Anotacao/conteudo que o usuario registra ali mesmo (guia ou nota livre). */
+  note: string | null;
   completedAt: string | null;
   createdAt: string;
 }
@@ -87,11 +89,16 @@ export interface ChecklistView {
   summary: ChecklistSummary;
 }
 
-/** PATCH status de um item (o usuario marca concluido/depois/nao se aplica). */
-export const updateChecklistStatusSchema = z.object({
-  status: checklistStatusSchema,
+/**
+ * PATCH de um item. Pode mudar o status (concluido/depois/nao se aplica) e/ou
+ * a anotacao (o conteudo que o usuario escreve pelo guia ou nota livre).
+ * Ambos opcionais: da para salvar so a nota ou so o status.
+ */
+export const updateChecklistItemSchema = z.object({
+  status: checklistStatusSchema.optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
 });
-export type UpdateChecklistStatusInput = z.infer<typeof updateChecklistStatusSchema>;
+export type UpdateChecklistItemInput = z.infer<typeof updateChecklistItemSchema>;
 
 /** Item personalizado criado pelo usuario. */
 export const createChecklistItemSchema = z.object({

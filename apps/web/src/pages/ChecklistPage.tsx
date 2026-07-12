@@ -13,7 +13,7 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
 import { checklistApi } from '../company/checklistApi';
-import { IconPlus } from './dashIcons';
+import { guideFor, type ChecklistGuide } from '../company/checklistGuides';
 import './dashboard.css';
 import './checklist.css';
 
@@ -23,21 +23,15 @@ type State =
   | { status: 'empty' }
   | { status: 'ready'; companyId: string; view: ChecklistView };
 
-const statusMeta: Record<ChecklistStatus, { label: string; cls: string }> = {
-  not_started: { label: 'Nao iniciado', cls: 'is-not-started' },
-  in_progress: { label: 'Em andamento', cls: 'is-in-progress' },
-  completed: { label: 'Concluido', cls: 'is-completed' },
-  skipped: { label: 'Fazer depois', cls: 'is-skipped' },
-  not_applicable: { label: 'Nao se aplica', cls: 'is-na' },
-};
-
 /**
- * Checklist da empresa. Orienta os proximos passos para estruturar o negocio,
- * sem bloquear. Alguns itens se concluem sozinhos quando o dado real aparece.
+ * Checklist da empresa. Orienta os próximos passos sem bloquear.
+ * Lista agrupada no estilo do app Lembretes: círculo para concluir,
+ * linha expande para detalhes e ações, e cada fase tem "+ Adicionar item".
  */
 export function ChecklistPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [formOpen, setFormOpen] = useState(false);
+  const [formPhase, setFormPhase] = useState<ChecklistPhase | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -61,23 +55,32 @@ export function ChecklistPage() {
 
   async function changeStatus(itemId: string, status: ChecklistStatus) {
     if (state.status !== 'ready') return;
-    // Atualiza otimista e recarrega para refletir progresso e regras automaticas.
     await checklistApi.setStatus(state.companyId, itemId, status);
     await load();
   }
 
-  if (state.status === 'loading') return <div className="dash-loading">Carregando checklist...</div>;
+  async function saveNote(item: CompanyChecklistItem, note: string | null) {
+    if (state.status !== 'ready') return;
+    // Escrever algo pela primeira vez sinaliza "em andamento"; concluir fica no circulo.
+    const patch: { note: string | null; status?: ChecklistStatus } = { note };
+    if (note && item.status === 'not_started') patch.status = 'in_progress';
+    await checklistApi.update(state.companyId, item.id, patch);
+    await load();
+  }
+
+  if (state.status === 'loading') return <div className="dash-muted">Carregando checklist...</div>;
   if (state.status === 'error')
     return (
       <div className="dash-error">
-        <p>{state.message}</p>
+        <p className="dash-error__msg">{state.message}</p>
         <Button onClick={() => void load()}>Tentar de novo</Button>
       </div>
     );
   if (state.status === 'empty')
     return (
-      <div className="dash-error">
-        <p>Cadastre sua empresa para ver o checklist.</p>
+      <div className="dash-empty">
+        <h2>Cadastre sua empresa</h2>
+        <p>O checklist aparece assim que a empresa existir.</p>
         <Button onClick={() => navigate('/onboarding')}>Cadastrar empresa</Button>
       </div>
     );
@@ -86,34 +89,61 @@ export function ChecklistPage() {
 
   return (
     <div className="chk">
-      <header className="chk-head">
-        <h1>Checklist da empresa</h1>
-        <p>
-          Organize os proximos passos para transformar sua ideia em uma empresa mais estruturada. Voce pode
-          concluir os itens no seu ritmo.
+      <header>
+        <h1 className="dash-page__title">Checklist da empresa</h1>
+        <p className="dash-page__subtitle">
+          Organize os próximos passos no seu ritmo. O Plim sugere itens pelo estágio do negócio e
+          conclui sozinho o que já estiver pronto.
         </p>
       </header>
 
       <ProgressBlock view={view} />
 
-      <div className="chk-actions">
-        <Button variant="ghost" onClick={() => setFormOpen(true)}>
-          <IconPlus /> Adicionar item ao checklist
-        </Button>
-      </div>
-
       {checklistPhaseCatalog.map((phase) => {
         const items = view.items.filter((i) => i.phase === phase.id);
         if (items.length === 0) return null;
-        return <PhaseSection key={phase.id} phaseId={phase.id} items={items} onChange={changeStatus} onGo={navigate} />;
+        const done = items.filter((i) => i.status === 'completed').length;
+        return (
+          <section className="chk-phase" key={phase.id}>
+            <div className="chk-phase__head">
+              <div>
+                <h2>{phase.label}</h2>
+                <p>{phase.help}</p>
+              </div>
+              <span className="chk-phase__count">
+                {done}/{items.length}
+              </span>
+            </div>
+            <div className="chk-group">
+              {items.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  expanded={expandedId === item.id}
+                  onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
+                  onChange={changeStatus}
+                  onSaveNote={saveNote}
+                  onGo={navigate}
+                />
+              ))}
+              <button type="button" className="chk-add" onClick={() => setFormPhase(phase.id)}>
+                <span className="chk-add__plus" aria-hidden="true">
+                  +
+                </span>
+                Adicionar item
+              </button>
+            </div>
+          </section>
+        );
       })}
 
-      {formOpen && (
+      {formPhase && (
         <CustomItemModal
           companyId={companyId}
-          onClose={() => setFormOpen(false)}
+          initialPhase={formPhase}
+          onClose={() => setFormPhase(null)}
           onCreated={async () => {
-            setFormOpen(false);
+            setFormPhase(null);
             await load();
           }}
         />
@@ -126,127 +156,188 @@ function ProgressBlock({ view }: { view: ChecklistView }) {
   const { completed, total, percent } = view.summary;
   return (
     <section className="chk-progress">
-      <div className="chk-progress__top">
-        <div>
-          <strong>Estruturacao da empresa</strong>
-          <span className="chk-progress__count">
-            {completed} de {total} itens concluidos
-          </span>
-        </div>
-        <span className="chk-progress__pct">{percent}%</span>
+      <div className="chk-progress__ring" style={{ ['--pct' as string]: percent }}>
+        <span>{percent}%</span>
       </div>
-      <div className="chk-bar">
-        <div className="chk-bar__fill" style={{ width: `${percent}%` }} />
-      </div>
-      <p className="chk-progress__hint">Quanto mais itens voce organiza, mais claro fica o caminho da empresa.</p>
-    </section>
-  );
-}
-
-function PhaseSection({
-  phaseId,
-  items,
-  onChange,
-  onGo,
-}: {
-  phaseId: ChecklistPhase;
-  items: CompanyChecklistItem[];
-  onChange: (itemId: string, status: ChecklistStatus) => void;
-  onGo: (route: string) => void;
-}) {
-  const phase = checklistPhaseCatalog.find((p) => p.id === phaseId)!;
-  const done = items.filter((i) => i.status === 'completed').length;
-  return (
-    <section className="chk-phase">
-      <div className="chk-phase__head">
-        <h2>{phase.label}</h2>
-        <span className="chk-phase__count">
-          {done}/{items.length}
+      <div className="chk-progress__body">
+        <strong>Estruturação da empresa</strong>
+        <span>
+          {completed} de {total} itens concluídos
         </span>
-      </div>
-      <p className="chk-phase__help">{phase.help}</p>
-      <div className="chk-items">
-        {items.map((item) => (
-          <ItemCard key={item.id} item={item} onChange={onChange} onGo={onGo} />
-        ))}
+        <p>Quanto mais itens você organiza, mais claro fica o caminho.</p>
       </div>
     </section>
   );
 }
 
-function ItemCard({
+function ItemRow({
   item,
+  expanded,
+  onToggle,
   onChange,
+  onSaveNote,
   onGo,
 }: {
   item: CompanyChecklistItem;
+  expanded: boolean;
+  onToggle: () => void;
   onChange: (itemId: string, status: ChecklistStatus) => void;
+  onSaveNote: (item: CompanyChecklistItem, note: string | null) => Promise<void>;
   onGo: (route: string) => void;
 }) {
-  const meta = statusMeta[item.status];
-  const isDone = item.status === 'completed';
-  const isParked = item.status === 'skipped' || item.status === 'not_applicable';
+  const done = item.status === 'completed';
+  const parked = item.status === 'skipped' || item.status === 'not_applicable';
+  const guide = guideFor(item.templateKey);
+  // Itens automáticos vivem dos dados reais; não têm anotação/guia manual.
+  const canNote = !item.isAuto;
+
+  function handleCircle() {
+    if (item.isAuto) return; // itens automáticos se resolvem sozinhos
+    onChange(item.id, done ? 'not_started' : 'completed');
+  }
+
   return (
-    <article className={'chk-card ' + meta.cls}>
-      <div className="chk-card__main">
-        <div className="chk-card__title">
-          <span>{item.title}</span>
-          <span className={'chk-badge ' + meta.cls}>{meta.label}</span>
+    <div className={'chk-row' + (done ? ' is-done' : '') + (parked ? ' is-parked' : '')}>
+      <div className="chk-row__main">
+        <button
+          type="button"
+          className={'chk-circle' + (done ? ' is-checked' : '') + (item.isAuto ? ' is-auto' : '')}
+          onClick={handleCircle}
+          aria-label={done ? 'Reabrir item' : 'Marcar como feito'}
+          title={item.isAuto ? 'Este item se conclui sozinho quando o dado existir' : undefined}
+        >
+          {done && <CheckIcon />}
+        </button>
+        <button type="button" className="chk-row__label" onClick={onToggle} aria-expanded={expanded}>
+          <span className="chk-row__texts">
+            <span className="chk-row__title">{item.title}</span>
+            {!expanded && item.note && <span className="chk-row__note">{item.note}</span>}
+          </span>
+          {item.isAuto && !done && <span className="chk-tag chk-tag--auto">automático</span>}
+          {item.status === 'in_progress' && <span className="chk-tag chk-tag--progress">em andamento</span>}
+          {item.status === 'skipped' && <span className="chk-tag">fazer depois</span>}
+          {item.status === 'not_applicable' && <span className="chk-tag">não se aplica</span>}
+          <ChevronIcon className={'chk-row__chevron' + (expanded ? ' is-open' : '')} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="chk-row__detail">
+          {item.description && <p>{item.description}</p>}
+
+          {item.actionRoute && !done && (
+            <div className="chk-row__actions">
+              <button type="button" className="chk-action" onClick={() => onGo(item.actionRoute!)}>
+                {item.actionLabel ?? 'Abrir'}
+              </button>
+            </div>
+          )}
+
+          {canNote && <NotePanel item={item} guide={guide} onSave={onSaveNote} />}
+
+          <div className="chk-row__actions">
+            {!done && !parked && (
+              <>
+                <button type="button" className="chk-link" onClick={() => onChange(item.id, 'skipped')}>
+                  Fazer depois
+                </button>
+                <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_applicable')}>
+                  Não se aplica
+                </button>
+              </>
+            )}
+            {parked && (
+              <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_started')}>
+                Reabrir
+              </button>
+            )}
+          </div>
         </div>
-        {item.description && <p className="chk-card__desc">{item.description}</p>}
+      )}
+    </div>
+  );
+}
+
+/**
+ * Painel de anotação/guia dentro do item. Para itens de posicionamento, mostra
+ * o roteiro (por que, perguntas, exemplo). Para os demais, um campo livre.
+ * O usuário escreve e salva ali mesmo, sem trocar de página.
+ */
+function NotePanel({
+  item,
+  guide,
+  onSave,
+}: {
+  item: CompanyChecklistItem;
+  guide: ChecklistGuide | null;
+  onSave: (item: CompanyChecklistItem, note: string | null) => Promise<void>;
+}) {
+  const [text, setText] = useState(item.note ?? '');
+  const [saving, setSaving] = useState(false);
+  const dirty = text !== (item.note ?? '');
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const trimmed = text.trim();
+      await onSave(item, trimmed ? trimmed : null);
+      setText(trimmed);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="chk-guide">
+      {guide && (
+        <>
+          <p className="chk-guide__intro">{guide.intro}</p>
+          <ul className="chk-guide__questions">
+            {guide.questions.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <textarea
+        className="chk-note"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={guide?.placeholder ?? 'Anote aqui. Ex: Conta PJ no Banco Inter, aberta.'}
+        rows={guide ? 4 : 3}
+      />
+      <div className="chk-guide__foot">
+        {guide && !text.trim() && (
+          <button type="button" className="chk-link" onClick={() => setText(guide.example)}>
+            Usar exemplo como base
+          </button>
+        )}
+        <button
+          type="button"
+          className="chk-action chk-action--save"
+          onClick={handleSave}
+          disabled={saving || !dirty}
+        >
+          {saving ? 'Salvando...' : 'Salvar'}
+        </button>
       </div>
-      <div className="chk-card__foot">
-        {item.actionRoute && !isDone && (
-          <Button variant="ghost" onClick={() => onGo(item.actionRoute!)}>
-            {item.actionLabel ?? 'Abrir'}
-          </Button>
-        )}
-        {!isDone && !item.isAuto && (
-          <button type="button" className="chk-link" onClick={() => onChange(item.id, 'completed')}>
-            Marcar como feito
-          </button>
-        )}
-        {!isParked && !isDone && (
-          <button type="button" className="chk-link chk-link--muted" onClick={() => onChange(item.id, 'skipped')}>
-            Fazer depois
-          </button>
-        )}
-        {!isParked && (
-          <button
-            type="button"
-            className="chk-link chk-link--muted"
-            onClick={() => onChange(item.id, 'not_applicable')}
-          >
-            Nao se aplica
-          </button>
-        )}
-        {(isDone || isParked) && !item.isAuto && (
-          <button type="button" className="chk-link chk-link--muted" onClick={() => onChange(item.id, 'not_started')}>
-            Reabrir
-          </button>
-        )}
-        {(isParked && item.isAuto) && (
-          <button type="button" className="chk-link chk-link--muted" onClick={() => onChange(item.id, 'not_started')}>
-            Reabrir
-          </button>
-        )}
-      </div>
-    </article>
+    </div>
   );
 }
 
 function CustomItemModal({
   companyId,
+  initialPhase,
   onClose,
   onCreated,
 }: {
   companyId: string;
+  initialPhase: ChecklistPhase;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [phase, setPhase] = useState<ChecklistPhase>('routine');
+  const [phase, setPhase] = useState<ChecklistPhase>(initialPhase);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const canSave = useMemo(() => title.trim().length >= 2, [title]);
@@ -268,17 +359,26 @@ function CustomItemModal({
   }
 
   return (
-    <Modal title="Adicionar item ao checklist" onClose={onClose}>
+    <Modal open title="Adicionar item ao checklist" onClose={onClose}>
       {error && <div className="form-error">{error}</div>}
-      <Input label="Titulo" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Falar com fornecedor" autoFocus />
-      <Input label="Descricao (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <Select label="Fase" value={phase} onChange={(e) => setPhase(e.target.value as ChecklistPhase)}>
-        {checklistPhaseCatalog.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-      </Select>
+      <Input
+        label="O que precisa ser organizado?"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Ex: Falar com fornecedor"
+        autoFocus
+      />
+      <Input
+        label="Detalhe (opcional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <Select
+        label="Fase"
+        value={phase}
+        onChange={(value) => setPhase(value as ChecklistPhase)}
+        options={checklistPhaseCatalog.map((p) => ({ value: p.id, label: p.label }))}
+      />
       <div className="modal-actions">
         <Button variant="ghost" onClick={onClose}>
           Cancelar
@@ -288,5 +388,20 @@ function CustomItemModal({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   );
 }

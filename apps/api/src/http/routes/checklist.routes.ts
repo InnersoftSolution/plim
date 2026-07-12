@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createChecklistItemSchema, updateChecklistStatusSchema } from '@plim/shared';
+import { createChecklistItemSchema, updateChecklistItemSchema } from '@plim/shared';
 import { z } from 'zod';
 import type { ChecklistService } from '../../services/checklist.service';
 import { authenticate } from '../auth';
@@ -23,8 +23,8 @@ export async function checklistRoutes(app: FastifyInstance, opts: { service: Che
 
   app.patch('/companies/:companyId/checklist/:itemId', async (request) => {
     const { companyId, itemId } = itemParamsSchema.parse(request.params);
-    const { status } = updateChecklistStatusSchema.parse(request.body);
-    return service.updateStatus(companyId, itemId, status, request.user?.id ?? null);
+    const patch = updateChecklistItemSchema.parse(request.body);
+    return service.updateItem(companyId, itemId, patch, request.user?.id ?? null);
   });
 
   app.post('/companies/:companyId/checklist', async (request, reply) => {

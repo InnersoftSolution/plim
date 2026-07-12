@@ -13,22 +13,28 @@ import { NotFoundError } from '../lib/errors';
 
 /** Chaves do catalogo que tem regra automatica (nao editaveis pelo usuario). */
 const autoRuleByKey = new Map(checklistCatalog.filter((t) => t.autoRule).map((t) => [t.key, t.autoRule!]));
+const templateByKey = new Map(checklistCatalog.map((t) => [t.key, t]));
 
 function toDto(r: ChecklistItemRecord): CompanyChecklistItem {
+  // Itens do sistema: a APRESENTACAO (titulo, descricao, acao) vem sempre do
+  // catalogo, que e a fonte da verdade e pode evoluir; o banco guarda o estado.
+  // Itens personalizados usam o que o usuario escreveu.
+  const t = r.templateKey ? templateByKey.get(r.templateKey) : undefined;
   return {
     id: r.id,
     templateKey: r.templateKey,
-    title: r.title,
-    description: r.description,
-    phase: r.phase,
+    title: t?.title ?? r.title,
+    description: t?.description ?? r.description,
+    phase: t?.phase ?? r.phase,
     status: r.status,
-    priority: r.priority,
-    actionLabel: r.actionLabel,
-    actionRoute: r.actionRoute,
-    recommendedPartnerCategory: r.recommendedPartnerCategory,
+    priority: t?.priority ?? r.priority,
+    actionLabel: t?.actionLabel ?? (t ? null : r.actionLabel),
+    actionRoute: t?.actionRoute ?? (t ? null : r.actionRoute),
+    recommendedPartnerCategory: t?.recommendedPartnerCategory ?? (t ? null : r.recommendedPartnerCategory),
     isCustom: r.isCustom,
     isSystemGenerated: r.isSystemGenerated,
     isAuto: r.templateKey ? autoRuleByKey.has(r.templateKey) : false,
+    note: r.note,
     completedAt: r.completedAt,
     createdAt: r.createdAt,
   };
@@ -96,12 +102,11 @@ export class ChecklistService {
       if (item.status === 'skipped' || item.status === 'not_applicable') continue;
       const next = autoStatus(rule, signals);
       if (next && next !== item.status) {
-        const updated = await this.repo.updateStatus(
-          item.id,
-          next,
-          next === 'completed' ? new Date().toISOString() : null,
-          null,
-        );
+        const updated = await this.repo.updateItem(item.id, {
+          status: next,
+          completedAt: next === 'completed' ? new Date().toISOString() : null,
+          skippedAt: null,
+        });
         Object.assign(item, updated);
       }
     }
@@ -110,23 +115,30 @@ export class ChecklistService {
     return { items, summary: checklistSummaryOf(items) };
   }
 
-  /** Usuario marca um item (concluido, fazer depois, nao se aplica...). */
-  async updateStatus(
+  /**
+   * Usuario atualiza um item: muda o status (concluido, fazer depois, nao se
+   * aplica...) e/ou salva a anotacao que escreveu ali mesmo (guia ou nota livre).
+   */
+  async updateItem(
     companyId: string,
     itemId: string,
-    status: ChecklistStatus,
+    patch: { status?: ChecklistStatus; note?: string | null },
     actingUserId?: string | null,
   ): Promise<CompanyChecklistItem> {
     await this.companyService.getOverview(companyId, actingUserId);
     const item = await this.repo.findItemById(companyId, itemId);
     if (!item) throw new NotFoundError('CHECKLIST_ITEM_NOT_FOUND', 'Item do checklist nao encontrado.');
-    const now = new Date().toISOString();
-    const updated = await this.repo.updateStatus(
-      itemId,
-      status,
-      status === 'completed' ? now : null,
-      status === 'skipped' ? now : null,
-    );
+
+    const changes: { status?: ChecklistStatus; completedAt?: string | null; skippedAt?: string | null; note?: string | null } = {};
+    if (patch.note !== undefined) changes.note = patch.note;
+    if (patch.status !== undefined) {
+      const now = new Date().toISOString();
+      changes.status = patch.status;
+      changes.completedAt = patch.status === 'completed' ? now : null;
+      changes.skippedAt = patch.status === 'skipped' ? now : null;
+    }
+
+    const updated = await this.repo.updateItem(itemId, changes);
     return toDto(updated);
   }
 

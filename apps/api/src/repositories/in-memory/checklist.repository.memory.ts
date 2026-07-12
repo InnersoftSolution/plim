@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { ChecklistStatus } from '@plim/shared';
 import type { ChecklistItemRecord } from '../../domain/checklist';
 import type {
   ChecklistExtraSignals,
+  ChecklistItemPatch,
   ChecklistRepository,
   NewChecklistItem,
 } from '../checklist.repository';
@@ -43,6 +43,7 @@ export class InMemoryChecklistRepository implements ChecklistRepository {
         recommendedPartnerCategory: input.recommendedPartnerCategory,
         isCustom: input.isCustom,
         isSystemGenerated: input.isSystemGenerated,
+        note: null,
         completedAt: null,
         skippedAt: null,
         createdAt: now,
@@ -57,17 +58,13 @@ export class InMemoryChecklistRepository implements ChecklistRepository {
     return item && item.companyId === companyId ? item : null;
   }
 
-  async updateStatus(
-    itemId: string,
-    status: ChecklistStatus,
-    completedAt: string | null,
-    skippedAt: string | null,
-  ): Promise<ChecklistItemRecord> {
+  async updateItem(itemId: string, patch: ChecklistItemPatch): Promise<ChecklistItemRecord> {
     const item = this.items.get(itemId);
     if (!item) throw new Error('checklist item not found');
-    item.status = status;
-    item.completedAt = completedAt;
-    item.skippedAt = skippedAt;
+    if (patch.status !== undefined) item.status = patch.status;
+    if (patch.completedAt !== undefined) item.completedAt = patch.completedAt;
+    if (patch.skippedAt !== undefined) item.skippedAt = patch.skippedAt;
+    if (patch.note !== undefined) item.note = patch.note;
     return item;
   }
 

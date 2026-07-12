@@ -11,11 +11,23 @@ export const checklistApi = {
     return apiFetch<ChecklistView>(`/companies/${companyId}/checklist`);
   },
 
-  setStatus(companyId: string, itemId: string, status: ChecklistStatus): Promise<CompanyChecklistItem> {
+  update(
+    companyId: string,
+    itemId: string,
+    patch: { status?: ChecklistStatus; note?: string | null },
+  ): Promise<CompanyChecklistItem> {
     return apiFetch<CompanyChecklistItem>(`/companies/${companyId}/checklist/${itemId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
+  },
+
+  setStatus(companyId: string, itemId: string, status: ChecklistStatus): Promise<CompanyChecklistItem> {
+    return this.update(companyId, itemId, { status });
+  },
+
+  saveNote(companyId: string, itemId: string, note: string | null): Promise<CompanyChecklistItem> {
+    return this.update(companyId, itemId, { note });
   },
 
   createCustom(companyId: string, input: CreateChecklistItemInput): Promise<CompanyChecklistItem> {

@@ -25,15 +25,18 @@ export interface NewChecklistItem {
   isSystemGenerated: boolean;
 }
 
+/** Campos editaveis de um item. So o que vier definido e alterado. */
+export interface ChecklistItemPatch {
+  status?: ChecklistStatus;
+  completedAt?: string | null;
+  skippedAt?: string | null;
+  note?: string | null;
+}
+
 export interface ChecklistRepository {
   listItems(companyId: string): Promise<ChecklistItemRecord[]>;
   insertItems(items: NewChecklistItem[]): Promise<ChecklistItemRecord[]>;
   findItemById(companyId: string, itemId: string): Promise<ChecklistItemRecord | null>;
-  updateStatus(
-    itemId: string,
-    status: ChecklistStatus,
-    completedAt: string | null,
-    skippedAt: string | null,
-  ): Promise<ChecklistItemRecord>;
+  updateItem(itemId: string, patch: ChecklistItemPatch): Promise<ChecklistItemRecord>;
   extraSignals(companyId: string): Promise<ChecklistExtraSignals>;
 }

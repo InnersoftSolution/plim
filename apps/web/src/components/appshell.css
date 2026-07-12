@@ -146,6 +146,16 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Botão "Sair" com borda, escopo só do rodapé. */
+.shell-foot .btn--ghost {
+  width: 100%;
+  justify-content: center;
+  border: 1px solid var(--color-border-default);
+}
+.shell-foot .btn--ghost:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-elevated);
+}
 .shell-foot__profile {
   display: flex;
   align-items: center;

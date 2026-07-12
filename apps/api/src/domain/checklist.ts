@@ -39,6 +39,7 @@ export interface ChecklistItemRecord {
   recommendedPartnerCategory: string | null;
   isCustom: boolean;
   isSystemGenerated: boolean;
+  note: string | null;
   completedAt: string | null;
   skippedAt: string | null;
   createdAt: string;

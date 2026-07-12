@@ -52,7 +52,7 @@ describe('ChecklistService', () => {
   it('respeita "fazer depois" e nao sobrescreve com regra automatica', async () => {
     let view = await checklist.getChecklist(companyId, 'u1');
     const mov = view.items.find((i) => i.templateKey === 'first_movement')!;
-    await checklist.updateStatus(companyId, mov.id, 'skipped', 'u1');
+    await checklist.updateItem(companyId, mov.id, { status: 'skipped' }, 'u1');
     // Agora surge uma movimentacao, mas o usuario ja escolheu adiar.
     checklistRepo.setSignals(companyId, { expensesCount: 1 });
     view = await checklist.getChecklist(companyId, 'u1');
@@ -63,9 +63,39 @@ describe('ChecklistService', () => {
     let view = await checklist.getChecklist(companyId, 'u1');
     const totalInicial = view.summary.total;
     const item = view.items.find((i) => i.status !== 'completed')!;
-    await checklist.updateStatus(companyId, item.id, 'not_applicable', 'u1');
+    await checklist.updateItem(companyId, item.id, { status: 'not_applicable' }, 'u1');
     view = await checklist.getChecklist(companyId, 'u1');
     expect(view.summary.total).toBe(totalInicial - 1);
+  });
+
+  it('salva a anotacao do item sem mexer no status', async () => {
+    const view = await checklist.getChecklist(companyId, 'u1');
+    const alvo = view.items.find((i) => i.templateKey === 'target_audience')!;
+    const updated = await checklist.updateItem(
+      companyId,
+      alvo.id,
+      { note: 'Donos de pet de classe media que compram online.' },
+      'u1',
+    );
+    expect(updated.note).toBe('Donos de pet de classe media que compram online.');
+    expect(updated.status).toBe('not_started');
+    const again = await checklist.getChecklist(companyId, 'u1');
+    expect(again.items.find((i) => i.id === alvo.id)?.note).toBe(
+      'Donos de pet de classe media que compram online.',
+    );
+  });
+
+  it('salva anotacao e status ao mesmo tempo', async () => {
+    const view = await checklist.getChecklist(companyId, 'u1');
+    const missao = view.items.find((i) => i.templateKey === 'mission')!;
+    const updated = await checklist.updateItem(
+      companyId,
+      missao.id,
+      { note: 'Facilitar a vida de quem esta comecando.', status: 'in_progress' },
+      'u1',
+    );
+    expect(updated.note).toBe('Facilitar a vida de quem esta comecando.');
+    expect(updated.status).toBe('in_progress');
   });
 
   it('cria item personalizado da empresa', async () => {
