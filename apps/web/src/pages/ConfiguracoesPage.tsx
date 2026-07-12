@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   businessStageCatalog,
@@ -638,16 +638,17 @@ const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Company) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [dragging, setDragging] = useState(false);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
     setError('');
     if (!LOGO_TYPES.includes(file.type)) {
-      setError('Formato nao suportado. Use PNG, JPG ou WEBP.');
+      setError('Formato não suportado. Use PNG, JPG ou WEBP.');
       return;
     }
     if (file.size > LOGO_MAX_BYTES) {
-      setError('A imagem passa de 5MB. Escolha uma versao menor.');
+      setError('A imagem passa de 5MB. Escolha uma versão menor.');
       return;
     }
     setBusy(true);
@@ -675,47 +676,69 @@ function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Compan
     }
   }
 
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    if (busy) return;
+    void handleFile(e.dataTransfer.files?.[0]);
+  }
+
   return (
     <section className="dash-panel">
       <div className="dash-panel__head">
         <h2>Logo da empresa</h2>
       </div>
       {error && <div className="form-error">{error}</div>}
-      <div className="logo-panel">
+
+      <label
+        className={
+          'logo-drop' + (dragging ? ' is-dragging' : '') + (busy ? ' is-busy' : '')
+        }
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <input
+          type="file"
+          accept={LOGO_TYPES.join(',')}
+          disabled={busy}
+          onChange={(e) => {
+            void handleFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
         {company.logoUrl ? (
-          <img className="logo-panel__img" src={company.logoUrl} alt={`Logo de ${company.name}`} />
+          <img className="logo-drop__img" src={company.logoUrl} alt={`Logo de ${company.name}`} />
         ) : (
-          <div className="logo-panel__placeholder" aria-hidden="true">
+          <div className="logo-drop__placeholder" aria-hidden="true">
             {initials(company.name)}
           </div>
         )}
-        <div className="logo-panel__body">
-          <p className="dash-panel__hint">
-            {company.logoUrl
-              ? 'Sua logo aparece na Home e nos dados da empresa.'
-              : 'Adicione uma logo para deixar o ambiente da empresa mais personalizado. PNG, JPG ou WEBP, ate 5MB.'}
-          </p>
-          <div className="logo-panel__actions">
-            <label className="logo-panel__upload">
-              <input
-                type="file"
-                accept={LOGO_TYPES.join(',')}
-                disabled={busy}
-                onChange={(e) => {
-                  void handleFile(e.target.files?.[0]);
-                  e.target.value = '';
-                }}
-              />
-              <span>{busy ? 'Enviando...' : company.logoUrl ? 'Trocar logo' : 'Adicionar logo'}</span>
-            </label>
-            {company.logoUrl && !busy && (
-              <button type="button" className="logo-panel__remove" onClick={() => void handleRemove()}>
-                Remover
-              </button>
-            )}
-          </div>
+        <div className="logo-drop__body">
+          <span className="logo-drop__cta">
+            {busy
+              ? 'Enviando...'
+              : dragging
+                ? 'Solte a imagem aqui'
+                : company.logoUrl
+                  ? 'Arraste uma nova imagem ou clique para trocar'
+                  : 'Arraste uma imagem ou clique para escolher'}
+          </span>
+          <span className="logo-drop__hint">
+            Tamanho ideal: quadrada, no mínimo 256x256px (512x512 fica ótima). PNG com fundo
+            transparente é o que fica melhor. JPG ou WEBP também servem, até 5MB.
+          </span>
         </div>
-      </div>
+      </label>
+
+      {company.logoUrl && !busy && (
+        <button type="button" className="logo-drop__remove" onClick={() => void handleRemove()}>
+          Remover logo
+        </button>
+      )}
     </section>
   );
 }
