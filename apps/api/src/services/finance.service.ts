@@ -9,11 +9,34 @@ import type {
 } from '@plim/shared';
 import type { CompanyMember } from '../domain/company';
 import type { Expense, SettlementPayment } from '../domain/finance';
+import type { RecurringCost } from '../domain/recurring';
 import type { FinanceRepository } from '../repositories/finance.repository';
+import type { RecurringRepository } from '../repositories/recurring.repository';
 import type { CompanyService } from './company.service';
 import { computeSplit } from './rateio';
 import { computeSettlements } from './settlements';
 import { DomainError, NotFoundError } from '../lib/errors';
+
+/**
+ * Avança a data da cobrança conforme a frequência (YYYY-MM-DD, sem fuso).
+ * Mensal/trimestral/anual preservam o dia, ajustando quando o mês é mais
+ * curto (31 jan + 1 mês = 28/29 fev). 'other' é tratado como mensal.
+ */
+export function nextChargeDate(chargeOn: string, frequency: RecurringCost['frequency']): string | null {
+  if (frequency === 'once') return null;
+  const [y, m, d] = chargeOn.split('-').map(Number) as [number, number, number];
+  if (frequency === 'weekly') {
+    const date = new Date(Date.UTC(y, m - 1, d + 7));
+    return date.toISOString().slice(0, 10);
+  }
+  const months = frequency === 'quarterly' ? 3 : frequency === 'annual' ? 12 : 1;
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12);
+  const month = total % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const date = new Date(Date.UTC(year, month, Math.min(d, lastDay)));
+  return date.toISOString().slice(0, 10);
+}
 
 /**
  * Decide se uma movimentação já nasce confirmada ou precisa do pagador confirmar.
@@ -57,7 +80,61 @@ export class FinanceService {
   constructor(
     private readonly companyService: CompanyService,
     private readonly repo: FinanceRepository,
+    /** Quando presente, liga a materialização de custos recorrentes. */
+    private readonly recurringRepo?: RecurringRepository,
   ) {}
+
+  /**
+   * Materializa cobranças vencidas dos custos recorrentes ativos: para cada
+   * custo com nextChargeOn <= hoje, gera uma CONTA A PAGAR já rateada entre
+   * os sócios (splitMode do custo) e avança a próxima cobrança.
+   * Idempotente: (custo, competência) é única; roda "preguiçosa" a cada
+   * abertura do financeiro. Determinística, R$0 de IA.
+   */
+  private async materializeRecurringCharges(
+    companyId: string,
+    members: CompanyMember[],
+    today = new Date().toISOString().slice(0, 10),
+  ): Promise<void> {
+    if (!this.recurringRepo) return;
+    const costs = await this.recurringRepo.list(companyId);
+    for (const cost of costs) {
+      if (!cost.active || !cost.nextChargeOn || cost.nextChargeOn > today) continue;
+
+      let charge: string | null = cost.nextChargeOn;
+      // Trava de segurança: no máximo 24 competências por vez (2 anos mensais).
+      for (let guard = 0; charge != null && charge <= today && guard < 24; guard++) {
+        const already = await this.repo.findExpenseByRecurringCharge(cost.id, charge);
+        if (!already) {
+          const weights = members.map((m) =>
+            cost.splitMode === 'equal' ? 1 : m.equityPercent ?? 0,
+          );
+          const split = computeSplit(cost.amountCents, weights);
+          await this.repo.createExpense({
+            companyId,
+            kind: 'expense',
+            description: cost.name,
+            amountCents: cost.amountCents,
+            currencyCode: cost.currencyCode,
+            paidByMemberId: cost.paidByMemberId,
+            spentOn: charge,
+            splitMode: cost.splitMode,
+            shares: members.map((m, i) => ({ memberId: m.id, shareCents: split[i]! })),
+            note: null,
+            paymentStatus: 'unpaid', // nasce como conta a pagar; entra nos números ao pagar
+            dueDate: charge,
+            confirmationStatus: 'confirmed', // gerada pelo sistema a partir de regra já acordada
+            createdByMemberId: null,
+            recurringCostId: cost.id,
+            recurringChargeOn: charge,
+          });
+        }
+        charge = nextChargeDate(charge, cost.frequency);
+      }
+      // Persiste a próxima cobrança (nula quando era pagamento único).
+      await this.recurringRepo.update(cost.id, { nextChargeOn: charge });
+    }
+  }
 
   async createExpense(
     companyId: string,
@@ -80,7 +157,7 @@ export class FinanceService {
       throw new DomainError('DUE_DATE_REQUIRED', 'Informe a data de vencimento da conta a pagar.');
     }
 
-    return this.repo.createExpense({
+    const expense = await this.repo.createExpense({
       companyId,
       kind: 'expense',
       description: input.description,
@@ -95,7 +172,35 @@ export class FinanceService {
       dueDate: isUnpaid ? input.dueDate ?? null : null,
       confirmationStatus: conf.status,
       createdByMemberId: conf.createdByMemberId,
+      recurringCostId: null,
+      recurringChargeOn: null,
     });
+
+    // "Fulano já me pagou a parte dele": registra o acerto na hora, junto
+    // com a despesa. Só faz sentido para despesa JÁ PAGA e confirmada.
+    if (
+      input.settledMemberIds?.length &&
+      expense.paymentStatus === 'paid' &&
+      expense.confirmationStatus === 'confirmed'
+    ) {
+      for (const memberId of new Set(input.settledMemberIds)) {
+        if (memberId === expense.paidByMemberId) continue; // pagador não deve a si mesmo
+        const share = expense.shares.find((s) => s.memberId === memberId);
+        if (!share || share.shareCents <= 0) continue;
+        await this.repo.createPayment({
+          companyId,
+          fromMemberId: memberId,
+          toMemberId: expense.paidByMemberId,
+          amountCents: share.shareCents,
+          paidOn: expense.spentOn,
+          method: null,
+          note: `Acerto registrado junto com a despesa "${expense.description}".`,
+          status: 'confirmed',
+        });
+      }
+    }
+
+    return expense;
   }
 
   /**
@@ -128,6 +233,8 @@ export class FinanceService {
       dueDate: null,
       confirmationStatus: conf.status,
       createdByMemberId: conf.createdByMemberId,
+      recurringCostId: null,
+      recurringChargeOn: null,
     });
   }
 
@@ -203,6 +310,13 @@ export class FinanceService {
   async listExpenses(companyId: string, actingUserId?: string | null) {
     const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const meId = actingUserId ? members.find((m) => m.userId === actingUserId)?.id ?? null : null;
+    // Cobranças recorrentes vencidas viram contas a pagar antes de listar.
+    // Falha aqui não pode derrubar a listagem (ex.: corrida entre duas abas).
+    try {
+      await this.materializeRecurringCharges(companyId, members);
+    } catch {
+      /* melhor listar sem materializar do que quebrar o financeiro */
+    }
     const expenses = await this.repo.listExpenses(companyId);
     // canConfirm: sou o pagador E está aguardando minha confirmação.
     return expenses.map((e) => ({

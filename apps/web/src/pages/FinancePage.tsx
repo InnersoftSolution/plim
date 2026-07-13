@@ -549,6 +549,11 @@ function MovRow({
               {isAporte ? 'Aporte' : 'Despesa'}
             </span>
           )}
+          {e.recurringCostId && (
+            <span className="fin-mov__badge fin-mov__badge--rec" title="Gerada automaticamente do custo recorrente">
+              automática
+            </span>
+          )}
         </span>
         <span className="fin-mov__meta">
           {toPay && e.dueDate
@@ -754,6 +759,9 @@ function MovDetail({
 
       {/* 2) resumo humano do impacto */}
       <div className={`movd-impact movd-impact--${cfg.tone}`}>
+        {exp?.recurringCostId && (
+          <p>O Plim gerou esta cobrança automaticamente a partir do custo recorrente cadastrado.</p>
+        )}
         {(impactLines ?? cfg.impact).map((line) => (
           <p key={line}>{line}</p>
         ))}
@@ -999,21 +1007,27 @@ function buildMonthlySeries(
     d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
   const points: ChartPoint[] = [];
 
+  // Regra do produto: só o que está CONFIRMADO e PAGO conta como gasto.
+  const counted = (e: Expense) =>
+    e.kind === kind && e.confirmationStatus === 'confirmed' && (e.paymentStatus ?? 'paid') === 'paid';
+
+  // Base da projeção: só lançamentos manuais. As cobranças geradas de custos
+  // recorrentes já entram pela soma recorrente — sem contar duas vezes.
+  const manualByMonth: number[] = [];
+
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const cents = expenses
-      .filter((e) => e.kind === kind && e.confirmationStatus === 'confirmed' && e.spentOn.startsWith(key))
-      .reduce((s, e) => s + e.amountCents, 0);
+    const inMonth = expenses.filter((e) => counted(e) && e.spentOn.startsWith(key));
+    const cents = inMonth.reduce((s, e) => s + e.amountCents, 0);
+    manualByMonth.push(inMonth.filter((e) => !e.recurringCostId).reduce((s, e) => s + e.amountCents, 0));
     points.push({ key, label: monthShort(d), cents, current: i === 0 });
   }
 
   if (kind === 'expense') {
-    const withData = points.filter((p) => p.cents > 0);
+    const withData = manualByMonth.filter((c) => c > 0);
     const avg =
-      withData.length > 0
-        ? Math.round(withData.reduce((s, p) => s + p.cents, 0) / withData.length)
-        : 0;
+      withData.length > 0 ? Math.round(withData.reduce((s, c) => s + c, 0) / withData.length) : 0;
     const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     points.push({
       key: 'proj',

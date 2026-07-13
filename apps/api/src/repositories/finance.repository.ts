@@ -13,4 +13,6 @@ export interface FinanceRepository {
   listPayments(companyId: string): Promise<SettlementPayment[]>;
   /** Exclusão definitiva de uma movimentação (as partilhas caem em cascata). */
   deleteExpense(expenseId: string): Promise<void>;
+  /** Cobrança já materializada deste custo nesta competência (idempotência). */
+  findExpenseByRecurringCharge(costId: string, chargeOn: string): Promise<Expense | null>;
 }

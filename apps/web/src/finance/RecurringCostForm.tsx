@@ -6,6 +6,7 @@ import {
   type CompanyMember,
   type RecurringCategory,
   type RecurringFrequency,
+  type RecurringSplitMode,
 } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -37,6 +38,7 @@ export function RecurringCostForm({
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<RecurringFrequency | ''>('monthly');
   const [paidBy, setPaidBy] = useState(members[0]?.id ?? '');
+  const [splitMode, setSplitMode] = useState<RecurringSplitMode>('equity');
   const [nextCharge, setNextCharge] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
@@ -58,7 +60,7 @@ export function RecurringCostForm({
     event.preventDefault();
     setError('');
     const amountCents = parseMoneyToCents(amount);
-    if (name.trim().length < 1) return setError('Dê um nome ao custo — ex.: "Adobe".');
+    if (name.trim().length < 1) return setError('Dê um nome ao custo. Ex.: "Adobe".');
     if (!category) return setError('Escolha uma categoria.');
     if (amountCents == null) return setError('Informe um valor válido, maior que zero.');
     if (!frequency) return setError('Escolha a frequência.');
@@ -71,6 +73,7 @@ export function RecurringCostForm({
         amountCents,
         frequency,
         paidByMemberId: paidBy,
+        splitMode,
         nextChargeOn: nextCharge || null,
         note: note.trim() || null,
       });
@@ -98,8 +101,8 @@ export function RecurringCostForm({
           </h3>
           <p className="rc-success__msg">
             {frequency === 'once'
-              ? 'Ficou salvo no histórico — sem afetar o custo mensal estimado.'
-              : 'O Plim atualizou o custo mensal estimado da sua empresa.'}
+              ? 'Ficou salvo no histórico, sem afetar o custo mensal estimado.'
+              : 'O custo mensal foi atualizado. Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.'}
           </p>
         </div>
         <div className="mw-actions">
@@ -117,8 +120,8 @@ export function RecurringCostForm({
   return (
     <form className="mw" onSubmit={handleSubmit} noValidate>
       <p className="mw-hint" style={{ marginTop: 0 }}>
-        Cadastre assinaturas, ferramentas e serviços que se repetem para entender quanto custa manter
-        sua empresa funcionando. Só custos ativos entram na estimativa mensal.
+        Cadastre assinaturas, ferramentas e serviços que se repetem. Na data da cobrança, o Plim gera
+        sozinho a conta a pagar já dividida entre os sócios, e o custo entra na estimativa mensal.
       </p>
       {error && <div className="form-error">{error}</div>}
       <div className="mw-form">
@@ -159,6 +162,17 @@ export function RecurringCostForm({
             options={members.map((m) => ({ value: m.id, label: m.fullName }))}
           />
         </div>
+        {members.length > 1 && frequency !== 'once' && (
+          <Select
+            label="Como dividir entre os sócios"
+            value={splitMode}
+            onChange={(v) => setSplitMode(v as RecurringSplitMode)}
+            options={[
+              { value: 'equity', label: 'Pela participação de cada sócio' },
+              { value: 'equal', label: 'Partes iguais' },
+            ]}
+          />
+        )}
         <div className="field">
           <label className="field__label">
             {frequency === 'once' ? 'Data do pagamento (opcional)' : 'Próxima cobrança (opcional, mas recomendada)'}

@@ -80,7 +80,6 @@ export function buildApp(): FastifyInstance {
   const financeRepository: FinanceRepository = isSupabaseConfigured
     ? new SupabaseFinanceRepository(getSupabaseAdmin())
     : new InMemoryFinanceRepository();
-  const financeService = new FinanceService(companyService, financeRepository);
 
   const guideRepository: GuideRepository = isSupabaseConfigured
     ? new SupabaseGuideRepository(getSupabaseAdmin())
@@ -95,6 +94,9 @@ export function buildApp(): FastifyInstance {
     ? new SupabaseRecurringRepository(getSupabaseAdmin())
     : new InMemoryRecurringRepository();
   const recurringService = new RecurringService(companyService, recurringRepository);
+
+  // O financeiro conhece os recorrentes para materializar as cobranças do mês.
+  const financeService = new FinanceService(companyService, financeRepository, recurringRepository);
 
   const activityRepository: ActivityRepository = isSupabaseConfigured
     ? new SupabaseActivityRepository(getSupabaseAdmin())

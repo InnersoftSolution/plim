@@ -1,4 +1,4 @@
-import type { RecurringCategory, RecurringFrequency } from '@plim/shared';
+import type { RecurringCategory, RecurringFrequency, RecurringSplitMode } from '@plim/shared';
 
 /** Custo recorrente (assinatura/ferramenta). Valores em centavos inteiros. */
 export interface RecurringCost {
@@ -10,6 +10,8 @@ export interface RecurringCost {
   currencyCode: string | null;
   frequency: RecurringFrequency;
   paidByMemberId: string;
+  /** Como a cobrança gerada se divide entre os sócios. */
+  splitMode: RecurringSplitMode;
   /** Próxima cobrança (YYYY-MM-DD). Opcional, mas recomendada. */
   nextChargeOn: string | null;
   note: string | null;
@@ -21,6 +23,14 @@ export interface RecurringCost {
 export type RecurringCostUpdate = Partial<
   Pick<
     RecurringCost,
-    'name' | 'category' | 'amountCents' | 'frequency' | 'paidByMemberId' | 'nextChargeOn' | 'note' | 'active'
+    | 'name'
+    | 'category'
+    | 'amountCents'
+    | 'frequency'
+    | 'paidByMemberId'
+    | 'splitMode'
+    | 'nextChargeOn'
+    | 'note'
+    | 'active'
   >
 >;

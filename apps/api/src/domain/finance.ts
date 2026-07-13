@@ -51,5 +51,9 @@ export interface Expense {
   confirmationStatus: ConfirmationStatus;
   /** Sócio que cadastrou (pode ≠ pagador). Nulo em dados antigos / modo dev. */
   createdByMemberId: string | null;
+  /** Custo recorrente que gerou esta cobrança (nulo em lançamento manual). */
+  recurringCostId: string | null;
+  /** Competência da cobrança gerada (YYYY-MM-DD); par único com o custo. */
+  recurringChargeOn: string | null;
   createdAt: Date;
 }

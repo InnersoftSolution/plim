@@ -114,6 +114,12 @@ export const createExpenseSchema = z.object({
   paymentStatus: paymentStatusSchema.optional(),
   /** Vencimento (YYYY-MM-DD) — obrigatório quando paymentStatus = 'unpaid'. */
   dueDate: z.string().date().nullable().optional(),
+  /**
+   * Sócios que JÁ acertaram a parte deles com o pagador no momento do
+   * registro (só vale para despesa já paga). O Plim registra o pagamento
+   * de acerto de cada um automaticamente.
+   */
+  settledMemberIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
@@ -155,6 +161,8 @@ export const expenseSchema = z.object({
   confirmationStatus: confirmationStatusSchema,
   /** Sócio que CADASTROU (pode ser diferente do pagador). Nulo em dados antigos. */
   createdByMemberId: z.string().uuid().nullable(),
+  /** Custo recorrente que gerou esta cobrança (nulo em lançamento manual). */
+  recurringCostId: z.string().uuid().nullable().default(null),
   /** True quando o usuário logado é o pagador e a movimentação está pendente. */
   canConfirm: z.boolean().default(false),
   createdAt: z.string().datetime(),

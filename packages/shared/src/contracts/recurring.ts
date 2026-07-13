@@ -3,7 +3,8 @@ import { z } from 'zod';
 /**
  * Custos recorrentes (assinaturas, ferramentas, serviços que se repetem).
  * Mostram quanto custa MANTER a empresa por mês. Valores em centavos inteiros.
- * Não geram acerto entre sócios automaticamente (por enquanto é estimativa).
+ * Na data da cobrança, o backend MATERIALIZA uma conta a pagar rateada entre
+ * os sócios (splitMode); a partir daí ela segue o fluxo normal de despesa.
  */
 
 export const recurringCategorySchema = z.enum([
@@ -39,12 +40,21 @@ export const recurringFrequencyCatalog = [
   { id: 'other', label: 'Outro' },
 ] as const;
 
+/**
+ * Divisão da cobrança gerada entre os sócios (sem 'custom' por enquanto:
+ * recorrente pede uma regra estável, não valores digitados a cada mês).
+ */
+export const recurringSplitModeSchema = z.enum(['equity', 'equal']);
+export type RecurringSplitMode = z.infer<typeof recurringSplitModeSchema>;
+
 export const createRecurringCostSchema = z.object({
   name: z.string().trim().min(1, 'Dê um nome ao custo').max(80),
   category: recurringCategorySchema,
   amountCents: z.number().int().positive('Valor deve ser maior que zero'),
   frequency: recurringFrequencySchema,
   paidByMemberId: z.string().uuid(),
+  /** Como a cobrança gerada se divide entre os sócios. */
+  splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().date().nullable().optional(), // opcional, mas recomendada
   note: z.string().trim().max(300).nullable().optional(),
 });
@@ -65,6 +75,7 @@ export const recurringCostSchema = z.object({
   currencyCode: z.string().nullable(),
   frequency: recurringFrequencySchema,
   paidByMemberId: z.string().uuid(),
+  splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().nullable(),
   note: z.string().nullable(),
   active: z.boolean(),

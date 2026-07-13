@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { RecurringCategory, RecurringFrequency } from '@plim/shared';
+import type { RecurringCategory, RecurringFrequency, RecurringSplitMode } from '@plim/shared';
 import type { RecurringCost, RecurringCostUpdate } from '../../domain/recurring';
 import type { RecurringRepository } from '../recurring.repository';
 
@@ -12,6 +12,7 @@ interface Row {
   currency_code: string | null;
   frequency: RecurringFrequency;
   paid_by_member_id: string;
+  split_mode: RecurringSplitMode | null;
   next_charge_on: string | null;
   note: string | null;
   active: boolean;
@@ -28,6 +29,7 @@ function toCost(row: Row): RecurringCost {
     currencyCode: row.currency_code,
     frequency: row.frequency,
     paidByMemberId: row.paid_by_member_id,
+    splitMode: row.split_mode ?? 'equity',
     nextChargeOn: row.next_charge_on,
     note: row.note,
     active: row.active,
@@ -42,6 +44,7 @@ function patchToRow(patch: RecurringCostUpdate): Record<string, unknown> {
     amountCents: 'amount_cents',
     frequency: 'frequency',
     paidByMemberId: 'paid_by_member_id',
+    splitMode: 'split_mode',
     nextChargeOn: 'next_charge_on',
     note: 'note',
     active: 'active',
@@ -68,6 +71,7 @@ export class SupabaseRecurringRepository implements RecurringRepository {
         currency_code: data.currencyCode,
         frequency: data.frequency,
         paid_by_member_id: data.paidByMemberId,
+        split_mode: data.splitMode,
         next_charge_on: data.nextChargeOn,
         note: data.note,
         active: data.active,

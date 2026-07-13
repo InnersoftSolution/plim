@@ -55,4 +55,12 @@ export class InMemoryFinanceRepository implements FinanceRepository {
   async deleteExpense(expenseId: string): Promise<void> {
     this.expenses.delete(expenseId);
   }
+
+  async findExpenseByRecurringCharge(costId: string, chargeOn: string): Promise<Expense | null> {
+    return (
+      [...this.expenses.values()].find(
+        (e) => e.recurringCostId === costId && e.recurringChargeOn === chargeOn,
+      ) ?? null
+    );
+  }
 }

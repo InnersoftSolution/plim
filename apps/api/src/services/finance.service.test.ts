@@ -385,6 +385,66 @@ describe('FinanceService', () => {
     });
   });
 
+  it('sócio marcado como "já me pagou" entra com o acerto quitado', async () => {
+    await finance.createExpense(
+      companyId,
+      {
+        description: 'Coworking',
+        amountCents: 10000,
+        paidByMemberId: ownerId,
+        splitMode: 'equity',
+        settledMemberIds: [partnerId],
+      },
+      'u1',
+    );
+    const balances = await finance.getBalances(companyId, 'u1');
+    const partner = balances.find((b) => b.memberId === partnerId)!;
+    // Devia 4000 (40%), mas o acerto foi registrado junto: saldo zerado.
+    expect(partner.netCents).toBe(0);
+    const payments = await finance.listSettlementPayments(companyId, 'u1');
+    expect(payments).toHaveLength(1);
+    expect(payments[0]).toMatchObject({
+      fromMemberId: partnerId,
+      toMemberId: ownerId,
+      amountCents: 4000,
+    });
+  });
+
+  it('ignora "já me pagou" para o próprio pagador e para quem não tem parte', async () => {
+    await finance.createExpense(
+      companyId,
+      {
+        description: 'Coworking',
+        amountCents: 10000,
+        paidByMemberId: ownerId,
+        splitMode: 'equity',
+        // ownerId é o pagador; accountPartnerId tem participação nula (peso 0).
+        settledMemberIds: [ownerId, accountPartnerId],
+      },
+      'u1',
+    );
+    const payments = await finance.listSettlementPayments(companyId, 'u1');
+    expect(payments).toHaveLength(0);
+  });
+
+  it('conta a pagar não registra acerto na criação (ainda não houve pagamento)', async () => {
+    await finance.createExpense(
+      companyId,
+      {
+        description: 'Luz',
+        amountCents: 8000,
+        paidByMemberId: ownerId,
+        splitMode: 'equity',
+        paymentStatus: 'unpaid',
+        dueDate: '2026-08-01',
+        settledMemberIds: [partnerId],
+      },
+      'u1',
+    );
+    const payments = await finance.listSettlementPayments(companyId, 'u1');
+    expect(payments).toHaveLength(0);
+  });
+
   it('exclui a movimentação e recalcula os saldos sem ela', async () => {
     const created = await finance.createExpense(
       companyId,

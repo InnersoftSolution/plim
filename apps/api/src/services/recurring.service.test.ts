@@ -43,12 +43,12 @@ describe('RecurringService', () => {
   it('cria custo ativo e soma no total mensal', async () => {
     await recurring.create(
       companyId,
-      { name: 'Adobe', category: 'tools', amountCents: 14000, frequency: 'monthly', paidByMemberId: ownerId },
+      { name: 'Adobe', category: 'tools', amountCents: 14000, frequency: 'monthly', paidByMemberId: ownerId, splitMode: 'equity' as const },
       'u1',
     );
     await recurring.create(
       companyId,
-      { name: 'Domínio', category: 'infrastructure', amountCents: 12000, frequency: 'annual', paidByMemberId: ownerId },
+      { name: 'Domínio', category: 'infrastructure', amountCents: 12000, frequency: 'annual', paidByMemberId: ownerId, splitMode: 'equity' as const },
       'u1',
     );
     const { costs, monthlyTotalCents } = await recurring.list(companyId, 'u1');
@@ -59,7 +59,7 @@ describe('RecurringService', () => {
   it('custo desativado sai do total, mas continua listado', async () => {
     const adobe = await recurring.create(
       companyId,
-      { name: 'Adobe', category: 'tools', amountCents: 14000, frequency: 'monthly', paidByMemberId: ownerId },
+      { name: 'Adobe', category: 'tools', amountCents: 14000, frequency: 'monthly', paidByMemberId: ownerId, splitMode: 'equity' as const },
       'u1',
     );
     await recurring.update(companyId, adobe.id, { active: false }, 'u1');
@@ -78,6 +78,7 @@ describe('RecurringService', () => {
           category: 'tools',
           amountCents: 14000,
           frequency: 'monthly',
+          splitMode: 'equity' as const,
           paidByMemberId: '00000000-0000-4000-8000-000000000000',
         },
         'u1',

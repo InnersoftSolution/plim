@@ -46,6 +46,8 @@ interface ExpenseRow {
   due_date: string | null;
   confirmation_status: ConfirmationStatus;
   created_by_member_id: string | null;
+  recurring_cost_id: string | null;
+  recurring_charge_on: string | null;
   created_at: string;
   expense_shares: { member_id: string; share_cents: number }[] | null;
 }
@@ -66,6 +68,8 @@ function toExpense(row: ExpenseRow): Expense {
     dueDate: row.due_date,
     confirmationStatus: row.confirmation_status ?? 'confirmed',
     createdByMemberId: row.created_by_member_id,
+    recurringCostId: row.recurring_cost_id ?? null,
+    recurringChargeOn: row.recurring_charge_on ?? null,
     shares: (row.expense_shares ?? []).map((s) => ({
       memberId: s.member_id,
       shareCents: s.share_cents,
@@ -95,6 +99,8 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         due_date: data.dueDate,
         confirmation_status: data.confirmationStatus,
         created_by_member_id: data.createdByMemberId,
+        recurring_cost_id: data.recurringCostId,
+        recurring_charge_on: data.recurringChargeOn,
       })
       .select('id, created_at')
       .single<{ id: string; created_at: string }>();
@@ -197,5 +203,16 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     // As partilhas (expense_shares) caem em cascata pela FK.
     const { error } = await this.db.from('expenses').delete().eq('id', expenseId);
     if (error) throw new Error(`Falha ao excluir movimentação: ${error.message}`);
+  }
+
+  async findExpenseByRecurringCharge(costId: string, chargeOn: string): Promise<Expense | null> {
+    const { data: row, error } = await this.db
+      .from('expenses')
+      .select('*, expense_shares(member_id, share_cents)')
+      .eq('recurring_cost_id', costId)
+      .eq('recurring_charge_on', chargeOn)
+      .maybeSingle<ExpenseRow>();
+    if (error) throw new Error(`Falha ao buscar cobrança gerada: ${error.message}`);
+    return row ? toExpense(row) : null;
   }
 }
