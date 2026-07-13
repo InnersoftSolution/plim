@@ -31,6 +31,7 @@ export interface ChecklistItemPatch {
   completedAt?: string | null;
   skippedAt?: string | null;
   note?: string | null;
+  data?: Record<string, string> | null;
 }
 
 export interface ChecklistRepository {

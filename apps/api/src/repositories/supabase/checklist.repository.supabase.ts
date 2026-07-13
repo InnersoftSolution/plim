@@ -23,13 +23,14 @@ interface Row {
   is_custom: boolean;
   is_system_generated: boolean;
   note: string | null;
+  data: Record<string, string> | null;
   completed_at: string | null;
   skipped_at: string | null;
   created_at: string;
 }
 
 const COLS =
-  'id, company_id, template_key, title, description, phase, status, priority, action_label, action_route, recommended_partner_category, is_custom, is_system_generated, note, completed_at, skipped_at, created_at';
+  'id, company_id, template_key, title, description, phase, status, priority, action_label, action_route, recommended_partner_category, is_custom, is_system_generated, note, data, completed_at, skipped_at, created_at';
 
 function toRecord(row: Row): ChecklistItemRecord {
   return {
@@ -47,6 +48,7 @@ function toRecord(row: Row): ChecklistItemRecord {
     isCustom: row.is_custom,
     isSystemGenerated: row.is_system_generated,
     note: row.note,
+    data: row.data,
     completedAt: row.completed_at,
     skippedAt: row.skipped_at,
     createdAt: row.created_at,
@@ -103,6 +105,7 @@ export class SupabaseChecklistRepository implements ChecklistRepository {
     if (patch.completedAt !== undefined) payload.completed_at = patch.completedAt;
     if (patch.skippedAt !== undefined) payload.skipped_at = patch.skippedAt;
     if (patch.note !== undefined) payload.note = patch.note;
+    if (patch.data !== undefined) payload.data = patch.data;
     const { data, error } = await this.db
       .from('company_checklist_items')
       .update(payload)

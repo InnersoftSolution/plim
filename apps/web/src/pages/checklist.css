@@ -269,11 +269,34 @@
   color: var(--color-text-muted);
   max-width: 560px;
 }
-.chk-row__actions {
+.chk-row__lead {
+  margin: 0 0 12px;
+}
+.chk-row__go {
+  margin: 0 0 14px;
+}
+/* rodapé de adiar: claramente secundário, separado por hairline */
+.chk-row__defer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
+  gap: 4px 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(13, 17, 36, 0.06);
+}
+.chk-row__defer-lead {
+  font-size: 12.5px;
+  color: var(--color-text-subtle);
+  margin-right: 2px;
+}
+.chk-row__defer-sep {
+  color: var(--color-text-subtle);
+  opacity: 0.5;
+}
+.chk-row__defer .chk-link {
+  padding: 2px 0;
+  font-size: 12.5px;
 }
 .chk-action {
   display: inline-flex;
@@ -306,10 +329,21 @@
 }
 .chk-action--save {
   margin-left: auto;
+  gap: 5px;
 }
 .chk-action--save:disabled {
   opacity: 0.45;
   cursor: default;
+}
+/* estado "Salvo": confirmação discreta, sem parecer botão ativo */
+.chk-action--save.is-saved {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+  opacity: 1;
+}
+.chk-action--save.is-saved svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* guia / anotação dentro do item */
@@ -326,17 +360,36 @@
   color: var(--color-text-muted);
   max-width: 560px;
 }
-.chk-guide__questions {
+/* dicas: caixa suave com as perguntas que ajudam a pensar */
+.chk-hints {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.chk-hints__lead {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+.chk-hints__list {
   margin: 0;
   padding-left: 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
-.chk-guide__questions li {
+.chk-hints__list li {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--color-text-subtle);
+  color: var(--color-text-muted);
+}
+.chk-hints__list li::marker {
+  color: var(--color-brand-primary);
 }
 .chk-note {
   width: 100%;
@@ -365,6 +418,66 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* campos estruturados (domínio, redes sociais, e-mail...) */
+.chk-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  max-width: 560px;
+}
+.chk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.chk-field__label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-text-muted);
+}
+.chk-field__open {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  text-decoration: none;
+}
+.chk-field__open:hover {
+  text-decoration: underline;
+}
+.chk-field__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 13px;
+  border-radius: 11px;
+  border: none;
+  background: var(--color-bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(13, 17, 36, 0.08);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-text-default);
+  transition: box-shadow 0.15s ease;
+}
+.chk-field__input::placeholder {
+  color: var(--color-text-subtle);
+}
+.chk-field__input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--color-brand-primary);
+}
+@media (min-width: 720px) {
+  .chk-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .chk-field--full,
+  .chk-fields > .chk-field:only-child {
+    grid-column: 1 / -1;
+  }
 }
 
 /* linha "+ Adicionar item" (fim de cada fase) */

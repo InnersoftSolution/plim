@@ -40,6 +40,7 @@ export interface ChecklistItemRecord {
   isCustom: boolean;
   isSystemGenerated: boolean;
   note: string | null;
+  data: Record<string, string> | null;
   completedAt: string | null;
   skippedAt: string | null;
   createdAt: string;

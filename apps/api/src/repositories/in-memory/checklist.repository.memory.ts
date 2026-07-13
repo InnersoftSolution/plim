@@ -44,6 +44,7 @@ export class InMemoryChecklistRepository implements ChecklistRepository {
         isCustom: input.isCustom,
         isSystemGenerated: input.isSystemGenerated,
         note: null,
+        data: null,
         completedAt: null,
         skippedAt: null,
         createdAt: now,
@@ -65,6 +66,7 @@ export class InMemoryChecklistRepository implements ChecklistRepository {
     if (patch.completedAt !== undefined) item.completedAt = patch.completedAt;
     if (patch.skippedAt !== undefined) item.skippedAt = patch.skippedAt;
     if (patch.note !== undefined) item.note = patch.note;
+    if (patch.data !== undefined) item.data = patch.data;
     return item;
   }
 

@@ -98,6 +98,21 @@ describe('ChecklistService', () => {
     expect(updated.status).toBe('in_progress');
   });
 
+  it('salva campos estruturados (data) do item', async () => {
+    const view = await checklist.getChecklist(companyId, 'u1');
+    const dominio = view.items.find((i) => i.templateKey === 'domain')!;
+    const updated = await checklist.updateItem(
+      companyId,
+      dominio.id,
+      { data: { url: 'okidoki.pet', registrar: 'GoDaddy' }, status: 'completed' },
+      'u1',
+    );
+    expect(updated.data).toEqual({ url: 'okidoki.pet', registrar: 'GoDaddy' });
+    expect(updated.status).toBe('completed');
+    const again = await checklist.getChecklist(companyId, 'u1');
+    expect(again.items.find((i) => i.id === dominio.id)?.data?.url).toBe('okidoki.pet');
+  });
+
   it('cria item personalizado da empresa', async () => {
     const item = await checklist.createCustomItem(
       companyId,

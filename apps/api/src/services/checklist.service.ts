@@ -35,6 +35,7 @@ function toDto(r: ChecklistItemRecord): CompanyChecklistItem {
     isSystemGenerated: r.isSystemGenerated,
     isAuto: r.templateKey ? autoRuleByKey.has(r.templateKey) : false,
     note: r.note,
+    data: r.data,
     completedAt: r.completedAt,
     createdAt: r.createdAt,
   };
@@ -122,15 +123,22 @@ export class ChecklistService {
   async updateItem(
     companyId: string,
     itemId: string,
-    patch: { status?: ChecklistStatus; note?: string | null },
+    patch: { status?: ChecklistStatus; note?: string | null; data?: Record<string, string> | null },
     actingUserId?: string | null,
   ): Promise<CompanyChecklistItem> {
     await this.companyService.getOverview(companyId, actingUserId);
     const item = await this.repo.findItemById(companyId, itemId);
     if (!item) throw new NotFoundError('CHECKLIST_ITEM_NOT_FOUND', 'Item do checklist nao encontrado.');
 
-    const changes: { status?: ChecklistStatus; completedAt?: string | null; skippedAt?: string | null; note?: string | null } = {};
+    const changes: {
+      status?: ChecklistStatus;
+      completedAt?: string | null;
+      skippedAt?: string | null;
+      note?: string | null;
+      data?: Record<string, string> | null;
+    } = {};
     if (patch.note !== undefined) changes.note = patch.note;
+    if (patch.data !== undefined) changes.data = patch.data;
     if (patch.status !== undefined) {
       const now = new Date().toISOString();
       changes.status = patch.status;

@@ -73,6 +73,8 @@ export interface CompanyChecklistItem {
   isAuto: boolean;
   /** Anotacao/conteudo que o usuario registra ali mesmo (guia ou nota livre). */
   note: string | null;
+  /** Campos estruturados do item (ex: dominio -> {url, registrar}). */
+  data: Record<string, string> | null;
   completedAt: string | null;
   createdAt: string;
 }
@@ -97,6 +99,7 @@ export interface ChecklistView {
 export const updateChecklistItemSchema = z.object({
   status: checklistStatusSchema.optional(),
   note: z.string().trim().max(2000).nullable().optional(),
+  data: z.record(z.string(), z.string().trim().max(300)).nullable().optional(),
 });
 export type UpdateChecklistItemInput = z.infer<typeof updateChecklistItemSchema>;
 

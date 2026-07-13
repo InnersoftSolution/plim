@@ -14,7 +14,7 @@ export const checklistApi = {
   update(
     companyId: string,
     itemId: string,
-    patch: { status?: ChecklistStatus; note?: string | null },
+    patch: { status?: ChecklistStatus; note?: string | null; data?: Record<string, string> | null },
   ): Promise<CompanyChecklistItem> {
     return apiFetch<CompanyChecklistItem>(`/companies/${companyId}/checklist/${itemId}`, {
       method: 'PATCH',

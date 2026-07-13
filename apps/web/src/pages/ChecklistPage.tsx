@@ -13,7 +13,7 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
 import { checklistApi } from '../company/checklistApi';
-import { guideFor, type ChecklistGuide } from '../company/checklistGuides';
+import { formFor, hrefFor, type ChecklistForm } from '../company/checklistGuides';
 import './dashboard.css';
 import './checklist.css';
 
@@ -59,11 +59,22 @@ export function ChecklistPage() {
     await load();
   }
 
-  async function saveNote(item: CompanyChecklistItem, note: string | null) {
+  async function saveEntry(
+    item: CompanyChecklistItem,
+    entry: { note: string | null; data: Record<string, string> | null },
+  ) {
     if (state.status !== 'ready') return;
-    // Escrever algo pela primeira vez sinaliza "em andamento"; concluir fica no circulo.
-    const patch: { note: string | null; status?: ChecklistStatus } = { note };
-    if (note && item.status === 'not_started') patch.status = 'in_progress';
+    const patch: { note: string | null; data: Record<string, string> | null; status?: ChecklistStatus } = {
+      ...entry,
+    };
+    // Inteligencia deterministica: se a informacao existe, o item esta feito.
+    // Campos estruturados preenchidos (ex: link do dominio) concluem sozinhos;
+    // texto de reflexao marca "em andamento". Concluir na mao fica no circulo.
+    if (item.status === 'not_started' || item.status === 'in_progress') {
+      const hasData = !!entry.data && Object.values(entry.data).some((v) => v.trim().length > 0);
+      if (hasData) patch.status = 'completed';
+      else if (entry.note) patch.status = 'in_progress';
+    }
     await checklistApi.update(state.companyId, item.id, patch);
     await load();
   }
@@ -122,7 +133,7 @@ export function ChecklistPage() {
                   expanded={expandedId === item.id}
                   onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
                   onChange={changeStatus}
-                  onSaveNote={saveNote}
+                  onSave={saveEntry}
                   onGo={navigate}
                 />
               ))}
@@ -175,21 +186,28 @@ function ItemRow({
   expanded,
   onToggle,
   onChange,
-  onSaveNote,
+  onSave,
   onGo,
 }: {
   item: CompanyChecklistItem;
   expanded: boolean;
   onToggle: () => void;
   onChange: (itemId: string, status: ChecklistStatus) => void;
-  onSaveNote: (item: CompanyChecklistItem, note: string | null) => Promise<void>;
+  onSave: (
+    item: CompanyChecklistItem,
+    entry: { note: string | null; data: Record<string, string> | null },
+  ) => Promise<void>;
   onGo: (route: string) => void;
 }) {
   const done = item.status === 'completed';
   const parked = item.status === 'skipped' || item.status === 'not_applicable';
-  const guide = guideFor(item.templateKey);
+  const form = formFor(item.templateKey);
   // Itens automáticos vivem dos dados reais; não têm anotação/guia manual.
   const canNote = !item.isAuto;
+  // Prévia discreta na linha fechada: valores registrados ou anotação.
+  const preview = item.data
+    ? Object.values(item.data).filter(Boolean).join(' · ') || item.note
+    : item.note;
 
   function handleCircle() {
     if (item.isAuto) return; // itens automáticos se resolvem sozinhos
@@ -211,7 +229,7 @@ function ItemRow({
         <button type="button" className="chk-row__label" onClick={onToggle} aria-expanded={expanded}>
           <span className="chk-row__texts">
             <span className="chk-row__title">{item.title}</span>
-            {!expanded && item.note && <span className="chk-row__note">{item.note}</span>}
+            {!expanded && preview && <span className="chk-row__note">{preview}</span>}
           </span>
           {item.isAuto && !done && <span className="chk-tag chk-tag--auto">automático</span>}
           {item.status === 'in_progress' && <span className="chk-tag chk-tag--progress">em andamento</span>}
@@ -222,35 +240,39 @@ function ItemRow({
       </div>
       {expanded && (
         <div className="chk-row__detail">
-          {item.description && <p>{item.description}</p>}
+          {/* Contexto: só mostra a descrição do catálogo quando o guia não tem a sua própria. */}
+          {item.description && !form?.intro && <p className="chk-row__lead">{item.description}</p>}
 
           {item.actionRoute && !done && (
-            <div className="chk-row__actions">
+            <div className="chk-row__go">
               <button type="button" className="chk-action" onClick={() => onGo(item.actionRoute!)}>
                 {item.actionLabel ?? 'Abrir'}
               </button>
             </div>
           )}
 
-          {canNote && <NotePanel item={item} guide={guide} onSave={onSaveNote} />}
+          {canNote && <ItemPanel item={item} form={form} onSave={onSave} />}
 
-          <div className="chk-row__actions">
-            {!done && !parked && (
-              <>
-                <button type="button" className="chk-link" onClick={() => onChange(item.id, 'skipped')}>
-                  Fazer depois
-                </button>
-                <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_applicable')}>
-                  Não se aplica
-                </button>
-              </>
-            )}
-            {parked && (
-              <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_started')}>
-                Reabrir
+          {/* Escape hatch discreto: claramente secundário. */}
+          {!done && !parked && (
+            <div className="chk-row__defer">
+              <span className="chk-row__defer-lead">Não é para agora?</span>
+              <button type="button" className="chk-link" onClick={() => onChange(item.id, 'skipped')}>
+                Fazer depois
               </button>
-            )}
-          </div>
+              <span className="chk-row__defer-sep" aria-hidden="true">·</span>
+              <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_applicable')}>
+                Não se aplica
+              </button>
+            </div>
+          )}
+          {parked && (
+            <div className="chk-row__defer">
+              <button type="button" className="chk-link" onClick={() => onChange(item.id, 'not_started')}>
+                Reabrir item
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -258,29 +280,50 @@ function ItemRow({
 }
 
 /**
- * Painel de anotação/guia dentro do item. Para itens de posicionamento, mostra
- * o roteiro (por que, perguntas, exemplo). Para os demais, um campo livre.
- * O usuário escreve e salva ali mesmo, sem trocar de página.
+ * Painel do item, ali mesmo na lista. Itens de registro (domínio, redes,
+ * e-mail, conta...) mostram campos estruturados que guardam a informação
+ * certa. Itens de pensamento mostram o roteiro (por que, perguntas, exemplo)
+ * com campo de texto. Tudo salva sem trocar de página.
  */
-function NotePanel({
+function ItemPanel({
   item,
-  guide,
+  form,
   onSave,
 }: {
   item: CompanyChecklistItem;
-  guide: ChecklistGuide | null;
-  onSave: (item: CompanyChecklistItem, note: string | null) => Promise<void>;
+  form: ChecklistForm | null;
+  onSave: (
+    item: CompanyChecklistItem,
+    entry: { note: string | null; data: Record<string, string> | null },
+  ) => Promise<void>;
 }) {
+  const [values, setValues] = useState<Record<string, string>>(item.data ?? {});
   const [text, setText] = useState(item.note ?? '');
   const [saving, setSaving] = useState(false);
-  const dirty = text !== (item.note ?? '');
+  const fields = form?.fields;
+
+  const savedData = item.data ?? {};
+  const dirty = fields
+    ? fields.some((f) => (values[f.key] ?? '').trim() !== (savedData[f.key] ?? ''))
+    : text !== (item.note ?? '');
+  const hasContent = fields ? Object.keys(savedData).length > 0 : !!item.note;
+  const savedState = !dirty && hasContent;
 
   async function handleSave() {
     setSaving(true);
     try {
-      const trimmed = text.trim();
-      await onSave(item, trimmed ? trimmed : null);
-      setText(trimmed);
+      if (fields) {
+        const data: Record<string, string> = {};
+        for (const f of fields) {
+          const v = (values[f.key] ?? '').trim();
+          if (v) data[f.key] = v;
+        }
+        await onSave(item, { note: item.note, data: Object.keys(data).length > 0 ? data : null });
+      } else {
+        const trimmed = text.trim();
+        await onSave(item, { note: trimmed ? trimmed : null, data: null });
+        setText(trimmed);
+      }
     } finally {
       setSaving(false);
     }
@@ -288,36 +331,75 @@ function NotePanel({
 
   return (
     <div className="chk-guide">
-      {guide && (
-        <>
-          <p className="chk-guide__intro">{guide.intro}</p>
-          <ul className="chk-guide__questions">
-            {guide.questions.map((q) => (
+      {form?.intro && <p className="chk-guide__intro">{form.intro}</p>}
+      {form?.questions && (
+        <div className="chk-hints">
+          <span className="chk-hints__lead">Para ajudar a pensar</span>
+          <ul className="chk-hints__list">
+            {form.questions.map((q) => (
               <li key={q}>{q}</li>
             ))}
           </ul>
-        </>
+        </div>
       )}
-      <textarea
-        className="chk-note"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={guide?.placeholder ?? 'Anote aqui. Ex: Conta PJ no Banco Inter, aberta.'}
-        rows={guide ? 4 : 3}
-      />
+
+      {fields ? (
+        <div className="chk-fields">
+          {fields.map((f) => {
+            const value = values[f.key] ?? '';
+            return (
+              <label className="chk-field" key={f.key}>
+                <span className="chk-field__label">
+                  {f.label}
+                  {f.type === 'url' && value.trim() && (
+                    <a href={hrefFor(value)} target="_blank" rel="noreferrer" className="chk-field__open">
+                      abrir
+                    </a>
+                  )}
+                </span>
+                <input
+                  className="chk-field__input"
+                  type="text"
+                  value={value}
+                  placeholder={f.placeholder}
+                  onChange={(e) => setValues((cur) => ({ ...cur, [f.key]: e.target.value }))}
+                  inputMode={f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : undefined}
+                />
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <textarea
+          className="chk-note"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={form?.notePlaceholder ?? 'Anote aqui o que já foi feito ou combinado...'}
+          rows={form?.questions ? 4 : 3}
+        />
+      )}
+
       <div className="chk-guide__foot">
-        {guide && !text.trim() && (
-          <button type="button" className="chk-link" onClick={() => setText(guide.example)}>
+        {form?.example && !fields && !text.trim() && (
+          <button type="button" className="chk-link" onClick={() => setText(form.example!)}>
             Usar exemplo como base
           </button>
         )}
         <button
           type="button"
-          className="chk-action chk-action--save"
+          className={'chk-action chk-action--save' + (savedState ? ' is-saved' : '')}
           onClick={handleSave}
           disabled={saving || !dirty}
         >
-          {saving ? 'Salvando...' : 'Salvar'}
+          {saving ? (
+            'Salvando...'
+          ) : savedState ? (
+            <>
+              <CheckIcon /> Salvo
+            </>
+          ) : (
+            'Salvar'
+          )}
         </button>
       </div>
     </div>
