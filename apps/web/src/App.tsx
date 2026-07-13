@@ -12,11 +12,13 @@ import { FinancePage } from './pages/FinancePage';
 import { AcertosPage } from './pages/AcertosPage';
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage';
 import { HomeRedirect } from './pages/HomeRedirect';
+import { SelectCompanyPage } from './pages/SelectCompanyPage';
 import { SociedadePage } from './pages/SociedadePage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ChecklistPage } from './pages/ChecklistPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AppShell } from './components/AppShell';
+import { ActiveCompanyProvider } from './company/ActiveCompanyContext';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminDashboardPage } from './admin/AdminDashboardPage';
 import { AdminCompaniesPage } from './admin/AdminCompaniesPage';
@@ -67,9 +69,10 @@ export function App() {
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/definir-senha" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
           <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
+          <Route path="/selecionar-empresa" element={<RequireAuth><SelectCompanyPage /></RequireAuth>} />
 
           {/* Páginas autenticadas dentro do menu (AppShell) */}
-          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route element={<RequireAuth><ActiveCompanyProvider><AppShell /></ActiveCompanyProvider></RequireAuth>}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/financeiro" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />

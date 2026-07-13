@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import { DomainError } from './lib/errors';
 import { healthRoutes } from './http/routes/health.routes';
 import { companyRoutes } from './http/routes/company.routes';
+import { meRoutes } from './http/routes/me.routes';
 import { advisorRoutes } from './http/routes/advisor.routes';
 import { journeyRoutes } from './http/routes/journey.routes';
 import { financeRoutes } from './http/routes/finance.routes';
@@ -133,6 +134,7 @@ export function buildApp(): FastifyInstance {
 
   app.register(healthRoutes);
   app.register(companyRoutes, { service: companyService });
+  app.register(meRoutes, { service: companyService });
   app.register(advisorRoutes, { service: advisorService });
   app.register(journeyRoutes, { service: journeyService });
   app.register(financeRoutes, { service: financeService });

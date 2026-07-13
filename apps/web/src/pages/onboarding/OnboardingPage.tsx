@@ -27,6 +27,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { companyApi, messageForError } from '../../company/companyApi';
+import { rememberActiveCompany } from '../../company/ActiveCompanyContext';
 import './onboarding.css';
 
 type Step = 'welcome' | 'resume' | OnboardingStep;
@@ -51,6 +52,7 @@ export function OnboardingPage() {
   const [members, setMembers] = useState<CompanyMember[]>([]);
   // Modo edição: chegou via /onboarding?step=... para mexer numa empresa já criada.
   const [editing, setEditing] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   const owner = { fullName: user?.fullName ?? '', email: user?.email ?? '' };
   const firstName = owner.fullName.split(' ')[0] || 'por aqui';
@@ -61,6 +63,12 @@ export function OnboardingPage() {
     let active = true;
     (async () => {
       try {
+        // ?nova=1: criar OUTRA empresa. Começa do zero (welcome), sem retomar a
+        // empresa existente nem carregá-la.
+        if (searchParams.get('nova') === '1') {
+          if (active) setBooting(false);
+          return;
+        }
         const requested = searchParams.get('step') as OnboardingStep | null;
         const targetStep = requested && STEP_ORDER.includes(requested) ? requested : null;
         const companies = await companyApi.listMyCompanies();
@@ -90,8 +98,36 @@ export function OnboardingPage() {
     };
   }, [searchParams]);
 
-  function goToDashboard() {
+  async function goToDashboard() {
+    // A empresa que o usuário acabou de mexer vira a ativa (abre nela no painel).
+    if (company) await rememberActiveCompany(company.id);
     navigate('/dashboard');
+  }
+
+  /**
+   * Pular o onboarding. Se ainda não existe empresa, cria um espaço provisório
+   * (nome editável depois) para o usuário entrar no app, em vez de mandá-lo a um
+   * painel que não funciona sem empresa. Se já existe, vai direto para o painel.
+   */
+  async function skipOnboarding() {
+    if (skipping) return;
+    setSkipping(true);
+    try {
+      let id = company?.id ?? null;
+      if (!id) {
+        const provisionalName =
+          firstName && firstName !== 'por aqui' ? `Empresa de ${firstName}` : 'Minha empresa';
+        const { company: created } = await companyApi.createCompany(
+          { name: provisionalName, isNameTemporary: true },
+          owner,
+        );
+        id = created.id;
+      }
+      await rememberActiveCompany(id);
+      navigate('/dashboard');
+    } catch {
+      setSkipping(false); // não trava: deixa o usuário tentar de novo
+    }
   }
 
   // ── orquestração de cada etapa (persiste no back, avança a etapa) ──
@@ -204,8 +240,10 @@ export function OnboardingPage() {
           <WelcomeStep
             firstName={firstName}
             onStart={() => setStep('basic')}
-            onSkip={goToDashboard}
+            onSkip={skipOnboarding}
             onBack={goToDashboard}
+            showBack={!!company}
+            skipping={skipping}
           />
         ) : step === 'resume' ? (
           <ResumePrompt
@@ -214,7 +252,7 @@ export function OnboardingPage() {
             onHome={goToDashboard}
           />
         ) : step === 'basic' ? (
-          <BasicStep company={company} onSubmit={submitBasic} onSkip={goToDashboard} />
+          <BasicStep company={company} onSubmit={submitBasic} onSkip={skipOnboarding} skipping={skipping} />
         ) : step === 'business_type' ? (
           <BusinessTypeStep
             company={company}
@@ -283,7 +321,7 @@ function ResumePrompt({
         <h1>Quer continuar de onde parou, {firstName}?</h1>
         <p>
           Você já começou a organizar sua empresa. Podemos seguir daqui, ou você vai para a Home e
-          termina depois — o Plim guarda seu progresso.
+          termina depois, o Plim guarda seu progresso.
         </p>
       </div>
       <div className="ob-actions">
@@ -384,7 +422,7 @@ function FormalizationStep({
     setError('');
     const digits = onlyDigits(cnpj);
     if (choice === 'yes' && digits && !isValidCnpj(digits)) {
-      setError('CNPJ inválido — confira os números (ou deixe em branco para preencher depois).');
+      setError('CNPJ inválido, confira os números (ou deixe em branco para preencher depois).');
       return;
     }
     setSaving(true);
@@ -407,7 +445,7 @@ function FormalizationStep({
         <h1>Sua empresa já está formalizada?</h1>
         <p>
           Isso ajuda o Plim a entender se você já tem registro ou ainda precisa organizar essa etapa.
-          Sem pressa — pode escolher depois.
+          Sem pressa, pode escolher depois.
         </p>
       </div>
       {error && <div className="form-error">{error}</div>}
@@ -501,8 +539,8 @@ function LegalStructureStep({
         </h1>
         <p>
           {alreadyRegistered
-            ? 'Você indicou que já tem CNPJ. Selecione o tipo de registro atual da sua empresa — na dúvida, confirme com seu contador.'
-            : 'Se ainda não sabe, tudo bem — o Plim registra essa pendência e pode indicar um contador parceiro para te ajudar a decidir.'}
+            ? 'Você indicou que já tem CNPJ. Selecione o tipo de registro atual da sua empresa, na dúvida, confirme com seu contador.'
+            : 'Se ainda não sabe, tudo bem, o Plim registra essa pendência e pode indicar um contador parceiro para te ajudar a decidir.'}
         </p>
       </div>
       {error && <div className="form-error">{error}</div>}
@@ -530,7 +568,7 @@ function LegalStructureStep({
       <p className="ob-disclaimer">
         {alreadyRegistered
           ? 'Essa informação ajuda o Plim a organizar sua empresa. Na dúvida sobre o enquadramento atual, confirme com seu contador.'
-          : 'Essa informação ajuda você a se organizar. Para decidir o melhor tipo de empresa, confirme com um contador — o Plim pode indicar um parceiro.'}
+          : 'Essa informação ajuda você a se organizar. Para decidir o melhor tipo de empresa, confirme com um contador, o Plim pode indicar um parceiro.'}
       </p>
       <div className="ob-actions">
         <Button block onClick={handleContinue} disabled={saving}>
@@ -566,24 +604,30 @@ function WelcomeStep({
   onStart,
   onSkip,
   onBack,
+  showBack,
+  skipping,
 }: {
   firstName: string;
   onStart: () => void;
   onSkip: () => void;
   onBack: () => void;
+  showBack: boolean;
+  skipping: boolean;
 }) {
   return (
     <>
-      <button type="button" className="ob-back" onClick={onBack}>
-        <span aria-hidden="true">←</span> Voltar
-      </button>
+      {showBack && (
+        <button type="button" className="ob-back" onClick={onBack}>
+          <span aria-hidden="true">←</span> Voltar
+        </button>
+      )}
       <div className="ob-head">
         <h1>
           Bem-vindo ao plim, {firstName}
           <span className="ob-accent">.</span>
         </h1>
         <p>
-          Vamos criar o espaço da sua empresa. Você pode começar com o básico e completar depois —
+          Vamos criar o espaço da sua empresa. Você pode começar com o básico e completar depois,
           nada é obrigatório agora.
         </p>
       </div>
@@ -594,11 +638,11 @@ function WelcomeStep({
         <span>Leva uns 2 minutos. Dá pra pular campos e voltar quando quiser.</span>
       </div>
       <div className="ob-actions">
-        <Button block onClick={onStart}>
+        <Button block onClick={onStart} disabled={skipping}>
           Vamos começar
         </Button>
-        <button type="button" className="ob-skip" onClick={onSkip}>
-          Pular por enquanto
+        <button type="button" className="ob-skip" onClick={onSkip} disabled={skipping}>
+          {skipping ? 'Abrindo…' : 'Pular por enquanto'}
         </button>
       </div>
     </>
@@ -617,10 +661,12 @@ function BasicStep({
   company,
   onSubmit,
   onSkip,
+  skipping,
 }: {
   company: Company | null;
   onSubmit: (fields: BasicFields) => Promise<void>;
   onSkip: () => void;
+  skipping: boolean;
 }) {
   const [name, setName] = useState(company?.name ?? '');
   const [isNameTemporary, setIsNameTemporary] = useState(company?.isNameTemporary ?? false);
@@ -716,11 +762,11 @@ function BasicStep({
           )}
         </div>
         <div className="ob-actions">
-          <Button type="submit" block disabled={saving}>
+          <Button type="submit" block disabled={saving || skipping}>
             {saving ? 'Salvando…' : 'Continuar'}
           </Button>
-          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
-            Pular por agora
+          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving || skipping}>
+            {skipping ? 'Abrindo…' : 'Pular por agora'}
           </button>
         </div>
       </form>
@@ -1003,7 +1049,7 @@ function MembersStep({
             </div>
             <span className={'ob-equity__hint' + (remaining === 0 ? ' ob-equity__hint--ok' : '')}>
               {remaining === 0
-                ? 'Participação completa — 100% distribuídos.'
+                ? 'Participação completa, 100% distribuídos.'
                 : `Ainda falta distribuir: ${formatPct(remaining)}`}
             </span>
           </div>
@@ -1047,7 +1093,7 @@ function MembersStep({
             <span className="ob-why__title">Por que isso importa?</span>
             <p>
               A participação ajuda o Plim a calcular como despesas compartilhadas e acertos entre
-              sócios devem ser distribuídos. Se vocês ainda não decidiram isso, tudo bem — o Plim
+              sócios devem ser distribuídos. Se vocês ainda não decidiram isso, tudo bem, o Plim
               vai lembrar depois.
             </p>
           </div>

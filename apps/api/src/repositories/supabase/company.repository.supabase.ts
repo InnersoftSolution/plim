@@ -339,4 +339,22 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     const { error } = await this.db.from('company_members').delete().eq('id', memberId);
     if (error) throw new Error(`Falha ao excluir sócio: ${error.message}`);
   }
+
+  async getLastActiveCompanyId(userId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('last_active_company_id')
+      .eq('id', userId)
+      .maybeSingle<{ last_active_company_id: string | null }>();
+    if (error) throw new Error(`Falha ao ler empresa ativa: ${error.message}`);
+    return data?.last_active_company_id ?? null;
+  }
+
+  async setLastActiveCompanyId(userId: string, companyId: string | null): Promise<void> {
+    const { error } = await this.db
+      .from('profiles')
+      .update({ last_active_company_id: companyId })
+      .eq('id', userId);
+    if (error) throw new Error(`Falha ao gravar empresa ativa: ${error.message}`);
+  }
 }

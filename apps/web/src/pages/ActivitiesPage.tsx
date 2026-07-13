@@ -15,6 +15,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { activityApi, currentWeekStart, weekRangeLabel } from '../activities/activityApi';
 import { IconPlus } from './dashIcons';
 import './dashboard.css';
@@ -42,24 +43,19 @@ export function ActivitiesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [detail, setDetail] = useState<Activity | null>(null);
   const [searchParams] = useSearchParams();
+  const { company: activeCompany } = useActiveCompany();
 
   const load = useCallback(async () => {
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) {
-        setState({ status: 'empty' });
-        return;
-      }
-      const company = companies[0]!;
       const [members, activities] = await Promise.all([
-        companyApi.listMembers(company.id),
-        activityApi.list(company.id),
+        companyApi.listMembers(activeCompany.id),
+        activityApi.list(activeCompany.id),
       ]);
-      setState({ status: 'ready', company, members, activities });
+      setState({ status: 'ready', company: activeCompany, members, activities });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();

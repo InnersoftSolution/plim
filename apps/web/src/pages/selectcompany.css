@@ -1,0 +1,130 @@
+/* Tela de seleção de empresa (multiempresa). Mobile first. */
+.selco {
+  min-height: 100vh;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.selco__muted {
+  color: var(--color-text-subtle);
+  font-size: 14px;
+}
+.selco__brand {
+  display: inline-flex;
+}
+.selco__head h1 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-default);
+}
+.selco__head p {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  max-width: 560px;
+}
+
+.selco__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 640px) {
+  .selco__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.selco-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: var(--color-bg-surface);
+}
+.selco-card__top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.selco-card__id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.selco-card__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.selco-card__prov {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+}
+.selco-card__desc {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.selco-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+.selco-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+/* card "criar nova empresa" (tracejado, chamando a ação) */
+.selco-card--new {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  border-style: dashed;
+  border-color: var(--color-border-strong, var(--color-border-default));
+  background: transparent;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.selco-card--new:hover:not(:disabled) {
+  background: var(--color-bg-brand-soft);
+  border-color: var(--color-brand-primary);
+}
+.selco-card--new:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.selco-card__plus {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+}

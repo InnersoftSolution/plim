@@ -15,6 +15,7 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { DateField } from '../components/ui/DateField';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from '../finance/financeApi';
 import { IconArrowRight } from './dashIcons';
 import './dashboard.css';
@@ -52,23 +53,21 @@ function formatDateBr(iso: string): string {
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [paying, setPaying] = useState<PayTarget | null>(null);
+  const { company: activeCompany } = useActiveCompany();
 
   const load = useCallback(async () => {
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) return setState({ status: 'empty' });
-      const company = companies[0]!;
       const [members, balances, movements, payments] = await Promise.all([
-        companyApi.listMembers(company.id),
-        financeApi.getBalances(company.id),
-        financeApi.getMovementSettlements(company.id),
-        financeApi.listSettlementPayments(company.id),
+        companyApi.listMembers(activeCompany.id),
+        financeApi.getBalances(activeCompany.id),
+        financeApi.getMovementSettlements(activeCompany.id),
+        financeApi.listSettlementPayments(activeCompany.id),
       ]);
-      setState({ status: 'ready', company, members, balances, movements, payments });
+      setState({ status: 'ready', company: activeCompany, members, balances, movements, payments });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();

@@ -8,6 +8,7 @@ export * from './contracts/finance';
 export * from './contracts/guides';
 export * from './contracts/insight';
 export * from './contracts/journey';
+export * from './contracts/me';
 export * from './contracts/partners';
 export * from './contracts/recurring';
 export * from './validators';

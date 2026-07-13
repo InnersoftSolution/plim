@@ -12,6 +12,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { FinChart, type ChartPoint } from '../finance/FinChart';
 import { MovementWizard } from '../finance/MovementWizard';
 import { financeApi, formatMoney } from '../finance/financeApi';
@@ -47,6 +48,7 @@ type MovItem =
 
 export function FinancePage() {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const { company: activeCompany } = useActiveCompany();
   const [filter, setFilter] = useState<Filter>('todos');
   const [thisMonth, setThisMonth] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -58,22 +60,16 @@ export function FinancePage() {
 
   const load = useCallback(async () => {
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) {
-        setState({ status: 'empty' });
-        return;
-      }
-      const company = companies[0]!;
       const [members, expenses, recurring] = await Promise.all([
-        companyApi.listMembers(company.id),
-        financeApi.listExpenses(company.id),
-        recurringApi.list(company.id),
+        companyApi.listMembers(activeCompany.id),
+        financeApi.listExpenses(activeCompany.id),
+        recurringApi.list(activeCompany.id),
       ]);
-      setState({ status: 'ready', company, members, expenses, recurring });
+      setState({ status: 'ready', company: activeCompany, members, expenses, recurring });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();

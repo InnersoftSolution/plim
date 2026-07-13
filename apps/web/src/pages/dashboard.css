@@ -178,6 +178,15 @@
   line-height: 1.08;
   color: var(--color-text-default);
 }
+.dash-page__active {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  margin-top: 4px;
+}
+.dash-page__active strong {
+  color: var(--color-text-default);
+  font-weight: 700;
+}
 .dash-page__subtitle {
   font-size: 14px;
   line-height: 1.45;

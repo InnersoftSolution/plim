@@ -28,4 +28,8 @@ export interface CompanyRepository {
   listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]>;
   /** Remoção definitiva de um sócio (ação irreversível, só do dono da conta). */
   deleteMember(memberId: string): Promise<void>;
+  /** Preferência: última empresa que o usuário escolheu acessar. Nulo se nunca escolheu. */
+  getLastActiveCompanyId(userId: string): Promise<string | null>;
+  /** Guarda a última empresa acessada (ou limpa, com null). */
+  setLastActiveCompanyId(userId: string, companyId: string | null): Promise<void>;
 }

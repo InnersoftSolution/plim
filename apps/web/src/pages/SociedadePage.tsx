@@ -11,6 +11,7 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../auth/AuthContext';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { IconPlus, IconUsers } from './dashIcons';
 import './dashboard.css';
 import './sociedade.css';
@@ -38,6 +39,7 @@ function fmtPct(v: number): string {
 
 export function SociedadePage() {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const { company: activeCompany } = useActiveCompany();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<CompanyMember | null>(null);
   const [soloBusy, setSoloBusy] = useState(false);
@@ -61,15 +63,12 @@ export function SociedadePage() {
 
   const load = useCallback(async () => {
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) return setState({ status: 'empty' });
-      const company = companies[0]!;
-      const members = await companyApi.listMembers(company.id);
-      setState({ status: 'ready', company, members });
+      const members = await companyApi.listMembers(activeCompany.id);
+      setState({ status: 'ready', company: activeCompany, members });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();

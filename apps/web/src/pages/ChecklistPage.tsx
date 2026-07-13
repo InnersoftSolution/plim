@@ -13,6 +13,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { checklistApi } from '../company/checklistApi';
 import { formFor, hrefFor, type ChecklistForm } from '../company/checklistGuides';
 import './dashboard.css';
@@ -34,15 +35,11 @@ export function ChecklistPage() {
   const [formPhase, setFormPhase] = useState<ChecklistPhase | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { company: activeCompany } = useActiveCompany();
 
   const load = useCallback(async () => {
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) {
-        setState({ status: 'empty' });
-        return;
-      }
-      const companyId = companies[0]!.id;
+      const companyId = activeCompany.id;
       const [viewLoaded, members] = await Promise.all([
         checklistApi.get(companyId),
         companyApi.listMembers(companyId),
@@ -67,7 +64,7 @@ export function ChecklistPage() {
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();

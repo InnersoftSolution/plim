@@ -7,6 +7,7 @@ import type {
 import type { Company, CompanyMember, CompanyUpdate } from '../domain/company';
 import type { CompanyRepository } from '../repositories/company.repository';
 import { DomainError, NotFoundError } from '../lib/errors';
+import { canCreateMultipleCompanies } from '../lib/company-access';
 import type { LogoStorage } from '../lib/logo-storage';
 import type { InviteSender } from '../lib/invite-sender';
 
@@ -70,6 +71,22 @@ export class CompanyService {
     owner: ActingOwner,
   ): Promise<{ company: Company; ownerMember: CompanyMember }> {
     const ownerId = owner.id ?? null;
+
+    // Gate de plano: nesta fase, criar MAIS de uma empresa é liberado por
+    // e-mail. A primeira empresa é sempre permitida; a segunda só para quem
+    // tem permissão. No modo dev (sem auth) não trava. A regra mora em
+    // canCreateMultipleCompanies — aqui só a aplicamos.
+    if (ownerId != null && !canCreateMultipleCompanies(owner)) {
+      const existing = await this.repo.listCompaniesByUserId(ownerId);
+      if (existing.length > 0) {
+        throw new DomainError(
+          'PLAN_COMPANY_LIMIT',
+          'Seu plano atual permite uma empresa. Em breve você poderá adicionar novas empresas em um plano avançado.',
+          403,
+        );
+      }
+    }
+
     const company = await this.repo.createCompany({
       name: input.name,
       isNameTemporary: input.isNameTemporary ?? false,
@@ -144,6 +161,32 @@ export class CompanyService {
     if (actingUserId == null) return this.repo.listAllCompanies();
     if (actingEmail) await this.claimMemberships(actingUserId, actingEmail);
     return this.repo.listCompaniesByUserId(actingUserId);
+  }
+
+  /**
+   * Empresa ativa lembrada (última que o usuário escolheu). Nulo no modo dev
+   * ou quando ele ainda não escolheu nenhuma.
+   */
+  async getActiveCompanyId(actingUserId?: string | null): Promise<string | null> {
+    if (actingUserId == null) return null;
+    // Resiliente: se a migração 0025 (coluna last_active_company_id) ainda não
+    // rodou, não derruba o /me — o front cai no fallback (localStorage/primeira)
+    // e a persistência liga sozinha assim que a coluna existir.
+    try {
+      return await this.repo.getLastActiveCompanyId(actingUserId);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Define a empresa ativa. Segurança: só grava se o usuário for membro dela
+   * (nunca confiar no front). No modo dev não há usuário para lembrar.
+   */
+  async setActiveCompany(companyId: string, actingUserId?: string | null): Promise<void> {
+    if (actingUserId == null) return;
+    await this.assertMembership(companyId, actingUserId);
+    await this.repo.setLastActiveCompanyId(actingUserId, companyId);
   }
 
   /** Liga convites pendentes (mesmo e-mail, sem conta vinculada) a este usuário. */

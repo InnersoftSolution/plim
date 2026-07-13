@@ -2,7 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminMe } from '../admin/useAdminMe';
+import { CompanySwitcher } from '../company/CompanySwitcher';
 import { Logo } from './Logo';
+import { LogoWhite } from './LogoWhite';
 import { Button } from './ui/Button';
 import './appshell.css';
 
@@ -64,12 +66,13 @@ export function AppShell() {
       <aside className="shell-sidebar">
         <div className="shell-sidebar__head">
           <div className="shell-brand">
-            <Logo height={24} />
+            <LogoWhite height={38} />
           </div>
           <button className="shell-close" aria-label="Fechar menu" onClick={closeMenu}>
             <IconClose />
           </button>
         </div>
+        <CompanySwitcher onNavigate={closeMenu} />
         <nav className="shell-nav">
           {NAV.map((entry) =>
             isGroup(entry) ? (

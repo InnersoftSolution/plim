@@ -4,6 +4,7 @@ import type {
   CompanyMember,
   CreateCompanyInput,
   InsightsResponse,
+  MeResponse,
   UpdateCompanyInput,
   UpdateMemberInput,
 } from '@plim/shared';
@@ -93,6 +94,20 @@ export const companyApi = {
   removeMember(companyId: string, memberId: string): Promise<void> {
     return apiFetch<void>(`/companies/${companyId}/members/${memberId}`, {
       method: 'DELETE',
+    });
+  },
+};
+
+/** Preferências e permissões do usuário atual (multiempresa). */
+export const meApi = {
+  get(): Promise<MeResponse> {
+    return apiFetch<MeResponse>('/me');
+  },
+  /** Define a empresa ativa (a API valida que o usuário é membro dela). */
+  setActiveCompany(companyId: string): Promise<MeResponse> {
+    return apiFetch<MeResponse>('/me/active-company', {
+      method: 'PATCH',
+      body: JSON.stringify({ companyId }),
     });
   },
 };

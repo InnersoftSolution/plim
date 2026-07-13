@@ -1,10 +1,8 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Ícone plim.work: as ondas do "plim" (o som de começar) + o ponto rosa (a origem). -->
-  <rect width="64" height="64" rx="15" fill="#5B63EE"/>
-  <g stroke="#FFFFFF" stroke-width="4.2" stroke-linecap="round" fill="none">
-    <path d="M27.785 21.106 A9 9 0 0 1 27.785 34.894"/>
-    <path d="M32.606 15.361 A16.5 16.5 0 0 1 32.606 40.639"/>
-    <path d="M37.427 9.615 A24 24 0 0 1 37.427 46.385"/>
-  </g>
-  <circle cx="22" cy="28" r="4.4" fill="#F43F5E"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="512" height="512" rx="16" fill="#4548C9"/>
+<path d="M161.123 215.78C178.542 216.383 195.506 221.433 210.367 230.441C225.228 239.449 237.479 252.107 245.93 267.185C254.381 282.262 258.743 299.247 258.593 316.486C258.443 333.725 253.786 350.632 245.074 365.564" stroke="white" stroke-width="10" stroke-linecap="round"/>
+<path d="M157.587 138.851C190.014 138.85 221.83 147.575 249.626 164.093C277.422 180.611 300.15 204.298 315.375 232.617C330.6 260.936 337.749 292.819 336.054 324.849C334.359 356.879 323.885 387.85 305.754 414.442" stroke="white" stroke-width="18" stroke-linecap="round"/>
+<path d="M148.652 62.1532C199.703 60.3973 250.121 73.7645 293.439 100.541" stroke="white" stroke-width="20" stroke-linecap="round"/>
+<path d="M335.707 133.164C380.177 175.639 407.635 232.577 413.024 293.491C418.414 354.405 401.372 415.194 365.037 464.664" stroke="white" stroke-width="20" stroke-linecap="round"/>
+<rect x="157.762" y="277" width="50.8451" height="50.8451" rx="4" transform="rotate(13.3754 157.762 277)" fill="#F43F5E"/>
 </svg>

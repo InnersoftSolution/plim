@@ -14,6 +14,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { MovementWizard } from '../finance/MovementWizard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
@@ -54,6 +55,7 @@ type State =
 export function DashboardPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const { company: activeCompany } = useActiveCompany();
 
   async function loadFinance(companyId: string) {
     const [expenses, settlements, recurring] = await Promise.all([
@@ -67,12 +69,7 @@ export function DashboardPage() {
   const load = useCallback(async () => {
     setState({ status: 'loading' });
     try {
-      const companies = await companyApi.listMyCompanies();
-      if (companies.length === 0) {
-        setState({ status: 'empty' });
-        return;
-      }
-      const company = companies[0]!;
+      const company = activeCompany;
       const [members, expenses, settlements, recurring, activities] = await Promise.all([
         companyApi.listMembers(company.id),
         financeApi.listExpenses(company.id),
@@ -85,7 +82,7 @@ export function DashboardPage() {
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     void load();
@@ -206,6 +203,9 @@ function DashboardReady({
           )}
           <div>
           <h1 className="dash-page__title">olá, {firstName || 'por aqui'}</h1>
+          <p className="dash-page__active">
+            Você está trabalhando em <strong>{company.name}</strong>
+          </p>
           <p className="dash-page__subtitle">
             {recommended
               ? 'O estado atual do seu negócio e o que fazer agora.'

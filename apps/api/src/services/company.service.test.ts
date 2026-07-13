@@ -301,3 +301,48 @@ describe('CompanyService: convites de sócio', () => {
     expect(v).toMatchObject({ userId: 'u-vanessa', status: 'active', invitationStatus: 'accepted' });
   });
 });
+
+describe('CompanyService (multiempresa)', () => {
+  let service: CompanyService;
+
+  beforeEach(() => {
+    service = new CompanyService(new InMemoryCompanyRepository());
+  });
+
+  const create = (name: string, id: string, email: string) =>
+    service.createCompany({ name }, { id, fullName: 'Fulano', email });
+
+  it('sempre permite a PRIMEIRA empresa, mesmo sem permissão de plano', async () => {
+    const { company } = await create('primeira', 'u-comum', 'comum@exemplo.com');
+    expect(company.name).toBe('primeira');
+  });
+
+  it('bloqueia a SEGUNDA empresa para quem não tem permissão', async () => {
+    await create('primeira', 'u-comum', 'comum@exemplo.com');
+    await expect(create('segunda', 'u-comum', 'comum@exemplo.com')).rejects.toMatchObject({
+      code: 'PLAN_COMPANY_LIMIT',
+    });
+  });
+
+  it('libera múltiplas empresas para o e-mail permitido (case-insensitive)', async () => {
+    await create('A', 'u-raffa', 'RAFAELLE.Rodrigues@gmail.com');
+    const { company } = await create('B', 'u-raffa', 'rafaelle.rodrigues@GMAIL.com');
+    expect(company.name).toBe('B');
+    const companies = await service.listMyCompanies('u-raffa', 'rafaelle.rodrigues@gmail.com');
+    expect(companies).toHaveLength(2);
+  });
+
+  it('lembra a empresa ativa e só aceita empresa da qual o usuário é membro', async () => {
+    const { company } = await create('A', 'u-raffa', 'rafaelle.rodrigues@gmail.com');
+    expect(await service.getActiveCompanyId('u-raffa')).toBeNull();
+    await service.setActiveCompany(company.id, 'u-raffa');
+    expect(await service.getActiveCompanyId('u-raffa')).toBe(company.id);
+  });
+
+  it('recusa definir como ativa uma empresa de que não se é membro', async () => {
+    const { company } = await create('A', 'u-raffa', 'rafaelle.rodrigues@gmail.com');
+    await expect(service.setActiveCompany(company.id, 'u-estranho')).rejects.toMatchObject({
+      code: 'NOT_A_MEMBER',
+    });
+  });
+});

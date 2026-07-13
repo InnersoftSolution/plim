@@ -47,6 +47,10 @@
   --color-bg-brand: var(--indigo-500);
   --color-bg-brand-soft: var(--indigo-50);
   --color-bg-brand-tint: var(--indigo-100);
+  /* fundo do menu lateral (lavanda da marca) */
+  --color-menu-bg: #e1e2fd;
+  /* faixa do cabeçalho da sidebar (índigo da marca, igual ao favicon) */
+  --color-brand-header: #4548c9;
   --color-border-default: var(--paper-200);
   --color-border-dark: var(--ink-700);
   --color-border-brand: var(--indigo-100);

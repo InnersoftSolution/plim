@@ -5,6 +5,7 @@ import type { CompanyRepository } from '../company.repository';
 export class InMemoryCompanyRepository implements CompanyRepository {
   private companies = new Map<string, Company>();
   private members = new Map<string, CompanyMember>();
+  private lastActive = new Map<string, string | null>();
 
   async createCompany(data: Omit<Company, 'id' | 'createdAt'>): Promise<Company> {
     const company: Company = { ...data, id: randomUUID(), createdAt: new Date() };
@@ -88,5 +89,13 @@ export class InMemoryCompanyRepository implements CompanyRepository {
 
   async deleteMember(memberId: string): Promise<void> {
     this.members.delete(memberId);
+  }
+
+  async getLastActiveCompanyId(userId: string): Promise<string | null> {
+    return this.lastActive.get(userId) ?? null;
+  }
+
+  async setLastActiveCompanyId(userId: string, companyId: string | null): Promise<void> {
+    this.lastActive.set(userId, companyId);
   }
 }

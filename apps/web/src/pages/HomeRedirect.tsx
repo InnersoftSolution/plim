@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { companyApi } from '../company/companyApi';
+import { companyApi, meApi } from '../company/companyApi';
+import { readStoredActiveCompany } from '../company/ActiveCompanyContext';
 
 /**
  * Resolvedor da home (`/`): decide para onde mandar o usuário autenticado.
- *  - sem empresa  → /onboarding
- *  - empresa com onboarding incompleto → /onboarding (retoma)
- *  - empresa concluída → /dashboard
+ *  - sem empresa            → /onboarding (cria a primeira)
+ *  - uma empresa            → /dashboard
+ *  - várias, com uma lembrada → /dashboard (abre na última usada)
+ *  - várias, sem escolha    → /selecionar-empresa
  * É um ponto único, então login e guarda concordam (sem corrida de rota).
  */
 export function HomeRedirect() {
@@ -14,20 +16,28 @@ export function HomeRedirect() {
 
   useEffect(() => {
     let active = true;
-    companyApi
-      .listMyCompanies()
-      .then((companies) => {
+    (async () => {
+      try {
+        const companies = await companyApi.listMyCompanies();
         if (!active) return;
         if (companies.length === 0) {
           setTarget('/onboarding');
           return;
         }
-        const allCompleted = companies.every((c) => c.onboardingStatus === 'completed');
-        setTarget(allCompleted ? '/dashboard' : '/onboarding');
-      })
-      .catch(() => {
+        if (companies.length === 1) {
+          setTarget('/dashboard');
+          return;
+        }
+        // Mais de uma: se há uma empresa lembrada, abre nela; senão, deixa escolher.
+        const me = await meApi.get().catch(() => null);
+        if (!active) return;
+        const remembered = me?.lastActiveCompanyId ?? readStoredActiveCompany();
+        const known = remembered && companies.some((c) => c.id === remembered);
+        setTarget(known ? '/dashboard' : '/selecionar-empresa');
+      } catch {
         if (active) setTarget('/dashboard'); // fallback: deixa o dashboard tratar o erro
-      });
+      }
+    })();
     return () => {
       active = false;
     };

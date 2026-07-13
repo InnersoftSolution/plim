@@ -21,6 +21,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { companyApi, logoApi, messageForError } from '../company/companyApi';
+import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { IconArrowRight, IconUsers } from './dashIcons';
 import './dashboard.css';
 
@@ -54,18 +55,15 @@ function initials(name: string): string {
 export function ConfiguracoesPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const { company: activeCompany } = useActiveCompany();
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const companies = await companyApi.listMyCompanies();
+        const members = await companyApi.listMembers(activeCompany.id);
         if (!active) return;
-        if (companies.length === 0) return setState({ status: 'empty' });
-        const company = companies[0]!;
-        const members = await companyApi.listMembers(company.id);
-        if (!active) return;
-        setState({ status: 'ready', company, members });
+        setState({ status: 'ready', company: activeCompany, members });
       } catch (err) {
         if (active) setState({ status: 'error', message: messageForError(err) });
       }
@@ -73,7 +71,7 @@ export function ConfiguracoesPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeCompany]);
 
   if (state.status === 'loading') return <p className="dash-muted">carregando configurações…</p>;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;

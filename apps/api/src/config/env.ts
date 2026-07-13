@@ -22,6 +22,9 @@ const envSchema = z.object({
   // IA (opcional): sem a chave, o copiloto usa só os insights determinísticos (custo zero).
   ANTHROPIC_API_KEY: emptyToUndefined(z.string().min(1)),
   PLIM_ADVISOR_MODEL: emptyToUndefined(z.string().min(1)),
+  // Multiempresa (fase de lançamento): e-mails liberados a criar mais de uma
+  // empresa, separados por vírgula. Futuro: dá lugar ao plano/assinatura.
+  PLIM_MULTI_COMPANY_EMAILS: emptyToUndefined(z.string().min(1)),
 });
 
 export const env = envSchema.parse(process.env);

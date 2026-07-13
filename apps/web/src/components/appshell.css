@@ -21,9 +21,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--color-brand-header);
+  /* sangra até as bordas da sidebar: faixa cheia no topo */
+  margin: -20px -16px 16px;
+  padding: 20px 14px;
 }
 .shell-brand {
-  padding: 4px 8px 20px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+/* botão fechar (mobile) sobre a faixa índigo */
+.shell-sidebar__head .shell-close {
+  color: var(--color-text-inverse);
+}
+.shell-sidebar__head .shell-close:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 /* elementos só do mobile — escondidos no desktop */
 .shell-mobilebar,
