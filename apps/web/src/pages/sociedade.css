@@ -218,6 +218,42 @@
 .soc-member__edit:hover {
   border-color: var(--color-brand-primary);
 }
+.soc-member__invite:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* status do convite na linha do sócio */
+.soc-tag--sent {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+.soc-tag--in {
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+}
+
+/* aviso de convite enviado / feedback da ação */
+.soc-notice {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+  font-size: 13.5px;
+  line-height: 1.5;
+  animation: soc-notice-in 0.18s ease;
+}
+@keyframes soc-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 .soc-ownernote,
 .soc-invalidnote {

@@ -306,6 +306,9 @@ export class SupabaseCompanyRepository implements CompanyRepository {
       functionalRole: 'functional_role',
       equityPercent: 'equity_percent',
       notes: 'notes',
+      userId: 'user_id',
+      status: 'status',
+      invitationStatus: 'invitation_status',
     };
     const row: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(patch)) {
@@ -320,5 +323,15 @@ export class SupabaseCompanyRepository implements CompanyRepository {
       .single<MemberRow>();
     if (error || !updated) throw new Error(`Falha ao atualizar sócio: ${error?.message}`);
     return toMember(updated);
+  }
+
+  async listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]> {
+    const { data: rows, error } = await this.db
+      .from('company_members')
+      .select()
+      .eq('email', email)
+      .is('user_id', null);
+    if (error) throw new Error(`Falha ao buscar convites pendentes: ${error.message}`);
+    return ((rows ?? []) as MemberRow[]).map(toMember);
   }
 }

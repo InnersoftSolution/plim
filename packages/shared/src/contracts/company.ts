@@ -128,6 +128,8 @@ export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export const companyMemberSchema = z.object({
   id: z.string().uuid(),
   companyId: z.string().uuid(),
+  /** Conta (auth) vinculada. Nula enquanto o sócio ainda não entrou no Plim. */
+  userId: z.string().uuid().nullable().default(null),
   fullName: z.string(),
   email: z.string().email().nullable(),
   functionalRole: z.string().nullable(),

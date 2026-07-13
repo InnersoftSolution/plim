@@ -8,6 +8,7 @@ import type { Company, CompanyMember, CompanyUpdate } from '../domain/company';
 import type { CompanyRepository } from '../repositories/company.repository';
 import { DomainError, NotFoundError } from '../lib/errors';
 import type { LogoStorage } from '../lib/logo-storage';
+import type { InviteSender } from '../lib/invite-sender';
 
 /** Limite da logo: 5MB ja decodificados. */
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
@@ -27,6 +28,7 @@ export class CompanyService {
   constructor(
     private readonly repo: CompanyRepository,
     private readonly logoStorage?: LogoStorage,
+    private readonly inviteSender?: InviteSender,
   ) {}
 
   /**
@@ -133,10 +135,27 @@ export class CompanyService {
     return this.repo.updateCompany(companyId, { onboardingStatus: 'completed' });
   }
 
-  /** Empresas do usuário autenticado. No modo dev (sem auth) devolve todas. */
-  async listMyCompanies(actingUserId?: string | null): Promise<Company[]> {
+  /**
+   * Empresas do usuário autenticado. No modo dev (sem auth) devolve todas.
+   * Com e-mail em mãos, VINCULA sozinho convites pendentes: um sócio
+   * convidado entra e já encontra a empresa dele, sem passo extra.
+   */
+  async listMyCompanies(actingUserId?: string | null, actingEmail?: string | null): Promise<Company[]> {
     if (actingUserId == null) return this.repo.listAllCompanies();
+    if (actingEmail) await this.claimMemberships(actingUserId, actingEmail);
     return this.repo.listCompaniesByUserId(actingUserId);
+  }
+
+  /** Liga convites pendentes (mesmo e-mail, sem conta vinculada) a este usuário. */
+  private async claimMemberships(userId: string, email: string): Promise<void> {
+    const pending = await this.repo.listUnclaimedMembersByEmail(email.toLowerCase());
+    for (const m of pending) {
+      await this.repo.updateMember(m.id, {
+        userId,
+        status: 'active',
+        invitationStatus: 'accepted',
+      });
+    }
   }
 
   async addMember(companyId: string, input: AddMemberInput, actingUserId?: string | null): Promise<CompanyMember> {
@@ -152,7 +171,7 @@ export class CompanyService {
 
     await this.assertEquitySumWithinLimit(companyId, input.equityPercent);
 
-    return this.repo.addMember({
+    const member = await this.repo.addMember({
       companyId,
       userId: null,
       fullName: input.fullName,
@@ -164,6 +183,58 @@ export class CompanyService {
       status: 'invited',
       invitationStatus: 'not_invited',
     });
+
+    // Cadastrou com e-mail? O convite sai na hora. Se o envio falhar, o
+    // cadastro NAO falha junto: fica "não convidado" e dá para reenviar.
+    if (member.email && this.inviteSender) {
+      try {
+        return await this.sendMemberInvite(companyId, member, actingUserId);
+      } catch {
+        return member;
+      }
+    }
+    return member;
+  }
+
+  /** Envia (ou reenvia) o convite de um sócio já cadastrado. */
+  async inviteMember(
+    companyId: string,
+    memberId: string,
+    actingUserId?: string | null,
+  ): Promise<CompanyMember> {
+    await this.assertMembership(companyId, actingUserId);
+    const member = await this.repo.findMemberById(companyId, memberId);
+    if (!member) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
+    if (!member.email) {
+      throw new DomainError('MEMBER_WITHOUT_EMAIL', 'Cadastre o e-mail do sócio antes de convidar.');
+    }
+    if (member.userId) {
+      throw new DomainError('MEMBER_ALREADY_ACTIVE', 'Esse sócio já entrou no Plim.');
+    }
+    if (!this.inviteSender) {
+      throw new DomainError('INVITE_NOT_CONFIGURED', 'Envio de convite indisponível neste ambiente.');
+    }
+    return this.sendMemberInvite(companyId, member, actingUserId);
+  }
+
+  private async sendMemberInvite(
+    companyId: string,
+    member: CompanyMember,
+    actingUserId?: string | null,
+  ): Promise<CompanyMember> {
+    const [company, inviter] = await Promise.all([
+      this.repo.findCompanyById(companyId),
+      actingUserId ? this.repo.findMemberByUserId(companyId, actingUserId) : null,
+    ]);
+    await this.inviteSender!.sendInvite({
+      email: member.email!,
+      fullName: member.fullName,
+      companyName: company?.name ?? 'a empresa',
+      inviterName: inviter?.fullName ?? 'Um sócio',
+    });
+    // "already_registered" também conta como convidado: o vínculo acontece
+    // sozinho no próximo login dessa pessoa (claim por e-mail).
+    return this.repo.updateMember(member.id, { invitationStatus: 'invited' });
   }
 
   async listMembers(companyId: string, actingUserId?: string | null): Promise<CompanyMember[]> {

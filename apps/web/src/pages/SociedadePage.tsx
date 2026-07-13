@@ -40,6 +40,8 @@ export function SociedadePage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<CompanyMember | null>(null);
   const [soloBusy, setSoloBusy] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -94,6 +96,20 @@ export function SociedadePage() {
       await load();
     } finally {
       setSoloBusy(false);
+    }
+  }
+
+  async function handleInvite(m: CompanyMember) {
+    setInvitingId(m.id);
+    setNotice('');
+    try {
+      await companyApi.inviteMember(company.id, m.id);
+      setNotice(`Convite enviado para ${m.email}. A pessoa recebe um e-mail para entrar no Plim.`);
+      await load();
+    } catch (err) {
+      setNotice(messageForError(err));
+    } finally {
+      setInvitingId(null);
     }
   }
 
@@ -161,7 +177,7 @@ export function SociedadePage() {
         <span className="soc-why__title">Por que isso importa?</span>
         <p>
           A participação societária ajuda o Plim a entender como despesas compartilhadas e acertos
-          entre sócios devem ser calculados. Se vocês ainda não decidiram os percentuais, tudo bem —
+          entre sócios devem ser calculados. Se vocês ainda não decidiram os percentuais, tudo bem:
           você pode deixar em aberto e completar depois.
         </p>
       </div>
@@ -188,6 +204,7 @@ export function SociedadePage() {
             <IconPlus /> Adicionar sócio
           </Button>
         </div>
+        {notice && <div className="soc-notice">{notice}</div>}
         <div className="soc-members">
           {members.map((m) => (
             <div className="soc-member" key={m.id}>
@@ -196,6 +213,12 @@ export function SociedadePage() {
                 <span className="soc-member__name">
                   {m.fullName}
                   {m.role === 'account_owner' && <span className="soc-tag">Responsável pela conta</span>}
+                  {m.role !== 'account_owner' && m.userId && (
+                    <span className="soc-tag soc-tag--in">no Plim</span>
+                  )}
+                  {!m.userId && m.invitationStatus === 'invited' && (
+                    <span className="soc-tag soc-tag--sent">convite enviado</span>
+                  )}
                 </span>
                 <span className="soc-member__meta">
                   {[
@@ -212,6 +235,19 @@ export function SociedadePage() {
                   <span className="soc-member__pct" data-financial>{fmtPct(m.equityPercent)}</span>
                 ) : (
                   <span className="soc-member__pct soc-member__pct--empty">participação não definida</span>
+                )}
+                {!m.userId && m.email && (
+                  <button
+                    className="soc-member__edit soc-member__invite"
+                    onClick={() => void handleInvite(m)}
+                    disabled={invitingId === m.id}
+                  >
+                    {invitingId === m.id
+                      ? 'Enviando...'
+                      : m.invitationStatus === 'invited'
+                        ? 'Reenviar convite'
+                        : 'Enviar convite'}
+                  </button>
                 )}
                 <button className="soc-member__edit" onClick={() => setEditing(m)}>
                   Editar
@@ -244,8 +280,13 @@ export function SociedadePage() {
           <MemberForm
             company={company}
             existingEmails={members.map((m) => m.email).filter((e): e is string => e != null)}
-            onDone={() => {
+            onDone={(created) => {
               setAddOpen(false);
+              if (created?.email && created.invitationStatus === 'invited') {
+                setNotice(`Sócio adicionado. Convite enviado para ${created.email}.`);
+              } else if (created && !created.email) {
+                setNotice('Sócio adicionado. Cadastre o e-mail quando quiser enviar o convite.');
+              }
               void load();
             }}
           />
@@ -272,7 +313,7 @@ export function SociedadePage() {
 
       {invalid && (
         <p className="soc-invalidnote">
-          ⚠ A soma passou de 100%. Ajuste as participações — o Plim precisa disso para calcular os
+          ⚠ A soma passou de 100%. Ajuste as participações: o Plim precisa disso para calcular os
           acertos com segurança.
         </p>
       )}
@@ -368,7 +409,7 @@ function MemberForm({
   company: Company;
   member?: CompanyMember;
   existingEmails: string[];
-  onDone: () => void;
+  onDone: (created?: CompanyMember) => void;
 }) {
   const isEdit = member != null;
   const isOwner = member?.role === 'account_owner';
@@ -414,16 +455,17 @@ function MemberForm({
           equityPercent: parsed === 'invalid' ? undefined : parsed,
           notes: notes.trim() || null,
         });
-      } else {
-        await companyApi.addMember(company.id, {
-          fullName: fullName.trim(),
-          email: cleanEmail || null,
-          functionalRole: functionalRole || null,
-          equityPercent: parsed === 'invalid' ? null : parsed,
-          notes: notes.trim() || null,
-        });
+        onDone();
+        return;
       }
-      onDone();
+      const created = await companyApi.addMember(company.id, {
+        fullName: fullName.trim(),
+        email: cleanEmail || null,
+        functionalRole: functionalRole || null,
+        equityPercent: parsed === 'invalid' ? null : parsed,
+        notes: notes.trim() || null,
+      });
+      onDone(created);
     } catch (err) {
       setFormError(messageForError(err));
       setSaving(false);
@@ -454,7 +496,7 @@ function MemberForm({
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         error={errors.email}
-        hint="Você poderá enviar convite depois."
+        hint="Com e-mail, o sócio recebe um convite para entrar no Plim."
       />
       <div className="rc-grid">
         <Select

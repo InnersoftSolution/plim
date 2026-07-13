@@ -21,4 +21,9 @@ export interface CompanyRepository {
   updateMemberEquity(memberId: string, equityPercent: number | null): Promise<CompanyMember>;
   /** Edição parcial de um sócio (nome, e-mail, papel funcional, participação, notas). */
   updateMember(memberId: string, patch: MemberUpdate): Promise<CompanyMember>;
+  /**
+   * Sócios convidados ainda sem conta vinculada (user_id nulo) com este e-mail,
+   * em QUALQUER empresa. Usado no login para vincular a pessoa automaticamente.
+   */
+  listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]>;
 }

@@ -32,7 +32,8 @@ export async function companyRoutes(app: FastifyInstance, opts: { service: Compa
   app.addHook('preHandler', authenticate);
 
   app.get('/companies', async (request) => {
-    return service.listMyCompanies(request.user?.id ?? null);
+    // O e-mail permite vincular sozinho convites pendentes deste usuário.
+    return service.listMyCompanies(request.user?.id ?? null, request.user?.email ?? null);
   });
 
   app.post('/companies', async (request, reply) => {
@@ -99,6 +100,11 @@ export async function companyRoutes(app: FastifyInstance, opts: { service: Compa
     // Aceita { equityPercent } (compat) ou edição completa do sócio.
     const input = updateMemberSchema.parse(request.body);
     return service.updateMember(companyId, memberId, input, request.user?.id ?? null);
+  });
+
+  app.post('/companies/:companyId/members/:memberId/invite', async (request) => {
+    const { companyId, memberId } = memberParamsSchema.parse(request.params);
+    return service.inviteMember(companyId, memberId, request.user?.id ?? null);
   });
 }
 

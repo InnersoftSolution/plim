@@ -5,6 +5,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { AuthCallbackPage } from './pages/auth/AuthCallbackPage';
+import { SetPasswordPage } from './pages/auth/SetPasswordPage';
 import { OnboardingPage } from './pages/onboarding/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FinancePage } from './pages/FinancePage';
@@ -64,6 +65,7 @@ export function App() {
           <Route path="/signup" element={<RedirectIfAuthed><SignupPage /></RedirectIfAuthed>} />
           <Route path="/forgot-password" element={<RedirectIfAuthed><ForgotPasswordPage /></RedirectIfAuthed>} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/definir-senha" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
           <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
 
           {/* Páginas autenticadas dentro do menu (AppShell) */}

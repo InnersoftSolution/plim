@@ -81,4 +81,8 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     this.members.set(memberId, updated);
     return updated;
   }
+
+  async listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]> {
+    return [...this.members.values()].filter((m) => m.email === email && m.userId === null);
+  }
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryCompanyRepository } from '../repositories/in-memory/company.repository.memory';
 import { CompanyService } from './company.service';
+import { InMemoryInviteSender } from '../lib/invite-sender';
 import { DomainError } from '../lib/errors';
 
 describe('CompanyService', () => {
@@ -170,5 +171,95 @@ describe('CompanyService — autorização por usuário', () => {
   it('sem actingUserId (modo dev) não aplica a checagem de membro', async () => {
     const members = await service.listMembers(companyId);
     expect(members).toHaveLength(1);
+  });
+});
+
+describe('CompanyService: convites de sócio', () => {
+  let repo: InMemoryCompanyRepository;
+  let invites: InMemoryInviteSender;
+  let service: CompanyService;
+  let companyId: string;
+
+  beforeEach(async () => {
+    repo = new InMemoryCompanyRepository();
+    invites = new InMemoryInviteSender();
+    service = new CompanyService(repo, undefined, invites);
+    const { company } = await service.createCompany(
+      { name: 'OkiDoki' },
+      { id: 'u-owner', fullName: 'Rafaelle Weran', email: 'rafaelle@plim.work' },
+    );
+    companyId = company.id;
+  });
+
+  it('cadastrar sócio com e-mail envia convite na hora e marca "invited"', async () => {
+    const member = await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    expect(member.invitationStatus).toBe('invited');
+    expect(invites.sent).toHaveLength(1);
+    expect(invites.sent[0]).toMatchObject({
+      email: 'vanessa@plim.work',
+      companyName: 'OkiDoki',
+      inviterName: 'Rafaelle Weran',
+    });
+  });
+
+  it('cadastrar sócio sem e-mail não envia convite', async () => {
+    const member = await service.addMember(
+      companyId,
+      { fullName: 'Sem Email', email: null, equityPercent: null },
+      'u-owner',
+    );
+    expect(member.invitationStatus).toBe('not_invited');
+    expect(invites.sent).toHaveLength(0);
+  });
+
+  it('reenvia o convite de um sócio já cadastrado', async () => {
+    const m = await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    const again = await service.inviteMember(companyId, m.id, 'u-owner');
+    expect(again.invitationStatus).toBe('invited');
+    expect(invites.sent).toHaveLength(2);
+  });
+
+  it('convidar sócio sem e-mail orienta a cadastrar o e-mail antes', async () => {
+    const m = await service.addMember(
+      companyId,
+      { fullName: 'Sem Email', email: null, equityPercent: null },
+      'u-owner',
+    );
+    await expect(service.inviteMember(companyId, m.id, 'u-owner')).rejects.toMatchObject({
+      code: 'MEMBER_WITHOUT_EMAIL',
+    });
+  });
+
+  it('pessoa já cadastrada no Plim também fica como convidada (vínculo no login)', async () => {
+    invites.registered.add('ja-tem-conta@plim.work');
+    const member = await service.addMember(
+      companyId,
+      { fullName: 'Quem Já Tem Conta', email: 'ja-tem-conta@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    expect(member.invitationStatus).toBe('invited');
+    expect(invites.sent).toHaveLength(0); // nenhum e-mail novo, mas o vínculo vem no login
+  });
+
+  it('vincula sozinho o sócio convidado no primeiro login (claim por e-mail)', async () => {
+    await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    // Vanessa entra pela primeira vez com a conta dela.
+    const companies = await service.listMyCompanies('u-vanessa', 'vanessa@plim.work');
+    expect(companies.map((c) => c.id)).toContain(companyId);
+    const members = await service.listMembers(companyId, 'u-vanessa');
+    const v = members.find((m) => m.email === 'vanessa@plim.work');
+    expect(v).toMatchObject({ userId: 'u-vanessa', status: 'active', invitationStatus: 'accepted' });
   });
 });

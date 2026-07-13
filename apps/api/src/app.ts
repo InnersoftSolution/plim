@@ -51,6 +51,7 @@ import { SupabaseAdminRepository } from './repositories/supabase/admin.repositor
 import { env, isSupabaseConfigured, isLlmConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
 import { InMemoryLogoStorage, SupabaseLogoStorage } from './lib/logo-storage';
+import { InMemoryInviteSender, SupabaseInviteSender } from './lib/invite-sender';
 import type { LlmProvider } from './ai/llm.provider';
 import { NoopLlmProvider } from './ai/llm.provider';
 import { AnthropicLlmProvider } from './ai/anthropic.provider';
@@ -66,7 +67,10 @@ export function buildApp(): FastifyInstance {
   const logoStorage = isSupabaseConfigured
     ? new SupabaseLogoStorage(getSupabaseAdmin())
     : new InMemoryLogoStorage();
-  const companyService = new CompanyService(repository, logoStorage);
+  const inviteSender = isSupabaseConfigured
+    ? new SupabaseInviteSender(getSupabaseAdmin())
+    : new InMemoryInviteSender();
+  const companyService = new CompanyService(repository, logoStorage, inviteSender);
 
   const journeyRepository: JourneyRepository = isSupabaseConfigured
     ? new SupabaseJourneyRepository(getSupabaseAdmin())

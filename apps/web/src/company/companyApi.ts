@@ -82,6 +82,12 @@ export const companyApi = {
       body: JSON.stringify(input),
     });
   },
+
+  inviteMember(companyId: string, memberId: string): Promise<CompanyMember> {
+    return apiFetch<CompanyMember>(`/companies/${companyId}/members/${memberId}/invite`, {
+      method: 'POST',
+    });
+  },
 };
 
 /** Traduz códigos estáveis do back em mensagens amigáveis (pt-BR). */
@@ -89,6 +95,9 @@ const MESSAGES: Record<string, string> = {
   EQUITY_SUM_EXCEEDED: 'A soma das participações passaria de 100%. Ajuste os percentuais.',
   MEMBER_ALREADY_EXISTS: 'Esse e-mail já faz parte da sociedade.',
   MEMBER_NOT_FOUND: 'Sócio não encontrado.',
+  MEMBER_WITHOUT_EMAIL: 'Cadastre o e-mail do sócio antes de convidar.',
+  MEMBER_ALREADY_ACTIVE: 'Esse sócio já entrou no Plim.',
+  INVITE_NOT_CONFIGURED: 'Envio de convite indisponível neste ambiente.',
   COMPANY_NOT_FOUND: 'Empresa não encontrada.',
   VALIDATION_ERROR: 'Confira os dados informados.',
   NETWORK_ERROR: 'Sem conexão com o servidor. Tente novamente.',

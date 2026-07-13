@@ -83,9 +83,16 @@ export type CompanyUpdate = Partial<
   >
 >;
 
-/** Campos editáveis de um sócio (tela Sociedade). system_role/role não entra. */
+/**
+ * Campos editáveis de um sócio (tela Sociedade + ciclo de convite).
+ * system_role/role não entra. userId/status/invitationStatus são atualizados
+ * apenas pelo próprio sistema (convite enviado, vínculo no login).
+ */
 export type MemberUpdate = Partial<
-  Pick<CompanyMember, 'fullName' | 'email' | 'functionalRole' | 'equityPercent' | 'notes'>
+  Pick<
+    CompanyMember,
+    'fullName' | 'email' | 'functionalRole' | 'equityPercent' | 'notes' | 'userId' | 'status' | 'invitationStatus'
+  >
 >;
 
 export interface CompanyMember {
