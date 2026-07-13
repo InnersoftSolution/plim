@@ -353,6 +353,28 @@
 }
 
 /* grupos de campos (Identificação · Contato · Endereço), com divisória */
+.dash-group__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dash-group__head .dash-group__title {
+  margin-bottom: 0;
+}
+.dash-group__edit {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.dash-group__edit:hover {
+  color: var(--color-brand-primary-deep);
+}
 .dash-group__title {
   font-size: 12px;
   font-weight: 700;
@@ -449,6 +471,33 @@
   font-weight: 400;
   font-size: 13px;
   color: var(--color-text-subtle);
+  line-height: 1.45;
+}
+/* campo vazio acionável: abre a edição já focada nele */
+.dash-field__add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.dash-field__add:hover {
+  color: var(--color-brand-primary-deep);
+}
+/* aviso do preenchimento automático pelo CEP */
+.dash-cepnotice {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-input);
+  background: var(--color-bg-brand-tint);
+  color: var(--color-brand-primary-deep);
+  font-size: 13px;
   line-height: 1.45;
 }
 @media (max-width: 620px) {

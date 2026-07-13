@@ -88,6 +88,13 @@ export const companyApi = {
       method: 'POST',
     });
   },
+
+  /** Exclusão definitiva (irreversível); só o dono da conta consegue. */
+  removeMember(companyId: string, memberId: string): Promise<void> {
+    return apiFetch<void>(`/companies/${companyId}/members/${memberId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 /** Traduz códigos estáveis do back em mensagens amigáveis (pt-BR). */
@@ -98,6 +105,8 @@ const MESSAGES: Record<string, string> = {
   MEMBER_WITHOUT_EMAIL: 'Cadastre o e-mail do sócio antes de convidar.',
   MEMBER_ALREADY_ACTIVE: 'Esse sócio já entrou no Plim.',
   INVITE_NOT_CONFIGURED: 'Envio de convite indisponível neste ambiente.',
+  NOT_ACCOUNT_OWNER: 'Só o dono da conta pode excluir sócios.',
+  OWNER_CANNOT_BE_REMOVED: 'O dono da conta não pode ser excluído da sociedade.',
   COMPANY_NOT_FOUND: 'Empresa não encontrada.',
   VALIDATION_ERROR: 'Confira os dados informados.',
   NETWORK_ERROR: 'Sem conexão com o servidor. Tente novamente.',

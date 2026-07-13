@@ -222,6 +222,57 @@
   opacity: 0.55;
   cursor: default;
 }
+/* excluir sócio: presente, mas discreto; a força fica na confirmação */
+.soc-member__remove {
+  color: var(--color-status-negative);
+}
+.soc-member__remove:hover {
+  border-color: var(--color-status-negative);
+}
+
+/* confirmação de exclusão (ação irreversível) */
+.soc-remove {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.soc-remove__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-default);
+}
+.soc-remove__warn {
+  padding: 12px 14px;
+  border-radius: var(--radius-input);
+  background: var(--color-status-negative-bg);
+  color: var(--color-status-negative);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.soc-remove__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.soc-remove__confirm {
+  border: none;
+  border-radius: var(--radius-button);
+  padding: 12px 22px;
+  background: var(--color-status-negative);
+  color: var(--color-text-inverse);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.soc-remove__confirm:hover {
+  filter: brightness(0.94);
+}
+.soc-remove__confirm:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 
 /* status do convite na linha do sócio */
 .soc-tag--sent {

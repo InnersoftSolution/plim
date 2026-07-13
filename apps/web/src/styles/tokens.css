@@ -54,6 +54,8 @@
   --color-status-positive-bg: #e6f8f1;
   --color-status-warning: var(--amber-500);
   --color-status-warning-bg: #fef5e4;
+  --color-status-negative: var(--rose-600);
+  --color-status-negative-bg: #fdeef2;
 
   /* ── tipografia ────────────────────────────────────── */
   --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;

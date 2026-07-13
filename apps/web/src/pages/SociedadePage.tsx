@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
+import { useAuth } from '../auth/AuthContext';
 import { companyApi, messageForError } from '../company/companyApi';
 import { IconPlus, IconUsers } from './dashIcons';
 import './dashboard.css';
@@ -42,6 +43,10 @@ export function SociedadePage() {
   const [soloBusy, setSoloBusy] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [removing, setRemoving] = useState<CompanyMember | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -79,6 +84,8 @@ export function SociedadePage() {
   const remaining = Math.max(0, Math.round((100 - allocated) * 100) / 100);
   const invalid = allocated > 100.001;
   const owner = members.find((m) => m.role === 'account_owner');
+  // Excluir sócio é ação só do dono da conta (a API valida de novo).
+  const viewerIsOwner = user ? members.find((m) => m.userId === user.id)?.role === 'account_owner' : true;
   const soloUndefined = members.length <= 1 && allocated === 0;
   const undefinedMembers = members.filter((m) => m.equityPercent == null);
 
@@ -96,6 +103,22 @@ export function SociedadePage() {
       await load();
     } finally {
       setSoloBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!removing) return;
+    setRemoveBusy(true);
+    setRemoveError('');
+    try {
+      await companyApi.removeMember(company.id, removing.id);
+      setNotice(`${removing.fullName} foi removido da sociedade.`);
+      setRemoving(null);
+      await load();
+    } catch (err) {
+      setRemoveError(messageForError(err));
+    } finally {
+      setRemoveBusy(false);
     }
   }
 
@@ -252,6 +275,17 @@ export function SociedadePage() {
                 <button className="soc-member__edit" onClick={() => setEditing(m)}>
                   Editar
                 </button>
+                {viewerIsOwner && m.role !== 'account_owner' && (
+                  <button
+                    className="soc-member__edit soc-member__remove"
+                    onClick={() => {
+                      setRemoveError('');
+                      setRemoving(m);
+                    }}
+                  >
+                    Excluir
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -308,6 +342,39 @@ export function SociedadePage() {
               void load();
             }}
           />
+        )}
+      </Modal>
+
+      <Modal
+        open={removing != null}
+        title="Excluir sócio"
+        onClose={() => (removeBusy ? undefined : setRemoving(null))}
+      >
+        {removing && (
+          <div className="soc-remove">
+            {removeError && <div className="form-error">{removeError}</div>}
+            <p className="soc-remove__text">
+              Tem certeza que deseja excluir <strong>{removing.fullName}</strong> da sociedade?
+            </p>
+            <div className="soc-remove__warn">
+              Essa ação é <strong>irreversível</strong>. O vínculo, a participação
+              {removing.equityPercent != null ? ` de ${fmtPct(removing.equityPercent)}` : ''} e o
+              convite dessa pessoa serão removidos da empresa.
+            </div>
+            <div className="soc-remove__actions">
+              <button
+                type="button"
+                className="soc-remove__confirm"
+                onClick={() => void handleRemove()}
+                disabled={removeBusy}
+              >
+                {removeBusy ? 'Excluindo…' : 'Sim, excluir definitivamente'}
+              </button>
+              <Button variant="ghost" onClick={() => setRemoving(null)} disabled={removeBusy}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
 

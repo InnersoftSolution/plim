@@ -334,4 +334,9 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     if (error) throw new Error(`Falha ao buscar convites pendentes: ${error.message}`);
     return ((rows ?? []) as MemberRow[]).map(toMember);
   }
+
+  async deleteMember(memberId: string): Promise<void> {
+    const { error } = await this.db.from('company_members').delete().eq('id', memberId);
+    if (error) throw new Error(`Falha ao excluir sócio: ${error.message}`);
+  }
 }

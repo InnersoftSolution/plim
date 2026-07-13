@@ -26,4 +26,6 @@ export interface CompanyRepository {
    * em QUALQUER empresa. Usado no login para vincular a pessoa automaticamente.
    */
   listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]>;
+  /** Remoção definitiva de um sócio (ação irreversível, só do dono da conta). */
+  deleteMember(memberId: string): Promise<void>;
 }

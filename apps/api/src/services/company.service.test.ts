@@ -249,6 +249,44 @@ describe('CompanyService: convites de sócio', () => {
     expect(invites.sent).toHaveLength(0); // nenhum e-mail novo, mas o vínculo vem no login
   });
 
+  it('o dono da conta exclui um sócio definitivamente', async () => {
+    const m = await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: 20 },
+      'u-owner',
+    );
+    await service.removeMember(companyId, m.id, 'u-owner');
+    const members = await service.listMembers(companyId, 'u-owner');
+    expect(members.find((x) => x.id === m.id)).toBeUndefined();
+  });
+
+  it('sócio que não é dono da conta não consegue excluir', async () => {
+    const m = await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    // Vanessa entra no Plim (vira membro ativo, mas partner).
+    await service.listMyCompanies('u-vanessa', 'vanessa@plim.work');
+    const other = await service.addMember(
+      companyId,
+      { fullName: 'Outro Sócio', email: 'outro@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    await expect(service.removeMember(companyId, other.id, 'u-vanessa')).rejects.toMatchObject({
+      code: 'NOT_ACCOUNT_OWNER',
+    });
+    expect(m.id).toBeTruthy();
+  });
+
+  it('o dono da conta não pode ser excluído', async () => {
+    const members = await service.listMembers(companyId, 'u-owner');
+    const owner = members.find((x) => x.role === 'account_owner')!;
+    await expect(service.removeMember(companyId, owner.id, 'u-owner')).rejects.toMatchObject({
+      code: 'OWNER_CANNOT_BE_REMOVED',
+    });
+  });
+
   it('vincula sozinho o sócio convidado no primeiro login (claim por e-mail)', async () => {
     await service.addMember(
       companyId,

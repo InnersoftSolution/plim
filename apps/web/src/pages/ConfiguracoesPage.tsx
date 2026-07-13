@@ -104,7 +104,7 @@ export function ConfiguracoesPage() {
         <h1 className="dash-page__title">Dados da empresa</h1>
         <p className="dash-page__subtitle">
           Quanto mais o Plim souber da empresa, melhor ele orienta os próximos passos. Preencha o que
-          já tiver — o resto pode ficar para depois.
+          já tiver; o resto pode ficar para depois.
         </p>
       </div>
 
@@ -160,23 +160,48 @@ export function ConfiguracoesPage() {
 }
 
 /* ── grupo de campos (leitura) com divisória e título ── */
-function ReadGroup({ title, children }: { title: string; children: ReactNode }) {
+function ReadGroup({ title, onEdit, children }: { title: string; onEdit?: () => void; children: ReactNode }) {
   return (
     <div className="dash-group">
-      <div className="dash-group__title">{title}</div>
+      <div className="dash-group__head">
+        <div className="dash-group__title">{title}</div>
+        {onEdit && (
+          <button type="button" className="dash-group__edit" onClick={onEdit}>
+            Editar
+          </button>
+        )}
+      </div>
       <div className="dash-fields">{children}</div>
     </div>
   );
 }
-function ReadField({ label, value, emptyHint }: { label: string; value: string; emptyHint?: string }) {
+function ReadField({
+  label,
+  value,
+  emptyHint,
+  onAdd,
+}: {
+  label: string;
+  value: string;
+  emptyHint?: string;
+  /** Quando o campo está vazio, vira um convite "Adicionar" que abre a edição já focada nele. */
+  onAdd?: () => void;
+}) {
   const isEmpty = !value || value === '—';
   return (
     <div className="dash-field">
       <span className="dash-field__label">{label}</span>
-      {isEmpty && emptyHint ? (
+      {isEmpty && onAdd ? (
+        <>
+          <button type="button" className="dash-field__add" onClick={onAdd}>
+            <span aria-hidden="true">+</span> Adicionar
+          </button>
+          {emptyHint && <span className="dash-field__value dash-field__value--empty">{emptyHint}</span>}
+        </>
+      ) : isEmpty && emptyHint ? (
         <span className="dash-field__value dash-field__value--empty">{emptyHint}</span>
       ) : (
-        <span className="dash-field__value">{value}</span>
+        <span className="dash-field__value">{isEmpty ? '—' : value}</span>
       )}
     </div>
   );
@@ -240,15 +265,30 @@ function ContadoresPanel({ companyId }: { companyId: string }) {
   );
 }
 
+/** Campo que deve receber o foco ao entrar na edição (clique em "Adicionar"/"Editar"). */
+type FocusField =
+  | 'name'
+  | 'cnpj'
+  | 'description'
+  | 'phone'
+  | 'email'
+  | 'cep'
+  | 'city'
+  | 'neighborhood'
+  | 'street'
+  | 'streetNumber'
+  | 'complement';
+
 /** Painel dos dados da empresa: leitura em blocos → Editar → edição inline → salva. */
 function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c: Company) => void }) {
   const [editing, setEditing] = useState(false);
+  const [focusField, setFocusField] = useState<FocusField | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [infoOpen, setInfoOpen] = useState(false);
   const [guides, setGuides] = useState<GuideContent[] | null>(null);
 
-  // Conteúdo configurável (banco) — carrega quando o painel de ajuda abre.
+  // Conteúdo configurável (banco); carrega quando o painel de ajuda abre.
   useEffect(() => {
     if (!infoOpen || guides) return;
     apiFetch<GuideContent[]>('/guides/legal_structure')
@@ -271,12 +311,46 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
   const [streetNumber, setStreetNumber] = useState('');
   const [complement, setComplement] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
+  const [cepNotice, setCepNotice] = useState('');
+
+  /**
+   * Sistema inteligente, custo zero: com o CEP completo, busca o endereço no
+   * ViaCEP (serviço público) e preenche logradouro, bairro e cidade sozinho.
+   */
+  async function handleCepChange(raw: string) {
+    const formatted = formatCep(raw);
+    setCep(formatted);
+    setCepNotice('');
+    const digits = onlyDigits(raw);
+    if (digits.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = (await res.json()) as {
+        erro?: boolean;
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+      };
+      if (data.erro) {
+        setCepNotice('CEP não encontrado. Confira os números ou preencha o endereço à mão.');
+        return;
+      }
+      if (data.logradouro) setStreet(data.logradouro);
+      if (data.bairro) setNeighborhood(data.bairro);
+      if (data.localidade) setCity(data.localidade);
+      setCountryCode((c) => c || 'BR');
+      setCepNotice('Endereço preenchido pelo CEP. Confira e complete o número.');
+    } catch {
+      // Sem rede ou serviço fora do ar: segue o preenchimento manual, sem alarde.
+    }
+  }
 
   const stage = businessStageCatalog.find((s) => s.id === company.businessStage);
   const country = countryCatalog.find((c) => c.code === company.countryCode);
   const currency = currencyCatalog.find((c) => c.code === company.currencyCode);
 
-  function startEdit() {
+  function startEdit(focus?: FocusField) {
+    setFocusField(focus ?? null);
     setLegalStructure(company.legalStructure ?? '');
     setName(company.name);
     setDescription(company.description ?? '');
@@ -303,11 +377,11 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     }
     const cnpjDigits = onlyDigits(cnpj);
     if (cnpjDigits && !isValidCnpj(cnpjDigits)) {
-      setFormError('CNPJ inválido — confira os números.');
+      setFormError('CNPJ inválido. Confira os números.');
       return;
     }
     if (email.trim() && !EMAIL_RE.test(email.trim())) {
-      setFormError('E-mail inválido — confira o endereço.');
+      setFormError('E-mail inválido. Confira o endereço.');
       return;
     }
     setFormError('');
@@ -346,7 +420,7 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     <Drawer
       open={infoOpen}
       title="Tipos de empresa"
-      subtitle="Orientação inicial em linguagem simples — confirme com um contador."
+      subtitle="Orientação inicial em linguagem simples. Confirme com um contador."
       onClose={() => setInfoOpen(false)}
     >
       <div className="lt-guide">
@@ -379,17 +453,18 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
         {infoDrawer}
         <div className="dash-panel__head">
           <h2>Dados da empresa</h2>
-          <button className="dash-panel__action" onClick={startEdit}>
+          <button className="dash-panel__action" onClick={() => startEdit()}>
             Editar <IconArrowRight />
           </button>
         </div>
 
-        <ReadGroup title="Identificação">
+        <ReadGroup title="Identificação" onEdit={() => startEdit('name')}>
           <ReadField label="Nome" value={company.name} />
           <ReadField
             label="CNPJ"
             value={company.registrationNumber ? formatCnpj(company.registrationNumber) : '—'}
-            emptyHint="Ainda sem CNPJ — normal nesse estágio. Registre aqui quando abrir a empresa."
+            emptyHint="Ainda sem CNPJ, normal nesse estágio. Registre aqui quando abrir a empresa."
+            onAdd={() => startEdit('cnpj')}
           />
           <div className="dash-field">
             <span className="dash-field__label">
@@ -407,36 +482,43 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
               <span className="dash-field__value">{legalStructureLabel(company.legalStructure)}</span>
             ) : (
               <span className="dash-field__value dash-field__value--empty">
-                Ainda não definida — toque no ⓘ para entender os tipos (MEI, LTDA…).
+                Ainda não definida. Toque no ⓘ para entender os tipos (MEI, LTDA…).
               </span>
             )}
           </div>
-          <ReadField label="Descrição" value={company.description || '—'} />
+          <ReadField label="Descrição" value={company.description || '—'} onAdd={() => startEdit('description')} />
           <ReadField label="Estágio" value={stage?.label ?? '—'} />
           <ReadField label="Moeda" value={currency ? `${currency.code} (${currency.symbol})` : '—'} />
         </ReadGroup>
 
-        <ReadGroup title="Contato">
+        <ReadGroup title="Contato" onEdit={() => startEdit('phone')}>
           <ReadField
             label="Telefone"
             value={company.phone ? formatPhone(company.phone) : '—'}
-            emptyHint="Adicione um telefone — facilita para clientes, bancos e fornecedores."
+            emptyHint="Facilita para clientes, bancos e fornecedores."
+            onAdd={() => startEdit('phone')}
           />
           <ReadField
             label="E-mail"
             value={company.email || '—'}
             emptyHint="Um e-mail da empresa separa o contato pessoal do profissional."
+            onAdd={() => startEdit('email')}
           />
         </ReadGroup>
 
-        <ReadGroup title="Endereço">
-          <ReadField label="CEP" value={company.cep ? formatCep(company.cep) : '—'} />
+        <ReadGroup title="Endereço" onEdit={() => startEdit('cep')}>
+          <ReadField
+            label="CEP"
+            value={company.cep ? formatCep(company.cep) : '—'}
+            emptyHint="Com o CEP, o Plim preenche o endereço sozinho."
+            onAdd={() => startEdit('cep')}
+          />
           <ReadField label="País" value={country?.label ?? '—'} />
-          <ReadField label="Cidade" value={company.city || '—'} />
-          <ReadField label="Bairro" value={company.neighborhood || '—'} />
-          <ReadField label="Logradouro" value={company.street || '—'} />
-          <ReadField label="Número" value={company.streetNumber || '—'} />
-          <ReadField label="Complemento" value={company.complement || '—'} />
+          <ReadField label="Cidade" value={company.city || '—'} onAdd={() => startEdit('city')} />
+          <ReadField label="Bairro" value={company.neighborhood || '—'} onAdd={() => startEdit('neighborhood')} />
+          <ReadField label="Logradouro" value={company.street || '—'} onAdd={() => startEdit('street')} />
+          <ReadField label="Número" value={company.streetNumber || '—'} onAdd={() => startEdit('streetNumber')} />
+          <ReadField label="Complemento" value={company.complement || '—'} onAdd={() => startEdit('complement')} />
         </ReadGroup>
       </section>
     );
@@ -458,13 +540,14 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
         <div className="dash-group__title">Identificação</div>
         <div className="dash-editform">
           <div className="dash-fields">
-            <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} autoFocus={focusField === 'name'} />
             <Input
               label="CNPJ"
               placeholder="00.000.000/0000-00"
               inputMode="numeric"
               value={cnpj}
               onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+              autoFocus={focusField === 'cnpj'}
             />
           </div>
           <Select
@@ -489,6 +572,7 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
             placeholder="Em uma frase, o que a empresa faz"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            autoFocus={focusField === 'description'}
           />
           <div className="dash-fields">
             <Select
@@ -518,6 +602,7 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
             inputMode="tel"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
+            autoFocus={focusField === 'phone'}
           />
           <Input
             label="E-mail"
@@ -525,19 +610,23 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
             inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoFocus={focusField === 'email'}
           />
         </div>
       </div>
 
       <div className="dash-editgroup">
         <div className="dash-group__title">Endereço</div>
+        {cepNotice && <div className="dash-cepnotice">{cepNotice}</div>}
         <div className="dash-fields">
           <Input
             label="CEP"
             placeholder="00000-000"
             inputMode="numeric"
             value={cep}
-            onChange={(e) => setCep(formatCep(e.target.value))}
+            onChange={(e) => void handleCepChange(e.target.value)}
+            hint="Digite o CEP e o endereço se preenche sozinho."
+            autoFocus={focusField === 'cep'}
           />
           <Select
             label="País"
@@ -546,20 +635,22 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
             placeholder="Selecione"
             options={countryCatalog.map((c) => ({ value: c.code, label: c.label }))}
           />
-          <Input label="Cidade" value={city} onChange={(e) => setCity(e.target.value)} />
-          <Input label="Bairro" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
+          <Input label="Cidade" value={city} onChange={(e) => setCity(e.target.value)} autoFocus={focusField === 'city'} />
+          <Input label="Bairro" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} autoFocus={focusField === 'neighborhood'} />
           <Input
             label="Logradouro"
             placeholder="Rua, avenida…"
             value={street}
             onChange={(e) => setStreet(e.target.value)}
+            autoFocus={focusField === 'street'}
           />
-          <Input label="Número" value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} />
+          <Input label="Número" value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} autoFocus={focusField === 'streetNumber'} />
           <Input
             label="Complemento"
             placeholder="Sala, andar…"
             value={complement}
             onChange={(e) => setComplement(e.target.value)}
+            autoFocus={focusField === 'complement'}
           />
         </div>
       </div>

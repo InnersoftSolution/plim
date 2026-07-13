@@ -237,6 +237,39 @@ export class CompanyService {
     return this.repo.updateMember(member.id, { invitationStatus: 'invited' });
   }
 
+  /**
+   * Exclusão definitiva de um sócio. Regras:
+   *  - só o DONO DA CONTA (account_owner) pode excluir;
+   *  - o dono da conta não pode ser excluído (a empresa ficaria órfã);
+   *  - irreversível: o front confirma com a pessoa antes de chamar.
+   */
+  async removeMember(
+    companyId: string,
+    memberId: string,
+    actingUserId?: string | null,
+  ): Promise<void> {
+    if (actingUserId != null) {
+      const acting = await this.repo.findMemberByUserId(companyId, actingUserId);
+      if (!acting) throw new DomainError('NOT_A_MEMBER', 'Você não faz parte desta empresa.', 403);
+      if (acting.role !== 'account_owner') {
+        throw new DomainError(
+          'NOT_ACCOUNT_OWNER',
+          'Só o dono da conta pode excluir sócios.',
+          403,
+        );
+      }
+    }
+    const member = await this.repo.findMemberById(companyId, memberId);
+    if (!member) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
+    if (member.role === 'account_owner') {
+      throw new DomainError(
+        'OWNER_CANNOT_BE_REMOVED',
+        'O dono da conta não pode ser excluído da sociedade.',
+      );
+    }
+    await this.repo.deleteMember(memberId);
+  }
+
   async listMembers(companyId: string, actingUserId?: string | null): Promise<CompanyMember[]> {
     // Empresa + sócios em paralelo; a permissão é checada na própria lista
     // (evita uma query só para autorizar). Equivale a findMemberByUserId.

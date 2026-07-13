@@ -106,6 +106,12 @@ export async function companyRoutes(app: FastifyInstance, opts: { service: Compa
     const { companyId, memberId } = memberParamsSchema.parse(request.params);
     return service.inviteMember(companyId, memberId, request.user?.id ?? null);
   });
+
+  app.delete('/companies/:companyId/members/:memberId', async (request, reply) => {
+    const { companyId, memberId } = memberParamsSchema.parse(request.params);
+    await service.removeMember(companyId, memberId, request.user?.id ?? null);
+    return reply.status(204).send();
+  });
 }
 
 function resolveOwner(
