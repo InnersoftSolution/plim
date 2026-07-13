@@ -458,6 +458,7 @@
 }
 .fin-mov__icon--despesa { background: var(--color-bg-brand-soft); color: var(--color-brand-primary); }
 .fin-mov__icon--aporte { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
+.fin-mov__icon--revenue { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__icon--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__icon--due { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__desc {
@@ -477,6 +478,7 @@
   color: var(--color-brand-primary);
 }
 .fin-mov__badge--aporte { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
+.fin-mov__badge--revenue { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__badge--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__badge--due { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__badge--overdue { background: var(--rose-50, #fff1f2); color: var(--rose-600); }

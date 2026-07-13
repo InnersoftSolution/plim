@@ -111,6 +111,131 @@ describe('FinanceService', () => {
     expect(settlements).toEqual([]);
   });
 
+  it('receita: registra kind=revenue, não divide e não vira gasto', async () => {
+    const rev = await finance.createRevenue(
+      companyId,
+      { description: 'Mensalidade cliente', amountCents: 500000, receivedByMemberId: ownerId },
+      'u1',
+    );
+    expect(rev.kind).toBe('revenue');
+    expect(rev.shares).toEqual([]);
+    // Não afeta saldos/acertos entre sócios.
+    const balances = await finance.getBalances(companyId, 'u1');
+    expect(balances.every((b) => b.netCents === 0)).toBe(true);
+  });
+
+  it('aporte reembolsável: gera partes e continua kind=contribution (fora do gasto)', async () => {
+    const aporte = await finance.createContribution(
+      companyId,
+      { description: 'Adiantei tudo', amountCents: 30000, memberId: ownerId, reimbursable: true, splitMode: 'equal' },
+      'u1',
+    );
+    expect(aporte.kind).toBe('contribution'); // não entra no total gasto
+    expect(aporte.shares).toHaveLength(3);
+    expect(aporte.shares.every((s) => s.shareCents === 10000)).toBe(true);
+  });
+
+  it('aporte reembolsável: cria dívida dos sócios ao autor (entra nos acertos)', async () => {
+    await finance.createContribution(
+      companyId,
+      { description: 'Adiantei tudo', amountCents: 30000, memberId: ownerId, reimbursable: true, splitMode: 'equal' },
+      'u1',
+    );
+    const balances = await finance.getBalances(companyId, 'u1');
+    const owner = balances.find((b) => b.memberId === ownerId)!;
+    const partner = balances.find((b) => b.memberId === partnerId)!;
+    expect(owner.netCents).toBe(20000); // adiantou 30000, parte dele 10000 → +20000 a receber
+    expect(partner.netCents).toBe(-10000); // deve a parte dele
+    expect(balances.reduce((s, b) => s + b.netCents, 0)).toBe(0);
+    const settlements = await finance.getSettlements(companyId, 'u1');
+    expect(settlements.length).toBeGreaterThan(0);
+  });
+
+  it('aporte reembolsável: "já me pagou" registra o acerto na hora', async () => {
+    await finance.createContribution(
+      companyId,
+      {
+        description: 'Adiantei tudo',
+        amountCents: 30000,
+        memberId: ownerId,
+        reimbursable: true,
+        splitMode: 'equal',
+        settledMemberIds: [partnerId],
+      },
+      'u1',
+    );
+    const balances = await finance.getBalances(companyId, 'u1');
+    const partner = balances.find((b) => b.memberId === partnerId)!;
+    expect(partner.netCents).toBe(0); // já acertou a parte dele
+    const payments = await finance.listSettlementPayments(companyId, 'u1');
+    expect(payments).toHaveLength(1);
+    expect(payments[0]!.amountCents).toBe(10000);
+  });
+
+  it('acerto por origem: cada movimentação gera um bloco com as dívidas dos sócios', async () => {
+    // Aporte reembolsável de 30000 (equal, 3 sócios) → cada sócio deve 10000.
+    await finance.createContribution(
+      companyId,
+      { description: 'Aporte', amountCents: 30000, memberId: ownerId, reimbursable: true, splitMode: 'equal' },
+      'u1',
+    );
+    // Despesa 10000 (60/40 → Sócio deve 4000) paga pela Dona.
+    await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    const movs = await finance.getMovementSettlements(companyId, 'u1');
+    expect(movs).toHaveLength(2);
+    const aporte = movs.find((m) => m.description === 'Aporte')!;
+    expect(aporte.payerId).toBe(ownerId);
+    expect(aporte.debts.every((d) => d.originalCents === 10000 && d.remainingCents === 10000)).toBe(true);
+    expect(aporte.debts.some((d) => d.debtorId === ownerId)).toBe(false); // autor não se deve
+    const servidor = movs.find((m) => m.description === 'Servidor')!;
+    const socioDebt = servidor.debts.find((d) => d.debtorId === partnerId)!;
+    expect(socioDebt.remainingCents).toBe(4000);
+  });
+
+  it('acerto por origem: pagar amarrado à movimentação quita só aquela origem', async () => {
+    const aporte = await finance.createContribution(
+      companyId,
+      { description: 'Aporte', amountCents: 30000, memberId: ownerId, reimbursable: true, splitMode: 'equal' },
+      'u1',
+    );
+    const servidor = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    // Sócio paga a parte do aporte (10000), amarrado ao aporte.
+    await finance.createSettlementPayment(
+      companyId,
+      { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 10000, expenseId: aporte.id },
+      'u1',
+    );
+    const movs = await finance.getMovementSettlements(companyId, 'u1');
+    const aporteAfter = movs.find((m) => m.movementId === aporte.id)!;
+    const servidorAfter = movs.find((m) => m.movementId === servidor.id)!;
+    // Só a dívida do aporte do Sócio some; a do servidor continua.
+    expect(aporteAfter.debts.find((d) => d.debtorId === partnerId)!.remainingCents).toBe(0);
+    expect(servidorAfter.debts.find((d) => d.debtorId === partnerId)!.remainingCents).toBe(4000);
+  });
+
+  it('acerto por origem: não deixa pagar mais que o pendente daquela movimentação', async () => {
+    const servidor = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    await expect(
+      finance.createSettlementPayment(
+        companyId,
+        { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 5000, expenseId: servidor.id },
+        'u1',
+      ),
+    ).rejects.toMatchObject({ code: 'SETTLEMENT_OVERPAY' });
+  });
+
   it('pagamento parcial reduz o acerto e vira "parcialmente pago"', async () => {
     // Dona paga 100,00 (60/40) → Sócio deve 40,00.
     await finance.createExpense(

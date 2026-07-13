@@ -51,6 +51,8 @@ export const createSettlementPaymentSchema = z.object({
   paidOn: z.string().date().optional(),
   method: paymentMethodSchema.nullable().optional(),
   note: z.string().trim().max(300).nullable().optional(),
+  /** Movimentação de origem: quita a parte daquela despesa/aporte específico. */
+  expenseId: z.string().uuid().nullable().optional(),
 });
 export type CreateSettlementPaymentInput = z.infer<typeof createSettlementPaymentSchema>;
 
@@ -64,6 +66,8 @@ export const settlementPaymentSchema = z.object({
   method: paymentMethodSchema.nullable(),
   note: z.string().nullable(),
   status: z.enum(['confirmed', 'cancelled']),
+  /** Movimentação que gerou a dívida (nulo em pagamentos antigos). */
+  expenseId: z.string().uuid().nullable().default(null),
   createdAt: z.string().datetime(),
 });
 export type SettlementPayment = z.infer<typeof settlementPaymentSchema>;
@@ -73,9 +77,11 @@ export type SettlementPayment = z.infer<typeof settlementPaymentSchema>;
  * - expense: gasto da empresa — divide entre sócios e entra no total gasto.
  * - contribution: APORTE — dinheiro que um sócio coloca no negócio. NÃO divide
  *   entre sócios e NÃO soma como gasto (RB002).
- * (recurring/loan/reimbursement chegam nas próximas jornadas.)
+ * - revenue: RECEITA — dinheiro que a empresa ganhou (clientes, vendas). É da
+ *   empresa (não divide entre sócios), não é gasto. Entra no resultado
+ *   (recebido − gasto = saúde do negócio).
  */
-export const movementKindSchema = z.enum(['expense', 'contribution']);
+export const movementKindSchema = z.enum(['expense', 'contribution', 'revenue']);
 export type MovementKind = z.infer<typeof movementKindSchema>;
 
 /**
@@ -129,7 +135,33 @@ export const payExpenseSchema = z.object({
 });
 export type PayExpenseInput = z.infer<typeof payExpenseSchema>;
 
-/** Criação de aporte: sócio coloca dinheiro no negócio. Sem rateio. */
+/**
+ * Criação de receita: dinheiro que ENTROU na empresa (venda, cliente, SaaS...).
+ * É da empresa: não divide entre sócios, não é gasto. Entra no resultado.
+ */
+export const createRevenueSchema = z.object({
+  description: z.string().trim().min(1, 'Descreva a entrada').max(120),
+  amountCents: z.number().int().positive('Valor deve ser maior que zero'),
+  /** Sócio/conta que recebeu (informativo; a receita é da empresa). */
+  receivedByMemberId: z.string().uuid(),
+  /** Origem: de onde o dinheiro veio (Asaas, Mercado Livre, Pix, cliente...). */
+  source: z.string().trim().max(60).nullable().optional(),
+  receivedOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
+  note: z.string().trim().max(300).nullable().optional(),
+});
+export type CreateRevenueInput = z.infer<typeof createRevenueSchema>;
+
+/** Como um aporte reembolsável é dividido entre os sócios (nunca 'custom'). */
+export const contributionSplitModeSchema = z.enum(['equity', 'equal']);
+export type ContributionSplitMode = z.infer<typeof contributionSplitModeSchema>;
+
+/**
+ * Criação de aporte: sócio coloca dinheiro no negócio.
+ * - Padrão (reimbursable = false): capital do sócio, NÃO divide, NÃO vira dívida.
+ * - Reembolsável (reimbursable = true): o sócio adiantou por todos; cada sócio
+ *   passa a dever a parte proporcional a ele. Continua sendo capital (não entra
+ *   no total gasto), mas gera acerto entre os sócios.
+ */
 export const createContributionSchema = z.object({
   description: z.string().trim().min(1, 'Descreva o aporte').max(120),
   amountCents: z.number().int().positive('Valor deve ser maior que zero'),
@@ -137,6 +169,15 @@ export const createContributionSchema = z.object({
   memberId: z.string().uuid(),
   contributedOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
   note: z.string().trim().max(300).nullable().optional(),
+  /** true = os sócios reembolsam a parte deles ao autor do aporte. */
+  reimbursable: z.boolean().optional(),
+  /** Como dividir o reembolso (só usado quando reimbursable). Padrão: equity. */
+  splitMode: contributionSplitModeSchema.optional(),
+  /**
+   * Sócios que JÁ acertaram a parte deles com o autor no momento do registro
+   * (só vale para aporte reembolsável). O Plim registra o acerto na hora.
+   */
+  settledMemberIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateContributionInput = z.infer<typeof createContributionSchema>;
 
@@ -153,6 +194,8 @@ export const expenseSchema = z.object({
   splitMode: expenseSplitModeSchema,
   shares: z.array(expenseShareSchema),
   note: z.string().nullable(),
+  /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
+  source: z.string().nullable().default(null),
   /** Pagamento: só 'paid' entra nos cálculos. 'unpaid' = conta a pagar. */
   paymentStatus: paymentStatusSchema.default('paid'),
   /** Vencimento da conta a pagar (YYYY-MM-DD). Nulo quando já paga. */
@@ -181,3 +224,36 @@ export const memberBalanceSchema = z.object({
   netCents: z.number().int(),
 });
 export type MemberBalance = z.infer<typeof memberBalanceSchema>;
+
+/**
+ * Acerto POR ORIGEM (RB006 refinado): cada movimentação compartilhada gera as
+ * dívidas dos sócios ao autor, amarradas àquela movimentação. Nada de juntar
+ * origens diferentes num número só — o par pode aparecer em vários blocos.
+ */
+export const movementDebtSchema = z.object({
+  debtorId: z.string().uuid(),
+  debtorName: z.string(),
+  /** Parte original do devedor nessa movimentação. */
+  originalCents: z.number().int().nonnegative(),
+  /** Quanto já foi pago dessa parte (acertos ligados a essa movimentação). */
+  paidCents: z.number().int().nonnegative(),
+  /** originalCents menos paidCents. */
+  remainingCents: z.number().int().nonnegative(),
+});
+export type MovementDebt = z.infer<typeof movementDebtSchema>;
+
+export const movementSettlementSchema = z.object({
+  /** Id da movimentacao (despesa ou aporte reembolsavel). */
+  movementId: z.string().uuid(),
+  kind: movementKindSchema,
+  description: z.string(),
+  spentOn: z.string(),
+  amountCents: z.number().int(),
+  /** Quem adiantou / pagou (recebe os acertos). */
+  payerId: z.string().uuid(),
+  payerName: z.string(),
+  /** Total ainda pendente nessa movimentacao (soma dos remaining). */
+  remainingCents: z.number().int().nonnegative(),
+  debts: z.array(movementDebtSchema),
+});
+export type MovementSettlement = z.infer<typeof movementSettlementSchema>;

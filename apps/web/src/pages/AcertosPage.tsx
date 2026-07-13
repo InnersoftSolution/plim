@@ -3,20 +3,22 @@ import {
   paymentMethodCatalog,
   type Company,
   type CompanyMember,
-  type Expense,
   type MemberBalance,
+  type MovementDebt,
+  type MovementSettlement,
   type PaymentMethod,
-  type Settlement,
   type SettlementPayment,
 } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
+import { DateField } from '../components/ui/DateField';
 import { companyApi, messageForError } from '../company/companyApi';
-import { financeApi, formatMoney, parseMoneyToCents } from '../finance/financeApi';
+import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from '../finance/financeApi';
 import { IconArrowRight } from './dashIcons';
 import './dashboard.css';
+import './acertos.css';
 import '../finance/wizard.css';
 
 type State =
@@ -28,10 +30,12 @@ type State =
       company: Company;
       members: CompanyMember[];
       balances: MemberBalance[];
-      settlements: Settlement[];
-      expenses: Expense[];
+      movements: MovementSettlement[];
       payments: SettlementPayment[];
     };
+
+/** Alvo do pagamento: uma dívida específica dentro de uma movimentação. */
+type PayTarget = { movement: MovementSettlement; debt: MovementDebt };
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -47,22 +51,20 @@ function formatDateBr(iso: string): string {
 
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [paying, setPaying] = useState<Settlement | null>(null);
-  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [paying, setPaying] = useState<PayTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
       const companies = await companyApi.listMyCompanies();
       if (companies.length === 0) return setState({ status: 'empty' });
       const company = companies[0]!;
-      const [members, balances, settlements, expenses, payments] = await Promise.all([
+      const [members, balances, movements, payments] = await Promise.all([
         companyApi.listMembers(company.id),
         financeApi.getBalances(company.id),
-        financeApi.getSettlements(company.id),
-        financeApi.listExpenses(company.id),
+        financeApi.getMovementSettlements(company.id),
         financeApi.listSettlementPayments(company.id),
       ]);
-      setState({ status: 'ready', company, members, balances, settlements, expenses, payments });
+      setState({ status: 'ready', company, members, balances, movements, payments });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
@@ -76,116 +78,95 @@ export function AcertosPage() {
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="dash-muted">Crie sua empresa primeiro.</p>;
 
-  const { company, balances, settlements, expenses, payments } = state;
-  const sharedExpenses = expenses.filter((e) => e.kind === 'expense');
+  const { company, balances, movements, payments } = state;
   const nameOf = (id: string) => state.members.find((m) => m.id === id)?.fullName ?? 'Sócio';
-  const keyOf = (s: Settlement) => `${s.fromMemberId}->${s.toMemberId}`;
+  const pending = movements.filter((m) => m.remainingCents > 0);
 
   return (
     <div className="dash">
       <div>
         <h1 className="dash-page__title">Acertos entre sócios</h1>
         <p className="dash-page__subtitle">
-          Veja os valores que precisam ser resolvidos entre os sócios com base nas movimentações
-          registradas — e registre os pagamentos quando acontecerem.
+          Cada movimentação compartilhada mostra quem ainda deve a parte dele e para quem. Os
+          pagamentos ficam amarrados à movimentação de origem.
         </p>
       </div>
 
-      {/* ── acertos pendentes ── */}
+      {/* ── acertos pendentes, agrupados por movimentação ── */}
       <section className="dash-panel">
         <div className="dash-panel__head">
           <h2>Acertos pendentes</h2>
         </div>
-        {settlements.length === 0 ? (
+        {pending.length === 0 ? (
           <div className="dash-emptyrow">
             <p>
-              <strong>Tudo certo entre os sócios.</strong> Quando houver despesas compartilhadas, o
-              Plim mostrará aqui quem precisa pagar quem.
+              <strong>Tudo certo entre os sócios.</strong> Quando uma despesa ou aporte reembolsável
+              gerar dívida, o Plim mostra aqui quem deve o quê, por movimentação.
             </p>
           </div>
         ) : (
-          <div className="dash-settlements">
-            {settlements.map((s) => {
-              const key = keyOf(s);
-              const partial = s.alreadyPaidCents > 0;
-              const original = s.amountCents + s.alreadyPaidCents;
-              const open = detailKey === key;
-              return (
-                <div className="ac-item" key={key}>
-                  <div className="dash-settlement" style={{ border: 'none', background: 'transparent', padding: 0 }}>
-                    <span className="dash-settlement__avatar">{initials(s.fromName)}</span>
-                    <span className="dash-settlement__text">
-                      <strong>{s.fromName}</strong> precisa pagar{' '}
-                      <strong className="dash-settlement__amount">
-                        {formatMoney(s.amountCents, company.currencyCode)}
-                      </strong>{' '}
-                      para <strong>{s.toName}</strong>
+          <div className="ac-groups">
+            {pending.map((m) => (
+              <article className="ac-group" key={m.movementId}>
+                <header className="ac-group__head">
+                  <div className="ac-group__id">
+                    <span className={'ac-group__badge' + (m.kind === 'contribution' ? ' ac-group__badge--aporte' : '')}>
+                      {m.kind === 'contribution' ? 'Aporte' : 'Despesa'}
                     </span>
-                    <span className={'ac-status' + (partial ? ' ac-status--partial' : '')}>
-                      {partial ? 'Parcialmente pago' : 'Pendente'}
+                    <strong className="ac-group__title">{m.description}</strong>
+                    <span className="ac-group__meta">
+                      {m.kind === 'contribution' ? 'adiantado' : 'pago'} por {m.payerName} ·{' '}
+                      {formatDateBr(m.spentOn)} · total {formatMoney(m.amountCents, company.currencyCode)}
                     </span>
                   </div>
-                  <div className="ac-item__actions">
-                    <Button onClick={() => setPaying(s)}>Registrar pagamento</Button>
-                    <button className="dash-pending__later" onClick={() => setDetailKey(open ? null : key)}>
-                      {open ? 'Esconder detalhes' : 'Ver detalhes'}
-                    </button>
-                  </div>
+                  <span className="ac-group__total" data-financial>
+                    {formatMoney(m.remainingCents, company.currencyCode)}
+                    <small>pendente</small>
+                  </span>
+                </header>
 
-                  {open && (
-                    <div className="ac-detail">
-                      <div className="mw-review">
-                        <div className="mw-review__row">
-                          <span>Quem paga</span>
-                          <strong>{s.fromName}</strong>
-                        </div>
-                        <div className="mw-review__row">
-                          <span>Quem recebe</span>
-                          <strong>{s.toName}</strong>
-                        </div>
-                        <div className="mw-review__row">
-                          <span>Valor do acerto</span>
-                          <strong data-financial>{formatMoney(original, company.currencyCode)}</strong>
-                        </div>
-                        <div className="mw-review__row">
-                          <span>Já pago</span>
-                          <strong data-financial>{formatMoney(s.alreadyPaidCents, company.currencyCode)}</strong>
-                        </div>
-                        <div className="mw-review__row">
-                          <span>Saldo pendente</span>
-                          <strong data-financial>{formatMoney(s.amountCents, company.currencyCode)}</strong>
-                        </div>
-                        <div className="mw-review__row">
-                          <span>Status</span>
-                          <strong>{partial ? 'Parcialmente pago' : 'Pendente'}</strong>
-                        </div>
-                      </div>
-                      <p className="dash-panel__hint" style={{ margin: '12px 0 8px' }}>
-                        {s.toName} pagou mais do que a parte dele(a) nas despesas compartilhadas.{' '}
-                        {s.fromName} pagou menos do que a parte dele(a). Por isso, o Plim sugere este
-                        acerto — recalculado a cada nova movimentação ou pagamento.
-                      </p>
-                      <div className="ac-detail__movs">
-                        <span className="fin-section__title" style={{ marginBottom: 6 }}>
-                          Movimentações que geram o acerto
+                <div className="ac-group__debts">
+                  {m.debts.map((d) => {
+                    const status =
+                      d.remainingCents === 0
+                        ? 'quitado'
+                        : d.paidCents > 0
+                          ? 'parcial'
+                          : 'pendente';
+                    return (
+                      <div className="ac-debt" key={d.debtorId}>
+                        <span className="ac-debt__avatar">{initials(d.debtorName)}</span>
+                        <span className="ac-debt__text">
+                          <strong>{d.debtorName}</strong> deve{' '}
+                          <strong className="ac-debt__amount" data-financial>
+                            {formatMoney(d.remainingCents, company.currencyCode)}
+                          </strong>{' '}
+                          para <strong>{m.payerName}</strong>
+                          {d.paidCents > 0 && d.remainingCents > 0 && (
+                            <span className="ac-debt__sub">
+                              já pagou {formatMoney(d.paidCents, company.currencyCode)} de{' '}
+                              {formatMoney(d.originalCents, company.currencyCode)}
+                            </span>
+                          )}
                         </span>
-                        {sharedExpenses.slice(0, 6).map((e) => (
-                          <div className="ac-mov" key={e.id}>
-                            <span className="ac-mov__desc">{e.description}</span>
-                            <span className="ac-mov__meta">
-                              pago por {nameOf(e.paidByMemberId)} · {formatDateBr(e.spentOn)}
+                        {status === 'quitado' ? (
+                          <span className="ac-status ac-status--paid">Quitado</span>
+                        ) : (
+                          <div className="ac-debt__actions">
+                            <span className={'ac-status' + (status === 'parcial' ? ' ac-status--partial' : '')}>
+                              {status === 'parcial' ? 'Parcial' : 'Pendente'}
                             </span>
-                            <span className="ac-mov__value">
-                              {formatMoney(e.amountCents, company.currencyCode)}
-                            </span>
+                            <Button onClick={() => setPaying({ movement: m, debt: d })}>
+                              Registrar pagamento
+                            </Button>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </article>
+            ))}
           </div>
         )}
       </section>
@@ -197,7 +178,7 @@ export function AcertosPage() {
             <h2>Pagamentos registrados</h2>
           </div>
           <p className="dash-panel__hint">
-            O histórico fica guardado — acertos quitados saem da lista de pendentes.
+            O histórico fica guardado — dívidas quitadas saem da lista de pendentes.
           </p>
           <div className="dash-settlements">
             {payments.map((p) => (
@@ -222,14 +203,14 @@ export function AcertosPage() {
         </section>
       )}
 
-      {/* ── saldo de cada sócio ── */}
+      {/* ── saldo de cada sócio (resumo líquido) ── */}
       <section className="dash-panel">
         <div className="dash-panel__head">
           <h2>Saldo de cada sócio</h2>
         </div>
         <p className="dash-panel__hint">
-          "Pagou" é o que saiu do bolso nas despesas; "cabe" é a parte pela participação. Pagamentos
-          de acerto já estão descontados do saldo.
+          Resumo líquido de tudo: "pagou" é o que saiu do bolso; "cabe" é a parte de cada um.
+          Pagamentos de acerto já estão descontados.
         </p>
         <div className="dash-settlements">
           {balances.map((b) => {
@@ -255,13 +236,13 @@ export function AcertosPage() {
         </div>
       </section>
 
-      {/* ── modal registrar pagamento ── */}
+      {/* ── modal registrar pagamento (amarrado à movimentação) ── */}
       <Modal
         open={paying !== null}
         title="Registrar pagamento"
         subtitle={
           paying
-            ? `${paying.fromName} → ${paying.toName} · pendente ${formatMoney(paying.amountCents, company.currencyCode)}`
+            ? `${paying.debt.debtorName} → ${paying.movement.payerName} · ${paying.movement.description}`
             : ''
         }
         onClose={() => setPaying(null)}
@@ -269,7 +250,7 @@ export function AcertosPage() {
         {paying && (
           <PaymentForm
             company={company}
-            settlement={paying}
+            target={paying}
             onSaved={() => {
               setPaying(null);
               void load();
@@ -281,46 +262,46 @@ export function AcertosPage() {
   );
 }
 
-/** Form do pagamento: total ou parcial, com data, forma e observação. */
+/** Pagamento de UMA dívida (devedor → autor) de UMA movimentação. */
 function PaymentForm({
   company,
-  settlement,
+  target,
   onSaved,
 }: {
   company: Company;
-  settlement: Settlement;
+  target: PayTarget;
   onSaved: () => void;
 }) {
-  const [amount, setAmount] = useState(
-    (settlement.amountCents / 100).toFixed(2).replace('.', ','),
-  );
+  const { movement, debt } = target;
+  const [amount, setAmount] = useState(maskMoneyBRL(String(debt.remainingCents / 100).replace('.', ',')));
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<PaymentMethod | ''>('pix');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const cents = parseMoneyToCents(amount);
-  const isPartial = cents != null && cents < settlement.amountCents;
+  const cents = maskedMoneyToCents(amount);
+  const isPartial = cents != null && cents < debt.remainingCents;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
     if (cents == null) return setError('Informe um valor válido.');
-    if (cents > settlement.amountCents) {
+    if (cents > debt.remainingCents) {
       return setError(
-        `O valor é maior que o pendente (${formatMoney(settlement.amountCents, company.currencyCode)}). Para pagamento parcial, use um valor menor.`,
+        `O valor é maior que o pendente dessa movimentação (${formatMoney(debt.remainingCents, company.currencyCode)}).`,
       );
     }
     setSaving(true);
     try {
       await financeApi.createSettlementPayment(company.id, {
-        fromMemberId: settlement.fromMemberId,
-        toMemberId: settlement.toMemberId,
+        fromMemberId: debt.debtorId,
+        toMemberId: movement.payerId,
         amountCents: cents,
         paidOn: date,
         method: method || null,
         note: note.trim() || null,
+        expenseId: movement.movementId,
       });
       onSaved();
     } catch (err) {
@@ -332,24 +313,23 @@ function PaymentForm({
   return (
     <form className="mw" onSubmit={handleSubmit} noValidate>
       {error && <div className="form-error">{error}</div>}
+      <p className="mw-hint" style={{ marginTop: 0 }}>
+        {debt.debtorName} deve {formatMoney(debt.remainingCents, company.currencyCode)} para{' '}
+        {movement.payerName} pela {movement.kind === 'contribution' ? 'parte do aporte' : 'parte da despesa'}{' '}
+        "{movement.description}".
+      </p>
       <div className="mw-form">
         <Input
           label={`Valor pago (${company.currencyCode ?? 'BRL'})`}
           inputMode="decimal"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
           autoFocus
         />
         <div className="rc-grid">
           <div className="field">
             <label className="field__label">Data do pagamento</label>
-            <input
-              type="date"
-              className="field__input"
-              value={date}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <DateField value={date} onChange={setDate} max={new Date().toISOString().slice(0, 10)} />
           </div>
           <Select
             label="Forma de pagamento"
@@ -367,8 +347,8 @@ function PaymentForm({
       </div>
       <p className="mw-hint">
         {isPartial
-          ? `Pagamento parcial: o acerto continua pendente com ${formatMoney(settlement.amountCents - (cents ?? 0), company.currencyCode)} restantes.`
-          : 'Esse valor quita o acerto — ele sai dos pendentes e fica no histórico.'}
+          ? `Pagamento parcial: sobra ${formatMoney(debt.remainingCents - (cents ?? 0), company.currencyCode)} nessa movimentação.`
+          : 'Esse valor quita a parte dele nessa movimentação.'}
       </p>
       <div className="mw-actions">
         <Button type="submit" block disabled={saving}>

@@ -89,6 +89,27 @@ describe('Materialização de custos recorrentes', () => {
     expect(costs[0]!.nextChargeOn).toBe(nextChargeDate(daysAgo(1), 'monthly'));
   });
 
+  it('recorrente sem data começa a cobrar hoje (vira conta a pagar dividida)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    // Passa nextChargeOn nulo explicitamente; o service deve assumir hoje.
+    const cost = await createCost({ name: 'Elephant', nextChargeOn: null });
+    // O próprio create já agenda para hoje.
+    const { costs } = await recurring.list(companyId, 'u1');
+    expect(costs.find((c) => c.id === cost.id)!.nextChargeOn).not.toBeNull();
+    const expenses = await finance.listExpenses(companyId, 'u1');
+    const charge = expenses.find((e) => e.recurringCostId === cost.id)!;
+    expect(charge).toBeDefined();
+    expect(charge.paymentStatus).toBe('unpaid');
+    expect(charge.dueDate).toBe(today);
+    expect(charge.shares.reduce((s, x) => s + x.shareCents, 0)).toBe(10000);
+  });
+
+  it('pagamento único sem data NÃO cobra sozinho', async () => {
+    const cost = await createCost({ name: 'Taxa única', frequency: 'once', nextChargeOn: null });
+    const expenses = await finance.listExpenses(companyId, 'u1');
+    expect(expenses.filter((e) => e.recurringCostId === cost.id)).toHaveLength(0);
+  });
+
   it('é idempotente: abrir o financeiro duas vezes não duplica a cobrança', async () => {
     const cost = await createCost();
     await finance.listExpenses(companyId, 'u1');

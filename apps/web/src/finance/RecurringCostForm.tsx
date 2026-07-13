@@ -11,8 +11,9 @@ import {
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { parseMoneyToCents, formatMoney } from './financeApi';
+import { maskMoneyBRL, maskedMoneyToCents, formatMoney } from './financeApi';
 import { recurringApi } from './recurringApi';
 import './wizard.css';
 
@@ -39,7 +40,9 @@ export function RecurringCostForm({
   const [frequency, setFrequency] = useState<RecurringFrequency | ''>('monthly');
   const [paidBy, setPaidBy] = useState(members[0]?.id ?? '');
   const [splitMode, setSplitMode] = useState<RecurringSplitMode>('equity');
-  const [nextCharge, setNextCharge] = useState('');
+  // Primeira cobrança já vem preenchida com hoje: o custo começa a cobrar de
+  // imediato (vira conta a pagar dividida). O usuário pode adiar se quiser.
+  const [nextCharge, setNextCharge] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -50,7 +53,7 @@ export function RecurringCostForm({
     setCategory('');
     setAmount('');
     setFrequency('monthly');
-    setNextCharge('');
+    setNextCharge(new Date().toISOString().slice(0, 10));
     setNote('');
     setError('');
     setSavedCents(null);
@@ -59,7 +62,7 @@ export function RecurringCostForm({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
-    const amountCents = parseMoneyToCents(amount);
+    const amountCents = maskedMoneyToCents(amount);
     if (name.trim().length < 1) return setError('Dê um nome ao custo. Ex.: "Adobe".');
     if (!category) return setError('Escolha uma categoria.');
     if (amountCents == null) return setError('Informe um valor válido, maior que zero.');
@@ -145,7 +148,7 @@ export function RecurringCostForm({
             inputMode="decimal"
             placeholder="0,00"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
           />
         </div>
         <div className="rc-grid">
@@ -175,13 +178,13 @@ export function RecurringCostForm({
         )}
         <div className="field">
           <label className="field__label">
-            {frequency === 'once' ? 'Data do pagamento (opcional)' : 'Próxima cobrança (opcional, mas recomendada)'}
+            {frequency === 'once' ? 'Data do pagamento (opcional)' : 'A partir de quando cobrar'}
           </label>
-          <input
-            type="date"
-            className="field__input"
+          <DateField
             value={nextCharge}
-            onChange={(e) => setNextCharge(e.target.value)}
+            onChange={setNextCharge}
+            clearable={frequency === 'once'}
+            placeholder={frequency === 'once' ? 'Sem data definida' : 'Escolha a data'}
           />
         </div>
         <div className="field">
@@ -204,10 +207,10 @@ export function RecurringCostForm({
       ) : (
         frequency &&
         frequency !== 'monthly' &&
-        parseMoneyToCents(amount) != null && (
+        maskedMoneyToCents(amount) != null && (
           <p className="mw-hint">
             Na estimativa mensal, esse custo entra como{' '}
-            {formatMoney(monthlyPreview(parseMoneyToCents(amount)!, frequency), company.currencyCode)}/mês.
+            {formatMoney(monthlyPreview(maskedMoneyToCents(amount)!, frequency), company.currencyCode)}/mês.
           </p>
         )
       )}

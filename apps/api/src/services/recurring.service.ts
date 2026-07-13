@@ -77,7 +77,10 @@ export class RecurringService {
       frequency: input.frequency,
       paidByMemberId: input.paidByMemberId,
       splitMode: input.splitMode ?? 'equity',
-      nextChargeOn: input.nextChargeOn ?? null,
+      // Recorrente sem data começa a cobrar HOJE (vira conta a pagar dividida na
+      // hora). 'once' fica sem data até o usuário informar o pagamento.
+      nextChargeOn:
+        input.nextChargeOn ?? (input.frequency !== 'once' ? new Date().toISOString().slice(0, 10) : null),
       note: input.note ?? null,
       active: true,
     });

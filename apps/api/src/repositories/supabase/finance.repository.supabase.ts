@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ConfirmationStatus, ExpenseSplitMode, PaymentMethod, PaymentStatus } from '@plim/shared';
+import type { ConfirmationStatus, ExpenseSplitMode, MovementKind, PaymentMethod, PaymentStatus } from '@plim/shared';
 import type { Expense, SettlementPayment } from '../../domain/finance';
 import type { FinanceRepository } from '../finance.repository';
 
@@ -13,6 +13,7 @@ interface PaymentRow {
   method: PaymentMethod | null;
   note: string | null;
   status: 'confirmed' | 'cancelled';
+  expense_id: string | null;
   created_at: string;
 }
 
@@ -27,6 +28,7 @@ function toPayment(row: PaymentRow): SettlementPayment {
     method: row.method,
     note: row.note,
     status: row.status,
+    expenseId: row.expense_id ?? null,
     createdAt: new Date(row.created_at),
   };
 }
@@ -34,7 +36,7 @@ function toPayment(row: PaymentRow): SettlementPayment {
 interface ExpenseRow {
   id: string;
   company_id: string;
-  kind: 'expense' | 'contribution';
+  kind: MovementKind;
   description: string;
   amount_cents: number;
   currency_code: string | null;
@@ -42,6 +44,7 @@ interface ExpenseRow {
   spent_on: string;
   split_mode: ExpenseSplitMode;
   note: string | null;
+  source: string | null;
   payment_status: PaymentStatus | null;
   due_date: string | null;
   confirmation_status: ConfirmationStatus;
@@ -64,6 +67,7 @@ function toExpense(row: ExpenseRow): Expense {
     spentOn: row.spent_on,
     splitMode: row.split_mode,
     note: row.note,
+    source: row.source ?? null,
     paymentStatus: row.payment_status ?? 'paid',
     dueDate: row.due_date,
     confirmationStatus: row.confirmation_status ?? 'confirmed',
@@ -95,6 +99,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         spent_on: data.spentOn,
         split_mode: data.splitMode,
         note: data.note,
+        source: data.source,
         payment_status: data.paymentStatus,
         due_date: data.dueDate,
         confirmation_status: data.confirmationStatus,
@@ -181,6 +186,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         method: data.method,
         note: data.note,
         status: data.status,
+        expense_id: data.expenseId,
       })
       .select()
       .single<PaymentRow>();

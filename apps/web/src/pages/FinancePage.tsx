@@ -38,11 +38,11 @@ type State =
       recurring: RecurringCostList;
     };
 
-type Filter = 'todos' | 'despesas' | 'aportes' | 'recorrentes' | 'a-pagar';
+type Filter = 'todos' | 'receitas' | 'despesas' | 'aportes' | 'recorrentes' | 'a-pagar';
 
 /** Item unificado da lista (despesa/aporte datados ou custo recorrente). */
 type MovItem =
-  | { kind: 'expense' | 'contribution'; expense: Expense }
+  | { kind: 'expense' | 'contribution' | 'revenue'; expense: Expense }
   | { kind: 'recurring'; cost: RecurringCost };
 
 export function FinancePage() {
@@ -117,11 +117,12 @@ export function FinancePage() {
   const gastoCents = expenses
     .filter((e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid')
     .reduce((s, e) => s + e.amountCents, 0);
-  const aportesCents = expenses
-    .filter((e) => e.kind === 'contribution' && confirmed(e))
+  // Receita: dinheiro que entrou (não divide entre sócios, não é gasto).
+  const receitaCents = expenses
+    .filter((e) => e.kind === 'revenue' && confirmed(e))
     .reduce((s, e) => s + e.amountCents, 0);
-  // Só custos que se repetem contam como "por mês" (pagamento único fica fora).
-  const activeRecurring = recurring.costs.filter((c) => c.active && c.frequency !== 'once');
+  // Saúde do negócio: recebido − gasto (aportes ficam à parte, são capital).
+  const resultadoCents = receitaCents - gastoCents;
   // Movimentações aguardando MINHA confirmação (backend marca canConfirm).
   const toConfirm = expenses.filter((e) => e.canConfirm);
   // Contas a pagar (jornada de vencimento): vencidas + a vencer.
@@ -134,6 +135,7 @@ export function FinancePage() {
     .filter((e) => {
       if (filter === 'despesas' && e.kind !== 'expense') return false;
       if (filter === 'aportes' && e.kind !== 'contribution') return false;
+      if (filter === 'receitas' && e.kind !== 'revenue') return false;
       if (filter === 'recorrentes') return false;
       if (filter === 'a-pagar' && !isPayable(e)) return false;
       if (thisMonth && !e.spentOn.startsWith(monthKey)) return false;
@@ -183,11 +185,12 @@ export function FinancePage() {
   const hasActiveRecurring = recurring.monthlyTotalCents > 0;
 
   const chartTitle = isProjChart ? 'Evolução dos gastos' : 'Aportes por mês';
+  const hasPendingBills = chart.points.some((p) => (p.pendingCents ?? 0) > 0);
   const chartSubtitle = isProjChart
-    ? 'Veja os gastos registrados por mês e uma estimativa do próximo período.'
+    ? 'Veja o que foi pago por mês, o que ainda está a pagar e uma estimativa do próximo período.'
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
   const chartCaption = isProjChart
-    ? `Projeção de ${nextLabel}: média dos meses com registro + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
+    ? `${hasPendingBills ? 'A parte tracejada é o que ainda falta pagar no mês (recorrentes e contas a pagar). ' : ''}Projeção de ${nextLabel}: média dos meses com registro + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
     : 'Aportes não entram na projeção de gastos — são investimento, não custo.';
   // Aviso adaptativo conforme os dados disponíveis (PRD §5/§8).
   const chartNote = !isProjChart
@@ -216,26 +219,39 @@ export function FinancePage() {
         </Button>
       </div>
 
-      {/* ── cards de resumo ── */}
+      {/* ── cards de resumo: saúde do negócio (recebido − gasto) ── */}
       <div className="dash-cards">
+        <div className="dash-stat">
+          <div className="dash-stat__icon dash-stat__icon--green"><IconArrowRight /></div>
+          <span className="dash-stat__label">Recebido</span>
+          <span className="dash-stat__value" data-financial>{formatMoney(receitaCents, currency)}</span>
+          <span className="dash-stat__hint">Dinheiro que entrou na empresa (receitas).</span>
+        </div>
         <div className="dash-stat">
           <div className="dash-stat__icon dash-stat__icon--ink"><IconWallet /></div>
           <span className="dash-stat__label">Total gasto</span>
           <span className="dash-stat__value" data-financial>{formatMoney(gastoCents, currency)}</span>
           <span className="dash-stat__hint">Só despesas — aportes não entram aqui.</span>
         </div>
-        <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--green"><IconArrowRight /></div>
-          <span className="dash-stat__label">Aportes registrados</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(aportesCents, currency)}</span>
-          <span className="dash-stat__hint">Dinheiro investido pelos sócios — não é gasto.</span>
-        </div>
-        <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--indigo"><IconRepeat /></div>
-          <span className="dash-stat__label">Custos recorrentes ativos</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(recurring.monthlyTotalCents, currency)}</span>
+        <div className={'dash-stat' + (resultadoCents < 0 ? ' dash-stat--warn' : '')}>
+          <div className={'dash-stat__icon ' + (resultadoCents < 0 ? 'dash-stat__icon--warn' : 'dash-stat__icon--green')}>
+            <IconRepeat />
+          </div>
+          <span className="dash-stat__label">Resultado</span>
+          <span
+            className="dash-stat__value"
+            data-financial
+            style={{ color: resultadoCents < 0 ? 'var(--rose-600)' : 'var(--color-status-positive)' }}
+          >
+            {resultadoCents < 0 ? '−' : '+'}
+            {formatMoney(Math.abs(resultadoCents), currency)}
+          </span>
           <span className="dash-stat__hint">
-            {activeRecurring.length} {activeRecurring.length === 1 ? 'custo ativo' : 'custos ativos'} por mês.
+            {resultadoCents < 0
+              ? 'A empresa gastou mais do que recebeu no período.'
+              : receitaCents === 0
+                ? 'Registre entradas para ver a saúde do negócio.'
+                : 'Recebido menos gasto — a saúde do negócio.'}
           </span>
         </div>
         <button
@@ -331,6 +347,7 @@ export function FinancePage() {
           [
             ['todos', 'Todos'],
             ['a-pagar', 'A pagar'],
+            ['receitas', 'Entradas'],
             ['despesas', 'Despesas'],
             ['aportes', 'Aportes'],
             ['recorrentes', 'Custos recorrentes'],
@@ -516,7 +533,8 @@ function MovRow({
   }
   const e = item.expense;
   const isAporte = e.kind === 'contribution';
-  const gerou = !isAporte && generatesSettlement(e);
+  const isRevenue = e.kind === 'revenue';
+  const gerou = !isAporte && !isRevenue && generatesSettlement(e);
   const conf = confInfo(e.confirmationStatus);
   const toPay = isPayable(e);
   const bucket = toPay ? dueBucket(e) : null;
@@ -531,11 +549,17 @@ function MovRow({
       <span
         className={
           'fin-mov__icon ' +
-          (isAporte ? 'fin-mov__icon--aporte' : toPay ? 'fin-mov__icon--due' : 'fin-mov__icon--despesa')
+          (isRevenue
+            ? 'fin-mov__icon--revenue'
+            : isAporte
+              ? 'fin-mov__icon--aporte'
+              : toPay
+                ? 'fin-mov__icon--due'
+                : 'fin-mov__icon--despesa')
         }
         aria-hidden="true"
       >
-        {isAporte ? <IconArrowRight /> : <IconWallet />}
+        {isAporte || isRevenue ? <IconArrowRight /> : <IconWallet />}
       </span>
       <div className="fin-mov__body">
         <span className="fin-mov__desc">
@@ -545,8 +569,13 @@ function MovRow({
               {overdue ? 'Vencida' : 'A pagar'}
             </span>
           ) : (
-            <span className={'fin-mov__badge' + (isAporte ? ' fin-mov__badge--aporte' : '')}>
-              {isAporte ? 'Aporte' : 'Despesa'}
+            <span
+              className={
+                'fin-mov__badge' +
+                (isRevenue ? ' fin-mov__badge--revenue' : isAporte ? ' fin-mov__badge--aporte' : '')
+              }
+            >
+              {isRevenue ? 'Entrada' : isAporte ? 'Aporte' : 'Despesa'}
             </span>
           )}
           {e.recurringCostId && (
@@ -558,7 +587,9 @@ function MovRow({
         <span className="fin-mov__meta">
           {toPay && e.dueDate
             ? `Vence ${formatDate(e.dueDate)} · ${nameOf(e.paidByMemberId)} vai pagar`
-            : `${formatDate(e.spentOn)} · ${isAporte ? 'feito por' : 'pago por'} ${nameOf(e.paidByMemberId)}`}
+            : isRevenue
+              ? `${formatDate(e.spentOn)}${e.source ? ` · via ${e.source}` : ` · recebido por ${nameOf(e.paidByMemberId)}`}`
+              : `${formatDate(e.spentOn)} · ${isAporte ? 'feito por' : 'pago por'} ${nameOf(e.paidByMemberId)}`}
         </span>
       </div>
       <div className="fin-mov__right">
@@ -570,8 +601,8 @@ function MovRow({
             {e.dueDate ? dueLabel(e.dueDate) : 'a pagar'}
           </span>
         ) : conf.status === 'confirmed' ? (
-          <span className={'fin-mov__impact' + (isAporte ? ' is-neutral' : gerou ? ' is-warn' : '')}>
-            {isAporte ? 'não é gasto' : gerou ? 'gerou acerto' : 'sem acerto'}
+          <span className={'fin-mov__impact' + (isRevenue ? ' is-ok' : isAporte ? ' is-neutral' : gerou ? ' is-warn' : '')}>
+            {isRevenue ? 'entrou no caixa' : isAporte ? 'não é gasto' : gerou ? 'gerou acerto' : 'sem acerto'}
           </span>
         ) : (
           <span className={'fin-mov__impact ' + conf.cls}>{conf.short}</span>
@@ -670,7 +701,20 @@ function MovDetail({
                   'Ele ajuda a entender quanto custa manter a empresa funcionando.',
                 ],
         }
-      : item.expense.kind === 'contribution'
+      : item.expense.kind === 'revenue'
+        ? {
+            tone: 'aporte' as const,
+            tipo: 'Entrada',
+            title: item.expense.description,
+            amount: item.expense.amountCents,
+            date: item.expense.spentOn,
+            status: 'Registrada',
+            impact: [
+              'Esta é uma entrada: dinheiro que a empresa recebeu.',
+              'Ela melhora o resultado (recebido menos gasto) e não divide entre os sócios.',
+            ],
+          }
+        : item.expense.kind === 'contribution'
         ? {
             tone: 'aporte' as const,
             tipo: 'Aporte',
@@ -809,8 +853,19 @@ function MovDetail({
               ) : (
                 <Row k="Data" v={formatDate(item.expense.spentOn)} />
               )}
+              {item.expense.kind === 'revenue' && item.expense.source && (
+                <Row k="Origem" v={item.expense.source} />
+              )}
               <Row
-                k={toPay ? 'Quem vai pagar' : cfg.tone === 'aporte' ? 'Feito por' : 'Pago por'}
+                k={
+                  toPay
+                    ? 'Quem vai pagar'
+                    : item.expense.kind === 'revenue'
+                      ? 'Entrou na conta de'
+                      : cfg.tone === 'aporte'
+                        ? 'Feito por'
+                        : 'Pago por'
+                }
                 v={nameOf(item.expense.paidByMemberId)}
               />
               {item.expense.createdByMemberId && item.expense.createdByMemberId !== item.expense.paidByMemberId && (
@@ -1007,9 +1062,14 @@ function buildMonthlySeries(
     d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
   const points: ChartPoint[] = [];
 
-  // Regra do produto: só o que está CONFIRMADO e PAGO conta como gasto.
+  // Regra do produto: só o que está CONFIRMADO e PAGO conta como gasto REAL.
   const counted = (e: Expense) =>
     e.kind === kind && e.confirmationStatus === 'confirmed' && (e.paymentStatus ?? 'paid') === 'paid';
+  // Contas do mês ainda NÃO pagas (recorrentes geradas, contas a pagar):
+  // entram como "a pagar" (alerta), agrupadas pelo vencimento.
+  const pendingBill = (e: Expense) =>
+    e.kind === kind && e.confirmationStatus === 'confirmed' && e.paymentStatus === 'unpaid';
+  const billMonth = (e: Expense) => (e.dueDate ?? e.spentOn).slice(0, 7);
 
   // Base da projeção: só lançamentos manuais. As cobranças geradas de custos
   // recorrentes já entram pela soma recorrente — sem contar duas vezes.
@@ -1020,8 +1080,11 @@ function buildMonthlySeries(
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const inMonth = expenses.filter((e) => counted(e) && e.spentOn.startsWith(key));
     const cents = inMonth.reduce((s, e) => s + e.amountCents, 0);
+    const pendingCents = expenses
+      .filter((e) => pendingBill(e) && billMonth(e) === key)
+      .reduce((s, e) => s + e.amountCents, 0);
     manualByMonth.push(inMonth.filter((e) => !e.recurringCostId).reduce((s, e) => s + e.amountCents, 0));
-    points.push({ key, label: monthShort(d), cents, current: i === 0 });
+    points.push({ key, label: monthShort(d), cents, pendingCents, current: i === 0 });
   }
 
   if (kind === 'expense') {

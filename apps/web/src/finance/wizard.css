@@ -157,6 +157,51 @@
   color: var(--color-status-warning);
   font-weight: 600;
 }
+/* chips de origem da receita (Asaas, Mercado Livre... + "+ Outra") */
+.mw-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mw-chip {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.mw-chip:hover {
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+.mw-chip.is-on {
+  background: var(--color-bg-brand-soft);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+.mw-chip--add {
+  border-style: dashed;
+}
+
+/* aviso quando as participações não somam 100% na divisão por participação */
+.mw-eqwarn {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-default);
+}
+.mw-eqwarn strong {
+  font-weight: 700;
+}
 /* toggle "está devendo / já me pagou" por sócio */
 .mw-splitright {
   display: inline-flex;

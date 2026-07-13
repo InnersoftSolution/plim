@@ -18,6 +18,8 @@ export interface SettlementPayment {
   method: PaymentMethod | null;
   note: string | null;
   status: 'confirmed' | 'cancelled';
+  /** Movimentação (despesa/aporte) que gerou a dívida. Nulo = pagamento antigo. */
+  expenseId: string | null;
   createdAt: Date;
 }
 
@@ -43,6 +45,8 @@ export interface Expense {
   /** Parte de cada sócio (soma = amountCents). */
   shares: ExpenseShare[];
   note: string | null;
+  /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
+  source: string | null;
   /** Só 'paid' entra nos cálculos; 'unpaid' = conta a pagar (só lembrete). */
   paymentStatus: PaymentStatus;
   /** Vencimento (YYYY-MM-DD) quando 'unpaid'; nulo quando já paga. */

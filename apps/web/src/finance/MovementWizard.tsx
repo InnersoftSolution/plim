@@ -3,8 +3,9 @@ import type { Company, CompanyMember, ExpenseSplitMode } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { financeApi, formatMoney, parseMoneyToCents } from './financeApi';
+import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
 import { RecurringCostForm } from './RecurringCostForm';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
@@ -39,7 +40,7 @@ function previewSplit(
   return members.map((m, i) => ({ memberId: m.id, cents: cents[i]! }));
 }
 
-type MovementType = 'expense' | 'recurring' | 'contribution' | 'loan' | 'reimbursement';
+type MovementType = 'expense' | 'revenue' | 'recurring' | 'contribution' | 'loan' | 'reimbursement';
 
 const TYPE_CARDS: {
   id: MovementType;
@@ -48,6 +49,12 @@ const TYPE_CARDS: {
   impact: string;
   soon?: boolean;
 }[] = [
+  {
+    id: 'revenue',
+    label: 'Entrada de dinheiro',
+    description: 'Dinheiro que a empresa recebeu (venda, cliente, assinatura...).',
+    impact: 'Entra como receita e melhora o resultado — recebido menos gasto.',
+  },
   {
     id: 'expense',
     label: 'Despesa',
@@ -82,6 +89,9 @@ const TYPE_CARDS: {
   },
 ];
 
+/** Origens comuns de receita (chips de um toque; "+" abre origem própria). */
+const REVENUE_SOURCES = ['Asaas', 'Mercado Livre', 'Stripe', 'Pix', 'Cliente direto', 'Boleto'];
+
 type WizStep = 'type' | 'details' | 'people' | 'review';
 const STEPS: WizStep[] = ['type', 'details', 'people', 'review'];
 
@@ -111,6 +121,11 @@ export function MovementWizard({
   const [note, setNote] = useState('');
   const [memberId, setMemberId] = useState(members[0]?.id ?? '');
   const [splitMode, setSplitMode] = useState<ExpenseSplitMode>('equity');
+  /** Aporte reembolsável: os sócios pagam a parte deles ao autor. */
+  const [reimbursable, setReimbursable] = useState(false);
+  /** Receita: origem do dinheiro (Asaas, Mercado Livre, custom...). */
+  const [source, setSource] = useState('');
+  const [customSource, setCustomSource] = useState(false);
   /** Sócios que já acertaram a parte deles com o pagador (despesa já paga). */
   const [settledIds, setSettledIds] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -118,10 +133,78 @@ export function MovementWizard({
 
   const stepIdx = step === 'recurring' ? -1 : STEPS.indexOf(step);
   const isExpense = type === 'expense';
+  const isRevenue = type === 'revenue';
   const isUnpaid = isExpense && paymentStatus === 'unpaid';
-  const amountCents = parseMoneyToCents(amount);
+  const amountCents = maskedMoneyToCents(amount);
   const memberName = members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
   const soloMember = members.length <= 1;
+  // Divisão entre sócios: sempre na despesa; no aporte só quando reembolsável.
+  const splitsAmongPartners = isExpense || (type === 'contribution' && reimbursable);
+  // Soma das participações. Quando "por participação" e a soma não fecha 100%,
+  // o Plim divide proporcional ao que está definido — precisa avisar (senão a
+  // divisão sai diferente das porcentagens cadastradas, em silêncio).
+  const equityTotal = members.reduce((s, m) => s + (m.equityPercent ?? 0), 0);
+  const equityGap = Math.round((100 - equityTotal) * 100) / 100;
+  const showEquityWarn =
+    splitMode === 'equity' && members.length > 1 && Math.abs(equityGap) > 0.01;
+  const equityWarn = showEquityWarn ? (
+    <div className="mw-eqwarn">
+      {equityTotal <= 0 ? (
+        <>
+          Nenhuma participação foi definida ainda, então o Plim está dividindo{' '}
+          <strong>em partes iguais</strong>. Defina as participações em Sócios ou use "Igualmente".
+        </>
+      ) : equityGap > 0 ? (
+        <>
+          As participações somam <strong>{formatPct(equityTotal)}</strong> (faltam {formatPct(equityGap)} para
+          100%). O Plim divide proporcional ao que está definido, então cada sócio com participação
+          assume uma fatia maior. Para dividir exatamente pelas porcentagens, complete a sociedade em
+          Sócios; ou escolha "Igualmente".
+        </>
+      ) : (
+        <>
+          As participações somam <strong>{formatPct(equityTotal)}</strong> (passou de 100%). Ajuste em
+          Sócios para os acertos ficarem exatos.
+        </>
+      )}
+    </div>
+  ) : null;
+
+  /** Linhas "Parte de fulano" com o toggle "está devendo / já me pagou". */
+  function splitRows(payerId: string, allowSettle: boolean, payerLabel: string) {
+    if (amountCents == null) return null;
+    return previewSplit(amountCents, members, splitMode).map((s) => {
+      const m = members.find((x) => x.id === s.memberId);
+      const isPayer = s.memberId === payerId;
+      const settled = settledIds.includes(s.memberId);
+      const canSettle = allowSettle && !isPayer && s.cents > 0;
+      return (
+        <div className="mw-review__row" key={s.memberId}>
+          <span>
+            Parte de {m?.fullName ?? 'Sócio'}
+            {isPayer && <span className="mw-payer"> · {payerLabel}</span>}
+          </span>
+          <span className="mw-splitright">
+            {canSettle && (
+              <button
+                type="button"
+                className={'mw-settle' + (settled ? ' mw-settle--on' : '')}
+                aria-pressed={settled}
+                onClick={() =>
+                  setSettledIds((ids) =>
+                    settled ? ids.filter((id) => id !== s.memberId) : [...ids, s.memberId],
+                  )
+                }
+              >
+                {settled ? 'já me pagou ✓' : 'está devendo'}
+              </button>
+            )}
+            <strong data-financial>{formatMoney(s.cents, company.currencyCode)}</strong>
+          </span>
+        </div>
+      );
+    });
+  }
 
   function next(to: WizStep | 'recurring') {
     setError('');
@@ -130,7 +213,13 @@ export function MovementWizard({
 
   function validateDetails(): boolean {
     if (description.trim().length < 1) {
-      setError(isExpense ? 'Conte de onde veio o gasto — ex.: "Domínio do site".' : 'Dê um nome ao aporte — ex.: "Aporte inicial".');
+      setError(
+        isExpense
+          ? 'Conte de onde veio o gasto — ex.: "Domínio do site".'
+          : isRevenue
+            ? 'Diga de onde veio a entrada — ex.: "Mensalidade de cliente".'
+            : 'Dê um nome ao aporte — ex.: "Aporte inicial".',
+      );
       return false;
     }
     if (amountCents == null) {
@@ -163,6 +252,15 @@ export function MovementWizard({
               ? settledIds.filter((id) => id !== memberId)
               : undefined,
         });
+      } else if (type === 'revenue') {
+        await financeApi.createRevenue(company.id, {
+          description: description.trim(),
+          amountCents: amountCents!,
+          receivedByMemberId: memberId,
+          source: source.trim() || null,
+          receivedOn: date,
+          note: note.trim() || null,
+        });
       } else {
         await financeApi.createContribution(company.id, {
           description: description.trim(),
@@ -170,6 +268,12 @@ export function MovementWizard({
           memberId,
           contributedOn: date,
           note: note.trim() || null,
+          reimbursable,
+          splitMode: reimbursable ? (splitMode === 'equal' ? 'equal' : 'equity') : undefined,
+          settledMemberIds:
+            reimbursable && settledIds.length > 0
+              ? settledIds.filter((id) => id !== memberId)
+              : undefined,
         });
       }
       onCreated();
@@ -237,12 +341,18 @@ export function MovementWizard({
       {step === 'details' && (
         <>
           <p className="mw-lead">
-            {isExpense ? 'Sobre esse gasto' : 'Sobre esse aporte'}
+            {isExpense ? 'Sobre esse gasto' : isRevenue ? 'Sobre essa entrada' : 'Sobre esse aporte'}
           </p>
           <div className="mw-form">
             <Input
-              label={isExpense ? 'De onde veio o gasto' : 'Como quer chamar esse aporte'}
-              placeholder={isExpense ? 'Ex.: Servidor, domínio, contador…' : 'Ex.: Aporte inicial'}
+              label={isExpense ? 'De onde veio o gasto' : isRevenue ? 'De onde veio a entrada' : 'Como quer chamar esse aporte'}
+              placeholder={
+                isExpense
+                  ? 'Ex.: Servidor, domínio, contador…'
+                  : isRevenue
+                    ? 'Ex.: Mensalidade de cliente, venda…'
+                    : 'Ex.: Aporte inicial'
+              }
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               autoFocus
@@ -252,7 +362,7 @@ export function MovementWizard({
               inputMode="decimal"
               placeholder="0,00"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
             />
             {isExpense && (
               <div className="field">
@@ -283,30 +393,82 @@ export function MovementWizard({
             {isUnpaid ? (
               <div className="field">
                 <label className="field__label">Vencimento</label>
-                <input
-                  type="date"
-                  className="field__input"
+                <DateField
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={setDueDate}
+                  placeholder="Escolha o vencimento"
                 />
               </div>
             ) : (
               <div className="field">
-                <label className="field__label">Quando foi</label>
-                <input
-                  type="date"
-                  className="field__input"
+                <label className="field__label">{isRevenue ? 'Quando entrou' : 'Quando foi'}</label>
+                <DateField
                   value={date}
+                  onChange={setDate}
                   max={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setDate(e.target.value)}
                 />
               </div>
+            )}
+            {isRevenue && (
+              <div className="field">
+                <label className="field__label">De onde veio o dinheiro (origem)</label>
+                <div className="mw-sources">
+                  {REVENUE_SOURCES.map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      className={'mw-chip' + (!customSource && source === s ? ' is-on' : '')}
+                      onClick={() => {
+                        setSource(s);
+                        setCustomSource(false);
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={'mw-chip mw-chip--add' + (customSource ? ' is-on' : '')}
+                    onClick={() => {
+                      setCustomSource(true);
+                      setSource('');
+                    }}
+                  >
+                    + Outra
+                  </button>
+                </div>
+                {customSource && (
+                  <input
+                    className="field__input"
+                    style={{ marginTop: 8 }}
+                    placeholder="Ex.: Hotmart, PagSeguro, loja física…"
+                    value={source}
+                    maxLength={60}
+                    onChange={(e) => setSource(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </div>
+            )}
+            {isRevenue && members.length > 1 && (
+              <Select
+                label="Entrou na conta de (opcional)"
+                value={memberId}
+                onChange={setMemberId}
+                options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+              />
             )}
             <div className="field">
               <label className="field__label">Observação (opcional)</label>
               <textarea
                 className="field__input rc-textarea"
-                placeholder={isExpense ? 'Ex.: renovação anual do domínio.' : 'Ex.: aporte combinado na reunião de junho.'}
+                placeholder={
+                  isExpense
+                    ? 'Ex.: renovação anual do domínio.'
+                    : isRevenue
+                      ? 'Ex.: assinatura mensal do cliente X.'
+                      : 'Ex.: aporte combinado na reunião de junho.'
+                }
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={300}
@@ -315,7 +477,7 @@ export function MovementWizard({
             </div>
           </div>
           <div className="mw-actions">
-            <Button block onClick={() => validateDetails() && next(soloMember && !isExpense ? 'review' : 'people')}>
+            <Button block onClick={() => validateDetails() && next(isRevenue || (soloMember && !isExpense) ? 'review' : 'people')}>
               Continuar
             </Button>
             <button type="button" className="mw-back" onClick={() => next('type')}>
@@ -362,39 +524,10 @@ export function MovementWizard({
                     ? 'Cada sócio assume a parte proporcional à participação dele. Se alguém pagou mais que a própria parte, o Plim calcula o acerto.'
                     : 'O valor é dividido em partes iguais entre todos os sócios, independente da participação.'}
                 </p>
+                {equityWarn}
                 {amountCents != null && members.length > 1 && (
                   <div className="mw-review mw-splitpreview">
-                    {previewSplit(amountCents, members, splitMode).map((s) => {
-                      const m = members.find((x) => x.id === s.memberId);
-                      const isPayer = s.memberId === memberId;
-                      const settled = settledIds.includes(s.memberId);
-                      const canSettle = !isPayer && !isUnpaid && s.cents > 0;
-                      return (
-                        <div className="mw-review__row" key={s.memberId}>
-                          <span>
-                            Parte de {m?.fullName ?? 'Sócio'}
-                            {isPayer && <span className="mw-payer"> · {isUnpaid ? 'vai pagar' : 'pagou'}</span>}
-                          </span>
-                          <span className="mw-splitright">
-                            {canSettle && (
-                              <button
-                                type="button"
-                                className={'mw-settle' + (settled ? ' mw-settle--on' : '')}
-                                aria-pressed={settled}
-                                onClick={() =>
-                                  setSettledIds((ids) =>
-                                    settled ? ids.filter((id) => id !== s.memberId) : [...ids, s.memberId],
-                                  )
-                                }
-                              >
-                                {settled ? 'já me pagou ✓' : 'está devendo'}
-                              </button>
-                            )}
-                            <strong data-financial>{formatMoney(s.cents, company.currencyCode)}</strong>
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {splitRows(memberId, !isUnpaid, isUnpaid ? 'vai pagar' : 'pagou')}
                   </div>
                 )}
                 {!isUnpaid && members.length > 1 && (
@@ -406,10 +539,69 @@ export function MovementWizard({
               </div>
             )}
             {!isExpense && (
-              <p className="mw-hint">
-                O aporte fica registrado como investimento de {memberName} — não vira gasto nem gera
-                dívida entre os sócios.
-              </p>
+              <div className="field">
+                <label className="field__label">Os sócios vão te reembolsar?</label>
+                <div className="fin-split">
+                  <button
+                    type="button"
+                    className={'fin-split__opt' + (!reimbursable ? ' fin-split__opt--active' : '')}
+                    onClick={() => setReimbursable(false)}
+                  >
+                    Não, é só meu
+                  </button>
+                  <button
+                    type="button"
+                    className={'fin-split__opt' + (reimbursable ? ' fin-split__opt--active' : '')}
+                    onClick={() => setReimbursable(true)}
+                    disabled={soloMember}
+                  >
+                    Sim, cada sócio paga a parte
+                  </button>
+                </div>
+                {!reimbursable ? (
+                  <p className="mw-hint">
+                    Fica registrado como capital de {memberName}: não vira gasto nem gera dívida
+                    entre os sócios.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mw-hint">
+                      Você adiantou por todos. Cada sócio passa a te dever a parte dele: entra nos
+                      acertos, mas continua sendo capital (fora do total gasto).
+                    </p>
+                    {members.length > 1 && (
+                      <div className="fin-split">
+                        <button
+                          type="button"
+                          className={'fin-split__opt' + (splitMode === 'equity' ? ' fin-split__opt--active' : '')}
+                          onClick={() => setSplitMode('equity')}
+                        >
+                          Por participação
+                        </button>
+                        <button
+                          type="button"
+                          className={'fin-split__opt' + (splitMode === 'equal' ? ' fin-split__opt--active' : '')}
+                          onClick={() => setSplitMode('equal')}
+                        >
+                          Igualmente
+                        </button>
+                      </div>
+                    )}
+                    {equityWarn}
+                    {amountCents != null && members.length > 1 && (
+                      <div className="mw-review mw-splitpreview">
+                        {splitRows(memberId, true, 'aportou')}
+                      </div>
+                    )}
+                    {members.length > 1 && (
+                      <p className="mw-hint">
+                        Alguém já te pagou a parte dela? Toque em "está devendo" para marcar como
+                        acertado. O Plim registra o acerto junto com o aporte.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
           <div className="mw-actions">
@@ -430,10 +622,12 @@ export function MovementWizard({
           <div className="mw-review">
             <div className="mw-review__row">
               <span>Tipo</span>
-              <strong>{isExpense ? 'Despesa' : 'Aporte'}</strong>
+              <strong>
+                {isExpense ? 'Despesa' : isRevenue ? 'Entrada' : reimbursable ? 'Aporte reembolsável' : 'Aporte'}
+              </strong>
             </div>
             <div className="mw-review__row">
-              <span>{isExpense ? 'Gasto' : 'Aporte'}</span>
+              <span>{isExpense ? 'Gasto' : isRevenue ? 'Entrada' : 'Aporte'}</span>
               <strong>{description.trim() || '—'}</strong>
             </div>
             <div className="mw-review__row">
@@ -457,26 +651,34 @@ export function MovementWizard({
                 <strong>{formatDateBr(date)}</strong>
               </div>
             )}
+            {isRevenue && source.trim() && (
+              <div className="mw-review__row">
+                <span>Origem</span>
+                <strong>{source.trim()}</strong>
+              </div>
+            )}
             <div className="mw-review__row">
-              <span>{isExpense ? 'Pago por' : 'Aportado por'}</span>
+              <span>{isExpense ? 'Pago por' : isRevenue ? 'Entrou na conta de' : 'Aportado por'}</span>
               <strong>{memberName}</strong>
             </div>
-            {isExpense && (
+            {splitsAmongPartners && (
               <div className="mw-review__row">
                 <span>Divisão</span>
                 <strong>{splitMode === 'equity' ? 'Por participação' : 'Igualmente'}</strong>
               </div>
             )}
-            {isExpense &&
+            {splitsAmongPartners &&
               amountCents != null &&
               members.length > 1 &&
               previewSplit(amountCents, members, splitMode).map((s) => {
                 const m = members.find((x) => x.id === s.memberId);
                 const isPayer = s.memberId === memberId;
                 const status = isPayer
-                  ? isUnpaid
-                    ? 'vai pagar'
-                    : 'pagou'
+                  ? isExpense
+                    ? isUnpaid
+                      ? 'vai pagar'
+                      : 'pagou'
+                    : 'aportou'
                   : isUnpaid || s.cents === 0
                     ? null
                     : settledIds.includes(s.memberId)
@@ -509,16 +711,28 @@ export function MovementWizard({
               ? 'Ao salvar, o Plim registra a conta a pagar e te lembra do vencimento. Ela entra nos cálculos quando você marcar como paga.'
               : isExpense
                 ? 'Ao salvar, o Plim atualiza o total gasto e recalcula os acertos entre os sócios.'
-                : 'Ao salvar, o Plim registra o investimento — sem afetar o total gasto nem os acertos.'}
+                : isRevenue
+                  ? 'Ao salvar, o Plim registra a entrada e melhora o resultado (recebido menos gasto). Não divide entre os sócios.'
+                  : reimbursable
+                    ? 'Ao salvar, o Plim registra o capital e cria o acerto: cada sócio te deve a parte dele. Não afeta o total gasto.'
+                    : 'Ao salvar, o Plim registra o investimento — sem afetar o total gasto nem os acertos.'}
           </p>
           <div className="mw-actions">
             <Button block onClick={save} disabled={saving}>
-              {saving ? 'Salvando…' : isUnpaid ? 'Salvar conta a pagar' : isExpense ? 'Salvar despesa' : 'Salvar aporte'}
+              {saving
+                ? 'Salvando…'
+                : isUnpaid
+                  ? 'Salvar conta a pagar'
+                  : isExpense
+                    ? 'Salvar despesa'
+                    : isRevenue
+                      ? 'Salvar entrada'
+                      : 'Salvar aporte'}
             </Button>
             <button
               type="button"
               className="mw-back"
-              onClick={() => next(soloMember && !isExpense ? 'details' : 'people')}
+              onClick={() => next(isRevenue || (soloMember && !isExpense) ? 'details' : 'people')}
               disabled={saving}
             >
               ← Voltar
@@ -528,6 +742,12 @@ export function MovementWizard({
       )}
     </div>
   );
+}
+
+/** Porcentagem enxuta em pt-BR (80, 33,33). */
+function formatPct(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 }
 
 function formatDateBr(iso: string): string {

@@ -1,0 +1,128 @@
+/* Acertos por origem: cada movimentação é um bloco com as dívidas dos sócios. */
+.ac-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ac-group {
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--color-bg-surface);
+}
+.ac-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-bg-default);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.ac-group__id {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ac-group__badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+}
+.ac-group__badge--aporte {
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+}
+.ac-group__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.ac-group__meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.ac-group__total {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--rose-600);
+}
+.ac-group__total small {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-text-subtle);
+}
+.ac-group__debts {
+  display: flex;
+  flex-direction: column;
+}
+.ac-debt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.ac-debt + .ac-debt {
+  border-top: 1px solid var(--color-border-default);
+}
+.ac-debt__avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.ac-debt__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--color-text-default);
+  line-height: 1.4;
+}
+.ac-debt__amount {
+  color: var(--rose-600);
+}
+.ac-debt__sub {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+.ac-debt__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 620px) {
+  .ac-debt {
+    flex-wrap: wrap;
+  }
+  .ac-debt__text {
+    flex-basis: calc(100% - 46px);
+  }
+  .ac-debt__actions {
+    margin-left: 46px;
+    width: 100%;
+    justify-content: space-between;
+  }
+}

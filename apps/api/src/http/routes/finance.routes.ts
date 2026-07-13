@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   createContributionSchema,
   createExpenseSchema,
+  createRevenueSchema,
   createSettlementPaymentSchema,
   payExpenseSchema,
 } from '@plim/shared';
@@ -32,6 +33,13 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     const input = createContributionSchema.parse(request.body);
     const contribution = await service.createContribution(companyId, input, request.user?.id ?? null);
     return reply.status(201).send(contribution);
+  });
+
+  app.post('/companies/:companyId/revenues', async (request, reply) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    const input = createRevenueSchema.parse(request.body);
+    const revenue = await service.createRevenue(companyId, input, request.user?.id ?? null);
+    return reply.status(201).send(revenue);
   });
 
   app.get('/companies/:companyId/expenses', async (request) => {
@@ -72,6 +80,11 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
   app.get('/companies/:companyId/settlements', async (request) => {
     const { companyId } = companyParamsSchema.parse(request.params);
     return service.getSettlements(companyId, request.user?.id ?? null);
+  });
+
+  app.get('/companies/:companyId/movement-settlements', async (request) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    return service.getMovementSettlements(companyId, request.user?.id ?? null);
   });
 
   app.post('/companies/:companyId/settlement-payments', async (request, reply) => {

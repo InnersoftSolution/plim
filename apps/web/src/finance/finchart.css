@@ -45,6 +45,40 @@
 .fchart__bar--current {
   background: var(--color-brand-primary);
 }
+/* barra empilhada: pago (embaixo) + a pagar (em cima) */
+.fchart__stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: height 300ms ease;
+}
+.fchart__seg {
+  width: 100%;
+  transition: height 300ms ease;
+}
+.fchart__seg--paid {
+  background: var(--indigo-100);
+  border-radius: 3px 3px 3px 3px;
+}
+.fchart__seg--paid.is-current {
+  background: var(--color-brand-primary);
+}
+.fchart__seg--pending {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-status-warning-bg, #fff4e5),
+    var(--color-status-warning-bg, #fff4e5) 5px,
+    var(--color-status-warning, #d97a1a) 5px,
+    var(--color-status-warning, #d97a1a) 10px
+  );
+  opacity: 0.85;
+  border-radius: 8px 8px 0 0;
+}
+/* canto de baixo do bloco: quando só há "pago", arredonda o topo também */
+.fchart__stack > .fchart__seg--paid:first-child {
+  border-radius: 8px 8px 3px 3px;
+}
 .fchart__bar--proj {
   background: repeating-linear-gradient(
     -45deg,
@@ -127,6 +161,11 @@
   border-radius: 4px;
 }
 .fchart-legend__swatch--real { background: var(--color-brand-primary); }
+.fchart-legend__swatch--pending {
+  background: repeating-linear-gradient(-45deg,
+    var(--color-status-warning-bg, #fff4e5), var(--color-status-warning-bg, #fff4e5) 3px,
+    var(--color-status-warning, #d97a1a) 3px, var(--color-status-warning, #d97a1a) 6px);
+}
 .fchart-legend__swatch--proj {
   background: repeating-linear-gradient(-45deg,
     var(--color-bg-brand-soft), var(--color-bg-brand-soft) 3px,
