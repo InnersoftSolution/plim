@@ -6,8 +6,10 @@ import { currentWeekStart } from '../activities/activityApi';
  * O Plim observa o estado da empresa, identifica o que falta, explica POR QUE
  * importa e sugere o próximo passo. Determinístico (R$0 de IA).
  *
- * "Fazer depois" (PRD §8): comportamento visual simples via localStorage
- * (dismissed_until) — a estrutura já prevê migrar para o banco depois.
+ * "Fazer depois" (PRD §8): fechar esconde o passo pelo RESTO DO DIA, via
+ * localStorage (dismissed_until). No dia seguinte ele volta sozinho — o
+ * lembrete é diário, nunca some para sempre. Estrutura pronta para migrar
+ * para o banco depois.
  */
 
 export type PendPriority = 'critica' | 'alta' | 'media' | 'baixa';
@@ -20,8 +22,8 @@ export interface Pendencia {
   reason: string;
   priority: PendPriority;
   action: { label: string; kind: 'navigate' | 'modal' | 'recurring'; to?: string };
-  /** Ação secundária: adiar (dismiss) ou navegar (ex.: falar com contador). */
-  secondary?: { label: string; kind: 'dismiss'; days: number } | { label: string; kind: 'navigate'; to: string };
+  /** Ação secundária: adiar (dismiss, volta amanhã) ou navegar (ex.: falar com contador). */
+  secondary?: { label: string; kind: 'dismiss' } | { label: string; kind: 'navigate'; to: string };
 }
 
 /* ── "Fazer depois": memória local por empresa+pendência ── */
@@ -36,10 +38,12 @@ export function isDismissed(companyId: string, id: string): boolean {
   }
 }
 
-export function dismissPendencia(companyId: string, id: string, days: number): void {
+/** Esconde a pendência até a próxima meia-noite local (volta amanhã). */
+export function dismissPendencia(companyId: string, id: string): void {
   try {
-    const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-    localStorage.setItem(dismissKey(companyId, id), until);
+    const until = new Date();
+    until.setHours(24, 0, 0, 0);
+    localStorage.setItem(dismissKey(companyId, id), until.toISOString());
   } catch {
     /* sem storage: apenas não persiste */
   }
@@ -88,7 +92,7 @@ export function buildPendencias(
       reason: 'Essa informação ajuda o Plim a calcular melhor os gastos e acertos entre os sócios.',
       priority: 'alta',
       action: { label: 'Ajustar sociedade', kind: 'navigate', to: '/socios' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 7 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
 
@@ -120,7 +124,7 @@ export function buildPendencias(
       reason: 'Um plano semanal simples evita que tarefas importantes fiquem perdidas.',
       priority: 'media',
       action: { label: 'Criar atividade', kind: 'navigate', to: '/atividades?nova=1' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 3 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
   if (noResponsible.length > 0) {
@@ -131,7 +135,7 @@ export function buildPendencias(
       reason: 'Cada atividade com dono claro tem muito mais chance de sair do papel.',
       priority: 'media',
       action: { label: 'Definir responsáveis', kind: 'navigate', to: '/atividades' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 3 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
 
@@ -158,7 +162,7 @@ export function buildPendencias(
       reason: 'Essa informação ajuda o Plim a organizar os próximos passos da empresa.',
       priority: 'media',
       action: { label: 'Atualizar formalização', kind: 'navigate', to: '/onboarding?step=formalization' },
-      secondary: { label: 'Decidir depois', kind: 'dismiss', days: 7 },
+      secondary: { label: 'Decidir depois', kind: 'dismiss' },
     });
   }
 
@@ -191,7 +195,7 @@ export function buildPendencias(
       reason: 'Sócios cadastrados permitem dividir gastos e calcular acertos automaticamente.',
       priority: 'media',
       action: { label: 'Adicionar sócio', kind: 'navigate', to: '/socios' },
-      secondary: { label: 'Estou sozinho por enquanto', kind: 'dismiss', days: 30 },
+      secondary: { label: 'Estou sozinho por enquanto', kind: 'dismiss' },
     });
   }
 
@@ -205,7 +209,7 @@ export function buildPendencias(
       reason: 'Com os custos mapeados, o Plim mostra o custo real de manter o negócio por mês.',
       priority: 'media',
       action: { label: 'Adicionar custo mensal', kind: 'recurring' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 7 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
 
@@ -219,7 +223,7 @@ export function buildPendencias(
       reason: 'Com a ideia clara, o Plim organiza melhor os próximos passos.',
       priority: 'baixa',
       action: { label: 'Completar descrição', kind: 'navigate', to: '/empresa/dados' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 7 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
 
@@ -233,7 +237,7 @@ export function buildPendencias(
       reason: 'Separar o contato da empresa do pessoal deixa tudo mais profissional.',
       priority: 'baixa',
       action: { label: 'Completar contato', kind: 'navigate', to: '/empresa/dados' },
-      secondary: { label: 'Fazer depois', kind: 'dismiss', days: 7 },
+      secondary: { label: 'Fazer depois', kind: 'dismiss' },
     });
   }
 

@@ -99,3 +99,22 @@ export function IconChevronRight() {
     </svg>
   );
 }
+
+export function IconChevronDown() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" {...base}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+export function IconBuilding() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="M4 21V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v15" />
+      <path d="M16 9h2a2 2 0 0 1 2 2v10" />
+      <path d="M3 21h18" />
+      <path d="M8 8h2M8 12h2M8 16h2" />
+    </svg>
+  );
+}

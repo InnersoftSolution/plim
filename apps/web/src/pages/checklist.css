@@ -520,3 +520,100 @@
     padding: 32px 24px 80px;
   }
 }
+
+/* "Papel de cada sócio": mini-organizador de responsabilidades */
+.chk-partners {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chk-partner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  background: var(--color-bg-surface);
+  transition: border-color 160ms ease;
+}
+.chk-partner.is-defined {
+  border-color: var(--color-status-positive);
+}
+.chk-partner__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chk-partner__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.chk-partner__id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.chk-partner__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.chk-partner__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+}
+.chk-partner__status.is-ok {
+  color: var(--color-status-positive);
+}
+.chk-partner__areas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chk-partner__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chk-chip {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.chk-chip:hover {
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+.chk-chip.is-on {
+  background: var(--color-bg-brand-soft);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+.chk-partners__later {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}

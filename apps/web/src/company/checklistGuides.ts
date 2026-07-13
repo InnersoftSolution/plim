@@ -133,7 +133,7 @@ export const checklistForms: Record<string, ChecklistForm> = {
   // ── Sociedade e formalizacao ───────────────────────────────────────
   partner_roles: {
     intro:
-      'Deixar claro quem cuida do quê evita retrabalho e conflito. Não precisa ser rígido, é um combinado inicial.',
+      'Definir quem cuida de cada área evita retrabalho, decisões soltas e conflitos no futuro. Não precisa ser definitivo agora, é apenas um combinado inicial.',
     questions: [
       'Quem cuida de produto e operação?',
       'Quem cuida de vendas e marketing?',

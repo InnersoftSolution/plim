@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   recurringCategoryCatalog,
@@ -25,10 +25,11 @@ import { checklistApi } from '../company/checklistApi';
 import type { ChecklistView } from '@plim/shared';
 import {
   IconArrowRight,
+  IconBuilding,
+  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconPlus,
-  IconReceipt,
   IconRepeat,
   IconUsers,
   IconWallet,
@@ -184,14 +185,15 @@ function DashboardReady({
     else if (p.action.kind === 'recurring') setRecurringOpen(true);
     else if (p.action.to) onNavigate(p.action.to);
   }
+  // Fechar esconde só até amanhã: lembrete diário, nunca some para sempre.
+  function closePendencia(p: Pendencia) {
+    dismissPendencia(company.id, p.id);
+    setDismissTick((t) => t + 1);
+  }
   function runPendSecondary(p: Pendencia) {
     if (!p.secondary) return;
-    if (p.secondary.kind === 'dismiss') {
-      dismissPendencia(company.id, p.id, p.secondary.days);
-      setDismissTick((t) => t + 1);
-    } else {
-      onNavigate(p.secondary.to);
-    }
+    if (p.secondary.kind === 'dismiss') closePendencia(p);
+    else onNavigate(p.secondary.to);
   }
 
   return (
@@ -286,9 +288,21 @@ function DashboardReady({
           </div>
           <div className="dash-recommend__actions">
             <Button onClick={() => runPendAction(recommended)}>{recommended.action.label}</Button>
-            {recommended.secondary && (
-              <button className="dash-pending__later" onClick={() => runPendSecondary(recommended)}>
+            {recommended.secondary ? (
+              <button
+                className="dash-pending__later"
+                title={recommended.secondary.kind === 'dismiss' ? 'Fecha por hoje. Volta amanhã.' : undefined}
+                onClick={() => runPendSecondary(recommended)}
+              >
                 {recommended.secondary.label}
+              </button>
+            ) : (
+              <button
+                className="dash-pending__later"
+                title="Fecha por hoje. Volta amanhã."
+                onClick={() => closePendencia(recommended)}
+              >
+                Fazer depois
               </button>
             )}
           </div>
@@ -296,6 +310,14 @@ function DashboardReady({
       )}
 
       <ChecklistNextSteps companyId={company.id} />
+
+      {/* ── ações rápidas: uma ação principal + atalho para as áreas ── */}
+      <div className="dash-quick">
+        <button className="dash-quick__btn dash-quick__btn--primary" onClick={() => setModalOpen(true)}>
+          <IconPlus /> Registrar movimentação
+        </button>
+        <MoreActions onNavigate={onNavigate} />
+      </div>
 
       {/* ── cards principais ── */}
       <div className="dash-cards">
@@ -356,19 +378,6 @@ function DashboardReady({
           }
           onClick={() => onNavigate('/socios')}
         />
-      </div>
-
-      {/* ── ações rápidas ── */}
-      <div className="dash-quick">
-        <button className="dash-quick__btn dash-quick__btn--primary" onClick={() => setModalOpen(true)}>
-          <IconPlus /> Adicionar movimentação
-        </button>
-        <button className="dash-quick__btn" onClick={() => onNavigate('/socios?add=1')}>
-          <IconUsers /> Adicionar sócio
-        </button>
-        <button className="dash-quick__btn" onClick={() => onNavigate('/empresa/dados')}>
-          <IconReceipt /> Editar empresa
-        </button>
       </div>
 
       {/* ── atividades da semana ── */}
@@ -754,9 +763,112 @@ function freqLabel(id: string): string {
  * ainda nao concluidos, com atalho para a tela completa. Busca o checklist por
  * conta propria (cache do apiFetch evita chamada repetida).
  */
+/**
+ * "Mais ações": atalho enxuto para as 3 áreas operacionais do Plim.
+ * Não repete o menu lateral nem lista ações individuais: leva a Financeiro,
+ * Equipe e Empresa. Desktop = dropdown ancorado ao botão; mobile = bottom sheet
+ * (a mesma folha do resto do app, via CSS).
+ */
+const MORE_AREAS: {
+  key: string;
+  label: string;
+  description: string;
+  to: string;
+  icon: ReactNode;
+}[] = [
+  {
+    key: 'financeiro',
+    label: 'Financeiro',
+    description: 'Organize gastos, aportes, custos e acertos.',
+    to: '/financeiro',
+    icon: <IconWallet />,
+  },
+  {
+    key: 'equipe',
+    label: 'Equipe',
+    description: 'Veja sócios, papéis e atividades.',
+    to: '/socios',
+    icon: <IconUsers />,
+  },
+  {
+    key: 'empresa',
+    label: 'Empresa',
+    description: 'Continue checklist, dados e identidade.',
+    to: '/empresa/checklist',
+    icon: <IconBuilding />,
+  },
+];
+
+function MoreActions({ onNavigate }: { onNavigate: (to: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function go(to: string) {
+    setOpen(false);
+    onNavigate(to);
+  }
+
+  return (
+    <div className="dash-more" ref={ref}>
+      <button
+        className="dash-quick__btn dash-more__toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        Mais ações <IconChevronDown />
+      </button>
+      {open && (
+        <>
+          <div className="dash-more__backdrop" onClick={() => setOpen(false)} />
+          <div className="dash-more__menu" role="menu">
+            <span className="dash-more__label">Ir para</span>
+            {MORE_AREAS.map((area) => (
+              <button
+                key={area.key}
+                type="button"
+                role="menuitem"
+                className="dash-more__item"
+                onClick={() => go(area.to)}
+              >
+                <span className="dash-more__icon" aria-hidden="true">
+                  {area.icon}
+                </span>
+                <span className="dash-more__texts">
+                  <span className="dash-more__item-title">{area.label}</span>
+                  <span className="dash-more__item-desc">{area.description}</span>
+                </span>
+                <IconChevronRight />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ChecklistNextSteps({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const [view, setView] = useState<ChecklistView | null>(null);
+  // Mesmo comportamento diário das pendências: fecha por hoje, volta amanhã.
+  const [closed, setClosed] = useState(() => isDismissed(companyId, 'checklist-nextsteps'));
 
   useEffect(() => {
     let alive = true;
@@ -769,12 +881,17 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
     };
   }, [companyId]);
 
-  if (!view) return null;
+  if (!view || closed) return null;
   const pending = view.items.filter(
     (i) => i.status === 'not_started' || i.status === 'in_progress',
   );
   if (pending.length === 0) return null;
   const top = pending.slice(0, 3);
+
+  function closeForToday() {
+    dismissPendencia(companyId, 'checklist-nextsteps');
+    setClosed(true);
+  }
 
   return (
     <section className="dash-panel dash-nextsteps">
@@ -801,6 +918,15 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
           </li>
         ))}
       </ul>
+      <div className="dash-nextsteps__foot">
+        <button
+          className="dash-pending__later"
+          title="Fecha por hoje. Volta amanhã."
+          onClick={closeForToday}
+        >
+          Fazer depois
+        </button>
+      </div>
     </section>
   );
 }
