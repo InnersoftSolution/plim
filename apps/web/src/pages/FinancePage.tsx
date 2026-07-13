@@ -22,7 +22,7 @@ import './dashboard.css';
 import './finance.css';
 
 /**
- * Central de Movimentações — não é só tabela: cada registro explica o que é
+ * Central de Movimentações, não é só tabela: cada registro explica o que é
  * e como afeta os cálculos (total gasto, custo mensal, acertos).
  */
 
@@ -111,7 +111,7 @@ export function FinancePage() {
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
   const currency = company.currencyCode;
 
-  /* ── números dos cards — só CONFIRMADAS e PAGAS entram (aporte não é gasto — RB002) ── */
+  /* ── números dos cards, só CONFIRMADAS e PAGAS entram (aporte não é gasto, RB002) ── */
   const monthKey = new Date().toISOString().slice(0, 7);
   const confirmed = (e: Expense) => e.confirmationStatus === 'confirmed';
   const gastoCents = expenses
@@ -175,35 +175,28 @@ export function FinancePage() {
     }
   }
 
-  /* ── gráfico mensal: 6 meses + projeção do próximo (só p/ despesas) ── */
-  const chartKind = filter === 'aportes' ? 'contribution' : 'expense';
-  const chart = buildMonthlySeries(expenses, chartKind, recurring.monthlyTotalCents);
+  /* ── gráfico mensal ──
+   * Padrão: FLUXO (entrou x saiu) + projeção de gastos do próximo mês.
+   * Aba "Aportes": série única de aportes por mês. */
+  const isFlowChart = filter !== 'aportes';
+  const chart = isFlowChart
+    ? buildFlowSeries(expenses, recurring.monthlyTotalCents)
+    : buildMonthlySeries(expenses, 'contribution', recurring.monthlyTotalCents);
   const showChart = filter !== 'recorrentes' && filter !== 'a-pagar' && !nothingYet;
-  const isProjChart = chartKind === 'expense';
   const nextLabel = chart.points.find((p) => p.projected)?.label ?? 'próximo mês';
-  const monthsWithData = chart.points.filter((p) => !p.projected && p.cents > 0).length;
-  const hasActiveRecurring = recurring.monthlyTotalCents > 0;
 
-  const chartTitle = isProjChart ? 'Evolução dos gastos' : 'Aportes por mês';
-  const hasPendingBills = chart.points.some((p) => (p.pendingCents ?? 0) > 0);
-  const chartSubtitle = isProjChart
-    ? 'Veja o que foi pago por mês, o que ainda está a pagar e uma estimativa do próximo período.'
+  const chartTitle = isFlowChart ? 'Entradas e saídas' : 'Aportes por mês';
+  const chartSubtitle = isFlowChart
+    ? 'O que entrou (azul) e o que saiu (vermelho) por mês, com uma estimativa de gastos do próximo mês.'
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
-  const chartCaption = isProjChart
-    ? `${hasPendingBills ? 'A parte tracejada é o que ainda falta pagar no mês (recorrentes e contas a pagar). ' : ''}Projeção de ${nextLabel}: média dos meses com registro + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
-    : 'Aportes não entram na projeção de gastos — são investimento, não custo.';
-  // Aviso adaptativo conforme os dados disponíveis (PRD §5/§8).
-  const chartNote = !isProjChart
-    ? undefined
-    : monthsWithData === 0 && hasActiveRecurring
-      ? 'A projeção considera os custos recorrentes ativos, mesmo sem despesas avulsas registradas.'
-      : monthsWithData >= 1 && !hasActiveRecurring
-        ? 'A projeção considera a média dos gastos registrados. Cadastre custos recorrentes para deixar a estimativa mais completa.'
-        : monthsWithData <= 1
-          ? 'Essa projeção ainda é inicial. Ela ficará mais precisa conforme você registrar mais movimentações.'
-          : undefined;
-  const chartEmpty = isProjChart
-    ? 'Sem dados suficientes para projetar. Registre despesas ou custos recorrentes para o Plim começar a estimar os próximos meses.'
+  const chartCaption = isFlowChart
+    ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
+    : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
+  const chartHelp = isFlowChart
+    ? 'Azul é o que entrou (receitas), vermelho é o que saiu (despesas); a parte tracejada é o que ainda falta pagar no mês. A última barra é a projeção de gastos do próximo mês: média dos gastos registrados mais os custos recorrentes ativos. Passe o mouse em cada barra para ver o valor.'
+    : undefined;
+  const chartEmpty = isFlowChart
+    ? 'Sem dados suficientes ainda. Registre entradas e despesas para o Plim mostrar o fluxo do negócio.'
     : 'Nenhum aporte registrado ainda.';
 
   return (
@@ -231,7 +224,7 @@ export function FinancePage() {
           <div className="dash-stat__icon dash-stat__icon--ink"><IconWallet /></div>
           <span className="dash-stat__label">Total gasto</span>
           <span className="dash-stat__value" data-financial>{formatMoney(gastoCents, currency)}</span>
-          <span className="dash-stat__hint">Só despesas — aportes não entram aqui.</span>
+          <span className="dash-stat__hint">Só despesas, aportes não entram aqui.</span>
         </div>
         <div className={'dash-stat' + (resultadoCents < 0 ? ' dash-stat--warn' : '')}>
           <div className={'dash-stat__icon ' + (resultadoCents < 0 ? 'dash-stat__icon--warn' : 'dash-stat__icon--green')}>
@@ -251,7 +244,7 @@ export function FinancePage() {
               ? 'A empresa gastou mais do que recebeu no período.'
               : receitaCents === 0
                 ? 'Registre entradas para ver a saúde do negócio.'
-                : 'Recebido menos gasto — a saúde do negócio.'}
+                : 'Recebido menos gasto, a saúde do negócio.'}
           </span>
         </div>
         <button
@@ -310,7 +303,7 @@ export function FinancePage() {
             </span>
             <span className="fin-due__sub">
               {overduePayable.length > 0
-                ? 'Marque como paga assim que quitar — contas vencidas podem gerar juros.'
+                ? 'Marque como paga assim que quitar, contas vencidas podem gerar juros.'
                 : 'Acompanhe os vencimentos para não deixar nada atrasar.'}
             </span>
           </div>
@@ -380,19 +373,9 @@ export function FinancePage() {
             title={chartTitle}
             subtitle={chartSubtitle}
             caption={chartCaption}
-            note={chartNote}
             emptyText={chartEmpty}
+            helpText={chartHelp}
           />
-          {isProjChart && (
-            <div className="fin-projexplain">
-              <span className="fin-projexplain__title">Como funciona a projeção?</span>
-              <p>
-                O Plim usa os gastos registrados e os custos recorrentes ativos para estimar quanto a
-                empresa pode custar no próximo mês. Essa estimativa serve para planejamento e pode
-                mudar conforme novas movimentações forem registradas.
-              </p>
-            </div>
-          )}
         </>
       )}
 
@@ -432,7 +415,7 @@ export function FinancePage() {
       <Modal
         open={wizardOpen}
         title="Adicionar movimentação"
-        subtitle="O Plim te guia passo a passo — e explica como cada registro afeta os cálculos."
+        subtitle="O Plim te guia passo a passo, e explica como cada registro afeta os cálculos."
         onClose={() => setWizardOpen(false)}
       >
         {wizardOpen && (
@@ -588,7 +571,7 @@ function MovRow({
           {toPay && e.dueDate
             ? `Vence ${formatDate(e.dueDate)} · ${nameOf(e.paidByMemberId)} vai pagar`
             : isRevenue
-              ? `${formatDate(e.spentOn)}${e.source ? ` · via ${e.source}` : ` · recebido por ${nameOf(e.paidByMemberId)}`}`
+              ? `${formatDate(e.spentOn)}${e.source ? ` · via ${e.source}` : ''}${e.account ? ` · em ${e.account}` : !e.source ? ` · recebido por ${nameOf(e.paidByMemberId)}` : ''}`
               : `${formatDate(e.spentOn)} · ${isAporte ? 'feito por' : 'pago por'} ${nameOf(e.paidByMemberId)}`}
         </span>
       </div>
@@ -693,7 +676,7 @@ function MovDetail({
           impact:
             item.cost.frequency === 'once'
               ? [
-                  'Este é um pagamento único — acontece uma vez só.',
+                  'Este é um pagamento único, acontece uma vez só.',
                   'Fica no histórico, mas não entra no custo mensal da empresa.',
                 ]
               : [
@@ -762,7 +745,7 @@ function MovDetail({
         ) : null}
       </div>
 
-      {/* confirmação pendente/recusada — bloco de destaque */}
+      {/* confirmação pendente/recusada, bloco de destaque */}
       {notConfirmed && exp && (
         <div className={'movd-conf movd-conf--' + cst}>
           <p>
@@ -770,7 +753,7 @@ function MovDetail({
               ? `Esta movimentação ainda não entrou nos cálculos porque está aguardando confirmação de ${nameOf(exp.paidByMemberId)}.`
               : cst === 'refused'
                 ? `${nameOf(exp.paidByMemberId)} recusou este pagamento, então ele não entra nos cálculos. Você pode editar ou cancelar.`
-                : 'Movimentação cancelada — fora dos cálculos, mas mantida no histórico.'}
+                : 'Movimentação cancelada, fora dos cálculos, mas mantida no histórico.'}
           </p>
           {exp.canConfirm && cst === 'pending' && (
             <div className="movd-conf__actions">
@@ -785,13 +768,13 @@ function MovDetail({
         </div>
       )}
 
-      {/* conta a pagar — bloco de destaque com ação de pagar */}
+      {/* conta a pagar, bloco de destaque com ação de pagar */}
       {toPay && exp && (
         <div className={'movd-conf movd-conf--' + (overdue ? 'refused' : 'pending')}>
           <p>
             {overdue
               ? `Esta conta ${exp.dueDate ? dueLabel(exp.dueDate) : 'está vencida'} e ainda não foi paga. Ela não entra nos cálculos até ser quitada.`
-              : `Esta conta ${exp.dueDate ? dueLabel(exp.dueDate) : 'está em aberto'}. Marque como paga quando quitar — só então entra no total gasto e nos acertos.`}
+              : `Esta conta ${exp.dueDate ? dueLabel(exp.dueDate) : 'está em aberto'}. Marque como paga quando quitar, só então entra no total gasto e nos acertos.`}
           </p>
           <div className="movd-conf__actions">
             <Button onClick={() => onPay(exp.id)} disabled={busy}>
@@ -828,17 +811,17 @@ function MovDetail({
               <Row k="Frequência" v={freqLabel(item.cost.frequency)} />
               <Row
                 k="Equivalente mensal"
-                v={item.cost.frequency === 'once' ? '— (pagamento único)' : formatMoney(item.cost.monthlyEquivalentCents, currency)}
+                v={item.cost.frequency === 'once' ? 'Pagamento único' : formatMoney(item.cost.monthlyEquivalentCents, currency)}
                 mono={item.cost.frequency !== 'once'}
               />
-              <Row k="Entrou no total gasto?" v="Não — custo recorrente é separado" />
+              <Row k="Entrou no total gasto?" v="Não, custo recorrente é separado" />
               <Row
                 k="Entra no custo mensal?"
-                v={item.cost.frequency === 'once' ? 'Não — pagamento único' : item.cost.active ? 'Sim, enquanto ativo' : 'Não (inativo)'}
+                v={item.cost.frequency === 'once' ? 'Não, pagamento único' : item.cost.active ? 'Sim, enquanto ativo' : 'Não (inativo)'}
               />
               <Row
                 k="Participou da projeção mensal?"
-                v={item.cost.frequency === 'once' ? 'Não — pagamento único' : item.cost.active ? 'Sim, como custo recorrente' : 'Não (inativo)'}
+                v={item.cost.frequency === 'once' ? 'Não, pagamento único' : item.cost.active ? 'Sim, como custo recorrente' : 'Não (inativo)'}
               />
               <Row k="Gerou acerto?" v="Não" />
               {item.cost.note && <Row k="Observação" v={item.cost.note} />}
@@ -866,7 +849,11 @@ function MovDetail({
                         ? 'Feito por'
                         : 'Pago por'
                 }
-                v={nameOf(item.expense.paidByMemberId)}
+                v={
+                  item.expense.kind === 'revenue'
+                    ? item.expense.account || nameOf(item.expense.paidByMemberId)
+                    : nameOf(item.expense.paidByMemberId)
+                }
               />
               {item.expense.createdByMemberId && item.expense.createdByMemberId !== item.expense.paidByMemberId && (
                 <Row k="Cadastrado por" v={nameOf(item.expense.createdByMemberId)} />
@@ -882,9 +869,9 @@ function MovDetail({
                 k="Entrou nos cálculos?"
                 v={
                   toPay
-                    ? 'Não — conta a pagar em aberto'
+                    ? 'Não, conta a pagar em aberto'
                     : notConfirmed
-                      ? 'Não — aguardando/recusada'
+                      ? 'Não, aguardando/recusada'
                       : cfg.tone === 'aporte'
                         ? 'Sim (como aporte, não gasto)'
                         : 'Sim'
@@ -892,12 +879,12 @@ function MovDetail({
               />
               <Row
                 k="Entrou no total gasto?"
-                v={toPay ? 'Não ainda — só quando for paga' : cfg.tone === 'aporte' ? 'Não — aporte não é despesa' : notConfirmed ? 'Não ainda' : 'Sim'}
+                v={toPay ? 'Não ainda, só quando for paga' : cfg.tone === 'aporte' ? 'Não, aporte não é despesa' : notConfirmed ? 'Não ainda' : 'Sim'}
               />
               <Row k="Entra no custo mensal?" v="Não" />
               <Row
                 k="Participou da projeção mensal?"
-                v={toPay ? 'Não — entra quando for paga' : cfg.tone === 'aporte' ? 'Não — aporte não entra na projeção' : 'Sim — entra na média de gastos'}
+                v={toPay ? 'Não, entra quando for paga' : cfg.tone === 'aporte' ? 'Não, aporte não entra na projeção' : 'Sim, entra na média de gastos'}
               />
               <Row
                 k="Gerou acerto?"
@@ -935,7 +922,7 @@ function MovDetail({
                   .filter((s) => s.memberId !== exp.paidByMemberId && s.shareCents > 0)
                   .map((s) => nameOf(s.memberId))
                   .join(', ')}. Por isso, ela entrou no cálculo de acertos.`
-              : `A parte que cabia a ${nameOf(exp.paidByMemberId)} coincide com o que foi pago — sem diferença a acertar.`}
+              : `A parte que cabia a ${nameOf(exp.paidByMemberId)} coincide com o que foi pago, sem diferença a acertar.`}
           </p>
         </div>
       )}
@@ -1049,9 +1036,46 @@ const freqLabel = (id: string) => recurringFrequencyCatalog.find((f) => f.id ===
 
 /**
  * Série mensal: 5 meses passados + mês atual + projeção do próximo.
- * Projeção (só despesas, determinística — R$0 de IA):
+ * Projeção (só despesas, determinística, R$0 de IA):
  * média dos meses COM registro + custos recorrentes ativos.
  */
+/**
+ * Série de FLUXO: por mês, o que ENTROU (receitas) e o que SAIU (despesas
+ * pagas), mais o "a pagar" do mês. A última barra é a projeção de gastos.
+ * Determinística, R$0 de IA.
+ */
+function buildFlowSeries(
+  expenses: Expense[],
+  recurringMonthlyCents: number,
+): { points: ChartPoint[] } {
+  const now = new Date();
+  const monthShort = (d: Date) =>
+    d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+  const confirmed = (e: Expense) => e.confirmationStatus === 'confirmed';
+  const isIn = (e: Expense) => e.kind === 'revenue' && confirmed(e);
+  const isOut = (e: Expense) => e.kind === 'expense' && confirmed(e) && (e.paymentStatus ?? 'paid') === 'paid';
+  const isPending = (e: Expense) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'unpaid';
+  const billMonth = (e: Expense) => (e.dueDate ?? e.spentOn).slice(0, 7);
+
+  const points: ChartPoint[] = [];
+  const manualOutByMonth: number[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const inCents = expenses.filter((e) => isIn(e) && e.spentOn.startsWith(key)).reduce((s, e) => s + e.amountCents, 0);
+    const outExp = expenses.filter((e) => isOut(e) && e.spentOn.startsWith(key));
+    const outCents = outExp.reduce((s, e) => s + e.amountCents, 0);
+    const pendingCents = expenses.filter((e) => isPending(e) && billMonth(e) === key).reduce((s, e) => s + e.amountCents, 0);
+    manualOutByMonth.push(outExp.filter((e) => !e.recurringCostId).reduce((s, e) => s + e.amountCents, 0));
+    points.push({ key, label: monthShort(d), inCents, outCents, pendingCents, current: i === 0 });
+  }
+  const withData = manualOutByMonth.filter((c) => c > 0);
+  const avg = withData.length > 0 ? Math.round(withData.reduce((s, c) => s + c, 0) / withData.length) : 0;
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  points.push({ key: 'proj', label: monthShort(next), outCents: avg + recurringMonthlyCents, projected: true });
+  return { points };
+}
+
 function buildMonthlySeries(
   expenses: Expense[],
   kind: 'expense' | 'contribution',
@@ -1072,7 +1096,7 @@ function buildMonthlySeries(
   const billMonth = (e: Expense) => (e.dueDate ?? e.spentOn).slice(0, 7);
 
   // Base da projeção: só lançamentos manuais. As cobranças geradas de custos
-  // recorrentes já entram pela soma recorrente — sem contar duas vezes.
+  // recorrentes já entram pela soma recorrente, sem contar duas vezes.
   const manualByMonth: number[] = [];
 
   for (let i = 5; i >= 0; i--) {

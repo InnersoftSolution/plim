@@ -131,6 +131,7 @@ export class FinanceService {
             shares: members.map((m, i) => ({ memberId: m.id, shareCents: split[i]! })),
             note: null,
             source: null,
+            account: null,
             paymentStatus: 'unpaid', // nasce como conta a pagar; entra nos números ao pagar
             dueDate: charge,
             confirmationStatus: 'confirmed', // gerada pelo sistema a partir de regra já acordada
@@ -179,6 +180,7 @@ export class FinanceService {
       shares,
       note: input.note ?? null,
       source: null,
+      account: null,
       paymentStatus: isUnpaid ? 'unpaid' : 'paid',
       dueDate: isUnpaid ? input.dueDate ?? null : null,
       confirmationStatus: conf.status,
@@ -258,6 +260,7 @@ export class FinanceService {
       shares,
       note: input.note ?? null,
       source: null,
+      account: null,
       paymentStatus: 'paid', // aporte não tem vencimento
       dueDate: null,
       confirmationStatus: conf.status,
@@ -303,23 +306,30 @@ export class FinanceService {
     actingUserId?: string | null,
   ): Promise<Expense> {
     const { company, members } = await this.companyService.getOverview(companyId, actingUserId);
-    const member = members.find((m) => m.id === input.receivedByMemberId);
-    if (!member) {
-      throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio que recebeu não encontrado.');
+    if (members.length === 0) {
+      throw new NotFoundError('MEMBER_NOT_FOUND', 'Empresa sem sócios.');
     }
-    const conf = resolveConfirmation(members, member, actingUserId);
+    // A conta pode ser de um sócio, "Conta da empresa" ou uma conta própria.
+    // O paidByMemberId (FK obrigatória) usa o sócio informado, senão quem
+    // registrou, senão o primeiro — é só vínculo; a conta real vai em `account`.
+    const receiver =
+      members.find((m) => m.id === input.receivedByMemberId) ??
+      (actingUserId ? members.find((m) => m.userId === actingUserId) : undefined) ??
+      members[0]!;
+    const conf = resolveConfirmation(members, receiver, actingUserId);
     return this.repo.createExpense({
       companyId,
       kind: 'revenue',
       description: input.description,
       amountCents: input.amountCents,
       currencyCode: company.currencyCode,
-      paidByMemberId: input.receivedByMemberId, // quem recebeu (informativo)
+      paidByMemberId: receiver.id, // vínculo obrigatório (a conta real fica em account)
       spentOn: input.receivedOn ?? new Date().toISOString().slice(0, 10),
       splitMode: 'custom',
       shares: [], // receita não divide entre sócios
       note: input.note ?? null,
       source: input.source ?? null,
+      account: input.account ?? null,
       paymentStatus: 'paid',
       dueDate: null,
       confirmationStatus: conf.status,

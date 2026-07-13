@@ -45,6 +45,7 @@ interface ExpenseRow {
   split_mode: ExpenseSplitMode;
   note: string | null;
   source: string | null;
+  account: string | null;
   payment_status: PaymentStatus | null;
   due_date: string | null;
   confirmation_status: ConfirmationStatus;
@@ -68,6 +69,7 @@ function toExpense(row: ExpenseRow): Expense {
     splitMode: row.split_mode,
     note: row.note,
     source: row.source ?? null,
+    account: row.account ?? null,
     paymentStatus: row.payment_status ?? 'paid',
     dueDate: row.due_date,
     confirmationStatus: row.confirmation_status ?? 'confirmed',
@@ -100,6 +102,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         split_mode: data.splitMode,
         note: data.note,
         source: data.source,
+        account: data.account,
         payment_status: data.paymentStatus,
         due_date: data.dueDate,
         confirmation_status: data.confirmationStatus,

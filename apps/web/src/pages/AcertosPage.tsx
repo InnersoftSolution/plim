@@ -178,7 +178,7 @@ export function AcertosPage() {
             <h2>Pagamentos registrados</h2>
           </div>
           <p className="dash-panel__hint">
-            O histórico fica guardado — dívidas quitadas saem da lista de pendentes.
+            O histórico fica guardado, dívidas quitadas saem da lista de pendentes.
           </p>
           <div className="dash-settlements">
             {payments.map((p) => (

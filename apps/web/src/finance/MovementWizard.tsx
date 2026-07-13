@@ -53,7 +53,7 @@ const TYPE_CARDS: {
     id: 'revenue',
     label: 'Entrada de dinheiro',
     description: 'Dinheiro que a empresa recebeu (venda, cliente, assinatura...).',
-    impact: 'Entra como receita e melhora o resultado — recebido menos gasto.',
+    impact: 'Entra como receita e melhora o resultado, recebido menos gasto.',
   },
   {
     id: 'expense',
@@ -65,7 +65,7 @@ const TYPE_CARDS: {
     id: 'contribution',
     label: 'Aporte',
     description: 'Dinheiro colocado por um sócio no negócio.',
-    impact: 'Registra o investimento de cada sócio — não vira gasto nem dívida entre sócios.',
+    impact: 'Registra o investimento de cada sócio, não vira gasto nem dívida entre sócios.',
   },
   {
     id: 'recurring',
@@ -126,6 +126,11 @@ export function MovementWizard({
   /** Receita: origem do dinheiro (Asaas, Mercado Livre, custom...). */
   const [source, setSource] = useState('');
   const [customSource, setCustomSource] = useState(false);
+  /** Receita: conta que recebeu (sócio, empresa ou conta própria via "+"). */
+  const [account, setAccount] = useState('');
+  const [customAccounts, setCustomAccounts] = useState<string[]>([]);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newAccount, setNewAccount] = useState('');
   /** Sócios que já acertaram a parte deles com o pagador (despesa já paga). */
   const [settledIds, setSettledIds] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -206,6 +211,21 @@ export function MovementWizard({
     });
   }
 
+  /** Rótulo da conta escolhida (nome do sócio ou conta própria). */
+  const accountMember = members.find((m) => m.id === account);
+  const accountLabel = accountMember ? accountMember.fullName : account;
+
+  function confirmAddAccount() {
+    const v = newAccount.trim();
+    if (!v) return;
+    if (!customAccounts.includes(v) && !members.some((m) => m.fullName === v)) {
+      setCustomAccounts((a) => [...a, v]);
+    }
+    setAccount(v);
+    setNewAccount('');
+    setAddingAccount(false);
+  }
+
   function next(to: WizStep | 'recurring') {
     setError('');
     setStep(to);
@@ -215,15 +235,15 @@ export function MovementWizard({
     if (description.trim().length < 1) {
       setError(
         isExpense
-          ? 'Conte de onde veio o gasto — ex.: "Domínio do site".'
+          ? 'Conte de onde veio o gasto, ex.: "Domínio do site".'
           : isRevenue
-            ? 'Diga de onde veio a entrada — ex.: "Mensalidade de cliente".'
-            : 'Dê um nome ao aporte — ex.: "Aporte inicial".',
+            ? 'Diga de onde veio a entrada, ex.: "Mensalidade de cliente".'
+            : 'Dê um nome ao aporte, ex.: "Aporte inicial".',
       );
       return false;
     }
     if (amountCents == null) {
-      setError('Informe um valor válido — ex.: 150,00.');
+      setError('Informe um valor válido, ex.: 150,00.');
       return false;
     }
     if (isUnpaid && !dueDate) {
@@ -256,7 +276,8 @@ export function MovementWizard({
         await financeApi.createRevenue(company.id, {
           description: description.trim(),
           amountCents: amountCents!,
-          receivedByMemberId: memberId,
+          receivedByMemberId: accountMember ? accountMember.id : undefined,
+          account: accountLabel.trim() || null,
           source: source.trim() || null,
           receivedOn: date,
           note: note.trim() || null,
@@ -450,13 +471,65 @@ export function MovementWizard({
                 )}
               </div>
             )}
-            {isRevenue && members.length > 1 && (
-              <Select
-                label="Entrou na conta de (opcional)"
-                value={memberId}
-                onChange={setMemberId}
-                options={members.map((m) => ({ value: m.id, label: m.fullName }))}
-              />
+            {isRevenue && (
+              <div className="field">
+                <label className="field__label">Entrou na conta de (opcional)</label>
+                <div className="mw-accountrow">
+                  <select
+                    className="field__select"
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                  >
+                    <option value="">Não informar</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName}
+                      </option>
+                    ))}
+                    <option value="Conta da empresa">Conta da empresa</option>
+                    {customAccounts.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="mw-addbox"
+                    onClick={() => setAddingAccount((v) => !v)}
+                    aria-label="Adicionar uma conta"
+                    title="Adicionar uma conta"
+                  >
+                    +
+                  </button>
+                </div>
+                {addingAccount && (
+                  <div className="mw-accountadd">
+                    <input
+                      className="field__input"
+                      placeholder="Ex.: Conta da empresa, Nubank PJ…"
+                      value={newAccount}
+                      maxLength={60}
+                      onChange={(e) => setNewAccount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          confirmAddAccount();
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="mw-addconfirm"
+                      onClick={confirmAddAccount}
+                      disabled={!newAccount.trim()}
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <div className="field">
               <label className="field__label">Observação (opcional)</label>
@@ -659,7 +732,7 @@ export function MovementWizard({
             )}
             <div className="mw-review__row">
               <span>{isExpense ? 'Pago por' : isRevenue ? 'Entrou na conta de' : 'Aportado por'}</span>
-              <strong>{memberName}</strong>
+              <strong>{isRevenue ? accountLabel.trim() || 'Não informado' : memberName}</strong>
             </div>
             {splitsAmongPartners && (
               <div className="mw-review__row">
@@ -715,7 +788,7 @@ export function MovementWizard({
                   ? 'Ao salvar, o Plim registra a entrada e melhora o resultado (recebido menos gasto). Não divide entre os sócios.'
                   : reimbursable
                     ? 'Ao salvar, o Plim registra o capital e cria o acerto: cada sócio te deve a parte dele. Não afeta o total gasto.'
-                    : 'Ao salvar, o Plim registra o investimento — sem afetar o total gasto nem os acertos.'}
+                    : 'Ao salvar, o Plim registra o investimento, sem afetar o total gasto nem os acertos.'}
           </p>
           <div className="mw-actions">
             <Button block onClick={save} disabled={saving}>

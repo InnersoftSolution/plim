@@ -47,6 +47,8 @@ export interface Expense {
   note: string | null;
   /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
   source: string | null;
+  /** Conta que recebeu (sócio, empresa, própria). Nulo em gasto/aporte. */
+  account: string | null;
   /** Só 'paid' entra nos cálculos; 'unpaid' = conta a pagar (só lembrete). */
   paymentStatus: PaymentStatus;
   /** Vencimento (YYYY-MM-DD) quando 'unpaid'; nulo quando já paga. */

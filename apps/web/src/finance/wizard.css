@@ -157,6 +157,62 @@
   color: var(--color-status-warning);
   font-weight: 600;
 }
+/* conta que recebeu: select + quadradinho "+" do mesmo tamanho */
+.mw-accountrow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.mw-accountrow .field__select {
+  flex: 1;
+  min-width: 0;
+}
+.mw-addbox {
+  flex-shrink: 0;
+  width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border-default);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-surface);
+  color: var(--color-brand-primary);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.mw-addbox:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+.mw-accountadd {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mw-accountadd .field__input {
+  flex: 1;
+}
+.mw-addconfirm {
+  flex-shrink: 0;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-input);
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mw-addconfirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* chips de origem da receita (Asaas, Mercado Livre... + "+ Outra") */
 .mw-sources {
   display: flex;

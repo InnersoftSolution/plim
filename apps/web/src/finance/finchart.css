@@ -12,6 +12,7 @@
   height: 170px;
 }
 .fchart__col {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -19,6 +20,58 @@
   align-items: center;
   gap: 4px;
 }
+/* tooltip próprio: aparece na hora ao passar o mouse na coluna */
+.fchart__tip {
+  position: absolute;
+  bottom: calc(100% - 18px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 130px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--color-text-default);
+  color: var(--color-text-inverse);
+  box-shadow: 0 12px 30px -12px rgba(13, 17, 36, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+}
+.fchart__col:hover .fchart__tip,
+.fchart__col:focus-within .fchart__tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.fchart__tip-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  opacity: 0.75;
+  margin-bottom: 1px;
+}
+.fchart__tip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fchart__tip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.fchart__tip-dot--in { background: var(--color-brand-primary); }
+.fchart__tip-dot--out { background: var(--rose-500); }
+.fchart__tip-dot--pending { background: var(--color-status-warning); }
+.fchart__tip-dot--proj { background: var(--indigo-300); }
 .fchart__value {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -35,6 +88,28 @@
   max-width: 46px;
   display: flex;
   align-items: flex-end;
+}
+/* fluxo: duas barras (entrou + saiu) lado a lado */
+.fchart__track--flow {
+  max-width: 56px;
+  justify-content: center;
+  gap: 5px;
+}
+.fchart__bar--in {
+  width: 18px;
+  border-radius: 8px 8px 3px 3px;
+  background: var(--color-brand-primary);
+  transition: height 300ms ease;
+}
+.fchart__stack--out {
+  width: 18px;
+}
+.fchart__seg--out {
+  background: var(--rose-500);
+  border-radius: 3px 3px 3px 3px;
+}
+.fchart__stack--out > .fchart__seg--out:first-child {
+  border-radius: 8px 8px 3px 3px;
 }
 .fchart__bar {
   width: 100%;
@@ -136,6 +211,62 @@
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--color-text-default);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+/* "?" educativo discreto — mostra a explicação no hover/foco */
+.fchart-help {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  outline: none;
+}
+.fchart-help:hover,
+.fchart-help:focus-visible {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+}
+.fchart-help__pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 5;
+  width: 250px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-text-default);
+  color: var(--color-text-inverse);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0;
+  box-shadow: 0 12px 30px -12px rgba(13, 17, 36, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+}
+.fchart-help:hover .fchart-help__pop,
+.fchart-help:focus-visible .fchart-help__pop {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+@media (max-width: 560px) {
+  .fchart-help__pop {
+    width: min(250px, 70vw);
+  }
 }
 .fchart-subtitle {
   font-size: 13px;
@@ -161,6 +292,8 @@
   border-radius: 4px;
 }
 .fchart-legend__swatch--real { background: var(--color-brand-primary); }
+.fchart-legend__swatch--in { background: var(--color-brand-primary); }
+.fchart-legend__swatch--out { background: var(--rose-500); }
 .fchart-legend__swatch--pending {
   background: repeating-linear-gradient(-45deg,
     var(--color-status-warning-bg, #fff4e5), var(--color-status-warning-bg, #fff4e5) 3px,

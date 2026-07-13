@@ -142,8 +142,10 @@ export type PayExpenseInput = z.infer<typeof payExpenseSchema>;
 export const createRevenueSchema = z.object({
   description: z.string().trim().min(1, 'Descreva a entrada').max(120),
   amountCents: z.number().int().positive('Valor deve ser maior que zero'),
-  /** Sócio/conta que recebeu (informativo; a receita é da empresa). */
-  receivedByMemberId: z.string().uuid(),
+  /** Sócio que recebeu (quando a conta é de um sócio). Opcional. */
+  receivedByMemberId: z.string().uuid().nullable().optional(),
+  /** Conta que recebeu: sócio, "Conta da empresa" ou uma conta própria. */
+  account: z.string().trim().max(60).nullable().optional(),
   /** Origem: de onde o dinheiro veio (Asaas, Mercado Livre, Pix, cliente...). */
   source: z.string().trim().max(60).nullable().optional(),
   receivedOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
@@ -196,6 +198,8 @@ export const expenseSchema = z.object({
   note: z.string().nullable(),
   /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
   source: z.string().nullable().default(null),
+  /** Conta que recebeu a entrada (sócio, empresa, própria). Nulo em gasto/aporte. */
+  account: z.string().nullable().default(null),
   /** Pagamento: só 'paid' entra nos cálculos. 'unpaid' = conta a pagar. */
   paymentStatus: paymentStatusSchema.default('paid'),
   /** Vencimento da conta a pagar (YYYY-MM-DD). Nulo quando já paga. */
