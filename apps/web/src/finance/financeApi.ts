@@ -61,6 +61,13 @@ export const financeApi = {
       body: JSON.stringify(paidOn ? { paidOn } : {}),
     });
   },
+
+  /** Exclusão definitiva (irreversível); saldos e acertos são recalculados. */
+  removeExpense(companyId: string, expenseId: string): Promise<void> {
+    return apiFetch<void>(`/companies/${companyId}/expenses/${expenseId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 /** Converte "1.500,00" / "1500.50" → centavos inteiros. Null se inválido. */

@@ -57,6 +57,13 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     return service.payExpense(companyId, expenseId, paidOn, request.user?.id ?? null);
   });
 
+  // Exclusão definitiva (irreversível; o front confirma antes).
+  app.delete('/companies/:companyId/expenses/:expenseId', async (request, reply) => {
+    const { companyId, expenseId } = movParamsSchema.parse(request.params);
+    await service.removeExpense(companyId, expenseId, request.user?.id ?? null);
+    return reply.status(204).send();
+  });
+
   app.get('/companies/:companyId/balances', async (request) => {
     const { companyId } = companyParamsSchema.parse(request.params);
     return service.getBalances(companyId, request.user?.id ?? null);

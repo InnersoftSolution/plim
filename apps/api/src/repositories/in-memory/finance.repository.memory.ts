@@ -51,4 +51,8 @@ export class InMemoryFinanceRepository implements FinanceRepository {
     this.expenses.set(expenseId, updated);
     return updated;
   }
+
+  async deleteExpense(expenseId: string): Promise<void> {
+    this.expenses.delete(expenseId);
+  }
 }

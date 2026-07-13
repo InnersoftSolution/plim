@@ -192,4 +192,10 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     if (error) throw new Error(`Falha ao listar pagamentos: ${error.message}`);
     return (rows ?? []).map(toPayment);
   }
+
+  async deleteExpense(expenseId: string): Promise<void> {
+    // As partilhas (expense_shares) caem em cascata pela FK.
+    const { error } = await this.db.from('expenses').delete().eq('id', expenseId);
+    if (error) throw new Error(`Falha ao excluir movimentação: ${error.message}`);
+  }
 }

@@ -453,6 +453,11 @@ export function FinancePage() {
               await markPaid(id);
               setDetail(null);
             }}
+            onRemove={async (id) => {
+              await financeApi.removeExpense(company.id, id);
+              setDetail(null);
+              await load();
+            }}
             onClose={() => setDetail(null)}
             onSeeAcertos={() => {
               setDetail(null);
@@ -604,6 +609,7 @@ function MovDetail({
   busy,
   onDecide,
   onPay,
+  onRemove,
   onClose,
   onSeeAcertos,
 }: {
@@ -614,9 +620,14 @@ function MovDetail({
   busy: boolean;
   onDecide: (expenseId: string, decision: 'confirm' | 'refuse') => void;
   onPay: (expenseId: string) => void;
+  onRemove: (expenseId: string) => Promise<void>;
   onClose: () => void;
   onSeeAcertos: () => void;
 }) {
+  // Exclusão em duas etapas: o botão vira uma confirmação no mesmo lugar.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState('');
   // Narrowing explícito (o TS não liga cfg.tone ao item.kind).
   const exp = item.kind !== 'recurring' ? item.expense : null;
   const isDespesa = exp != null && exp.kind === 'expense';
@@ -897,19 +908,65 @@ function MovDetail({
         )}
       </div>
 
-      {/* 5) ações (editar/cancelar preparados; fechar funcional) */}
+      {/* 5) ações */}
       <div className="movd-actions">
-        <div className="movd-actions__soon">
-          <button type="button" className="movd-btn" disabled title="Em breve">
-            Editar movimentação
-          </button>
-          <button type="button" className="movd-btn movd-btn--danger" disabled title="Em breve">
-            Cancelar movimentação
-          </button>
-        </div>
-        <Button block onClick={onClose}>
-          Fechar
-        </Button>
+        {confirmingRemove && exp ? (
+          <div className="movd-removeconfirm">
+            {removeError && <div className="form-error">{removeError}</div>}
+            <p className="movd-removeconfirm__text">
+              Tem certeza que deseja excluir <strong>{cfg.title}</strong>?
+            </p>
+            <div className="movd-removeconfirm__warn">
+              Essa ação é <strong>irreversível</strong>. A movimentação de{' '}
+              {formatMoney(cfg.amount, currency)} sai do histórico
+              {isDespesa && generatesSettlement(exp)
+                ? ', e os saldos e acertos entre sócios são recalculados sem ela.'
+                : '.'}
+            </div>
+            <div className="movd-removeconfirm__actions">
+              <button
+                type="button"
+                className="movd-removeconfirm__confirm"
+                disabled={removeBusy}
+                onClick={async () => {
+                  setRemoveBusy(true);
+                  setRemoveError('');
+                  try {
+                    await onRemove(exp.id);
+                  } catch (err) {
+                    setRemoveError(messageForError(err));
+                    setRemoveBusy(false);
+                  }
+                }}
+              >
+                {removeBusy ? 'Excluindo…' : 'Sim, excluir definitivamente'}
+              </button>
+              <Button variant="ghost" onClick={() => setConfirmingRemove(false)} disabled={removeBusy}>
+                Voltar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="movd-actions__soon">
+              <button type="button" className="movd-btn" disabled title="Em breve">
+                Editar movimentação
+              </button>
+              {exp && (
+                <button
+                  type="button"
+                  className="movd-btn movd-btn--danger"
+                  onClick={() => setConfirmingRemove(true)}
+                >
+                  Excluir movimentação
+                </button>
+              )}
+            </div>
+            <Button block onClick={onClose}>
+              Fechar
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

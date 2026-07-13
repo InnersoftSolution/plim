@@ -11,4 +11,6 @@ export interface FinanceRepository {
   markExpensePaid(expenseId: string, paidOn: string): Promise<Expense>;
   createPayment(data: Omit<SettlementPayment, 'id' | 'createdAt'>): Promise<SettlementPayment>;
   listPayments(companyId: string): Promise<SettlementPayment[]>;
+  /** Exclusão definitiva de uma movimentação (as partilhas caem em cascata). */
+  deleteExpense(expenseId: string): Promise<void>;
 }

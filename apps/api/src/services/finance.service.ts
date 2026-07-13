@@ -182,6 +182,24 @@ export class FinanceService {
     return this.repo.markExpensePaid(expenseId, paidOn ?? new Date().toISOString().slice(0, 10));
   }
 
+  /**
+   * Exclusão definitiva de uma movimentação (despesa ou aporte).
+   * Os saldos e acertos são recalculados na hora, pois derivam das despesas.
+   * Irreversível: o front confirma com a pessoa antes de chamar.
+   */
+  async removeExpense(
+    companyId: string,
+    expenseId: string,
+    actingUserId?: string | null,
+  ): Promise<void> {
+    await this.companyService.getOverview(companyId, actingUserId);
+    const expense = await this.repo.findExpenseById(companyId, expenseId);
+    if (!expense) {
+      throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
+    }
+    await this.repo.deleteExpense(expenseId);
+  }
+
   async listExpenses(companyId: string, actingUserId?: string | null) {
     const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const meId = actingUserId ? members.find((m) => m.userId === actingUserId)?.id ?? null : null;

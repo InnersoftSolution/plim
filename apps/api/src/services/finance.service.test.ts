@@ -384,4 +384,34 @@ describe('FinanceService', () => {
       code: 'ALREADY_PAID',
     });
   });
+
+  it('exclui a movimentação e recalcula os saldos sem ela', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    await finance.removeExpense(companyId, created.id, 'u1');
+    const expenses = await finance.listExpenses(companyId, 'u1');
+    expect(expenses.find((e) => e.id === created.id)).toBeUndefined();
+    const balances = await finance.getBalances(companyId, 'u1');
+    expect(balances.every((b) => b.paidCents === 0 && b.owedCents === 0)).toBe(true);
+  });
+
+  it('excluir movimentação inexistente devolve MOVEMENT_NOT_FOUND', async () => {
+    await expect(
+      finance.removeExpense(companyId, '00000000-0000-0000-0000-000000000000', 'u1'),
+    ).rejects.toMatchObject({ code: 'MOVEMENT_NOT_FOUND' });
+  });
+
+  it('quem não é membro não consegue excluir movimentação', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    await expect(finance.removeExpense(companyId, created.id, 'u-estranho')).rejects.toMatchObject({
+      code: 'NOT_A_MEMBER',
+    });
+  });
 });
