@@ -52,7 +52,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Esqueceu a senha?"
-      subtitle="Sem problema — informe seu e-mail e enviaremos um link para criar uma nova."
+      subtitle="Sem problema, informe seu e-mail e enviaremos um link para criar uma nova."
       backTo="/login"
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>

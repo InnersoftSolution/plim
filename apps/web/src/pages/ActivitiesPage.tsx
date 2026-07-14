@@ -269,7 +269,7 @@ function ActivityForm({
 
   async function save() {
     if (title.trim().length < 1) {
-      setError('Dê um título à atividade — ex.: "Criar página inicial do site".');
+      setError('Dê um título à atividade, ex.: "Criar página inicial do site".');
       return;
     }
     if (startDate && dueDate && startDate > dueDate) {
@@ -445,7 +445,7 @@ function ActivityDetail({
       )}
 
       <div className="mw-review">
-        <Row k="Responsável" v={responsible ?? '— sem responsável'} />
+        <Row k="Responsável" v={responsible ?? 'Sem responsável'} />
         <Row k="Área" v={areaLabel(a.area)} />
         <Row k="Prioridade" v={priorityLabel(a.priority)} />
         <Row k="Início" v={a.startDate ? formatDate(a.startDate) : 'não definido'} />

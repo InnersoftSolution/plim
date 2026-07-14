@@ -51,7 +51,7 @@ export function AdminUserDetailPage() {
         <dl className="adm-facts">
           <div><dt>Cadastro</dt><dd>{fmtDate(detail.createdAt)}</dd></div>
           <div><dt>Último acesso</dt><dd>{fmtDate(detail.lastSignInAt)}</dd></div>
-          <div><dt>Senha</dt><dd>gerenciada pelo provedor de autenticação — nunca visível</dd></div>
+          <div><dt>Senha</dt><dd>gerenciada pelo provedor de autenticação, nunca visível</dd></div>
         </dl>
       </section>
 

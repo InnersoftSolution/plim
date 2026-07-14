@@ -49,7 +49,7 @@ export function AdminLayout() {
           <Logo height={22} />
           <span className="adm-badge">ADMIN</span>
         </div>
-        <p className="adm-sidebar__hint">Painel interno do Plim — empresas, usuários e uso do produto.</p>
+        <p className="adm-sidebar__hint">Painel interno do Plim: empresas, usuários e uso do produto.</p>
         <nav className="adm-nav">
           {NAV.map((item) => (
             <NavLink

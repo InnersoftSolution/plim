@@ -104,29 +104,52 @@ export function OnboardingPage() {
     navigate('/dashboard');
   }
 
+  /** Próxima etapa do fluxo (a última leva para a revisão). */
+  function nextOf(current: OnboardingStep): OnboardingStep {
+    const i = STEP_ORDER.indexOf(current);
+    return (i >= 0 && i < STEP_ORDER.length - 1 ? STEP_ORDER[i + 1] : 'review') as OnboardingStep;
+  }
+
   /**
-   * Pular o onboarding. Se ainda não existe empresa, cria um espaço provisório
-   * (nome editável depois) para o usuário entrar no app, em vez de mandá-lo a um
-   * painel que não funciona sem empresa. Se já existe, vai direto para o painel.
+   * "Fazer depois": avança para a PRÓXIMA tela sem salvar os campos desta etapa.
+   * O onboarding é uma jornada, pular uma etapa não sai do fluxo.
    */
-  async function skipOnboarding() {
+  async function skipStep(current: OnboardingStep) {
+    const next = nextOf(current);
+    if (company) {
+      const updated = await companyApi.updateCompany(company.id, { onboardingStep: next });
+      setCompany(updated);
+    }
+    setStep(next);
+  }
+
+  /**
+   * "Fazer depois" na primeira etapa: como as próximas telas precisam de uma
+   * empresa, cria um espaço provisório (nome editável depois) e segue o fluxo.
+   */
+  async function skipBasic() {
     if (skipping) return;
     setSkipping(true);
     try {
-      let id = company?.id ?? null;
-      if (!id) {
+      if (company) {
+        const updated = await companyApi.updateCompany(company.id, { onboardingStep: 'business_type' });
+        setCompany(updated);
+      } else {
         const provisionalName =
           firstName && firstName !== 'por aqui' ? `Empresa de ${firstName}` : 'Minha empresa';
-        const { company: created } = await companyApi.createCompany(
+        const { company: created, ownerMember } = await companyApi.createCompany(
           { name: provisionalName, isNameTemporary: true },
           owner,
         );
-        id = created.id;
+        const updated = await companyApi.updateCompany(created.id, { onboardingStep: 'business_type' });
+        setCompany(updated);
+        setMembers([ownerMember]);
       }
-      await rememberActiveCompany(id);
-      navigate('/dashboard');
+      setStep('business_type');
     } catch {
-      setSkipping(false); // não trava: deixa o usuário tentar de novo
+      /* não trava: deixa o usuário tentar de novo */
+    } finally {
+      setSkipping(false);
     }
   }
 
@@ -240,7 +263,7 @@ export function OnboardingPage() {
           <WelcomeStep
             firstName={firstName}
             onStart={() => setStep('basic')}
-            onSkip={skipOnboarding}
+            onSkip={() => setStep('basic')}
             onBack={goToDashboard}
             showBack={!!company}
             skipping={skipping}
@@ -252,24 +275,27 @@ export function OnboardingPage() {
             onHome={goToDashboard}
           />
         ) : step === 'basic' ? (
-          <BasicStep company={company} onSubmit={submitBasic} onSkip={skipOnboarding} skipping={skipping} />
+          <BasicStep company={company} onSubmit={submitBasic} onSkip={skipBasic} skipping={skipping} />
         ) : step === 'business_type' ? (
           <BusinessTypeStep
             company={company}
             onSubmit={submitBusinessType}
             onBack={editing ? goToDashboard : () => setStep('basic')}
+            onSkip={editing ? undefined : () => skipStep('business_type')}
           />
         ) : step === 'location' ? (
           <LocationStep
             company={company}
             onSubmit={submitLocation}
             onBack={editing ? goToDashboard : () => setStep('business_type')}
+            onSkip={editing ? undefined : () => skipStep('location')}
           />
         ) : step === 'stage' ? (
           <StageStep
             company={company}
             onSubmit={submitStage}
             onBack={editing ? goToDashboard : () => setStep('location')}
+            onSkip={editing ? undefined : () => skipStep('stage')}
           />
         ) : step === 'members' ? (
           <MembersStep
@@ -279,18 +305,21 @@ export function OnboardingPage() {
             onMembersChange={setMembers}
             onContinue={editing ? goToDashboard : goToFormalization}
             onBack={editing ? goToDashboard : () => setStep('stage')}
+            onSkip={editing ? undefined : () => skipStep('members')}
           />
         ) : step === 'formalization' ? (
           <FormalizationStep
             company={company}
             onSubmit={submitFormalization}
             onBack={editing ? goToDashboard : () => setStep('members')}
+            onSkip={editing ? undefined : () => skipStep('formalization')}
           />
         ) : step === 'legal_structure' ? (
           <LegalStructureStep
             company={company}
             onSubmit={submitLegalStructure}
             onBack={editing ? goToDashboard : () => setStep('formalization')}
+            onSkip={editing ? undefined : () => skipStep('legal_structure')}
           />
         ) : (
           <ReviewStep
@@ -341,10 +370,12 @@ function BusinessTypeStep({
   company,
   onSubmit,
   onBack,
+  onSkip,
 }: {
   company: Company | null;
   onSubmit: (type: BusinessModelType | null) => Promise<void>;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const [type, setType] = useState<BusinessModelType | ''>(company?.businessModelType ?? '');
   const [error, setError] = useState('');
@@ -389,6 +420,11 @@ function BusinessTypeStep({
         <button type="button" className="ob-skip" onClick={onBack} disabled={saving}>
           ← Voltar
         </button>
+        {onSkip && (
+          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
+            Fazer depois
+          </button>
+        )}
       </div>
     </>
   );
@@ -404,10 +440,12 @@ function FormalizationStep({
   company,
   onSubmit,
   onBack,
+  onSkip,
 }: {
   company: Company | null;
   onSubmit: (fields: FormalizationFields) => Promise<void>;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const [choice, setChoice] = useState<HasFormalRegistration | ''>(
     company?.hasFormalRegistration ?? '',
@@ -480,6 +518,11 @@ function FormalizationStep({
         <button type="button" className="ob-skip" onClick={onBack} disabled={saving}>
           ← Voltar
         </button>
+        {onSkip && (
+          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
+            Fazer depois
+          </button>
+        )}
       </div>
     </>
   );
@@ -492,10 +535,12 @@ function LegalStructureStep({
   company,
   onSubmit,
   onBack,
+  onSkip,
 }: {
   company: Company | null;
   onSubmit: (fields: LegalStructureFields) => Promise<void>;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const initial =
     company?.legalStructureStatus === 'needs_accountant'
@@ -577,6 +622,11 @@ function LegalStructureStep({
         <button type="button" className="ob-skip" onClick={onBack} disabled={saving}>
           ← Voltar
         </button>
+        {onSkip && (
+          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
+            Fazer depois
+          </button>
+        )}
       </div>
     </>
   );
@@ -766,7 +816,7 @@ function BasicStep({
             {saving ? 'Salvando…' : 'Continuar'}
           </Button>
           <button type="button" className="ob-skip" onClick={onSkip} disabled={saving || skipping}>
-            {skipping ? 'Abrindo…' : 'Pular por agora'}
+            {skipping ? 'Salvando…' : 'Fazer depois'}
           </button>
         </div>
       </form>
@@ -785,10 +835,12 @@ function LocationStep({
   company,
   onSubmit,
   onBack,
+  onSkip,
 }: {
   company: Company | null;
   onSubmit: (fields: LocationFields) => Promise<void>;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const [countryCode, setCountryCode] = useState(company?.countryCode ?? '');
   const [region, setRegion] = useState(company?.region ?? '');
@@ -879,6 +931,11 @@ function LocationStep({
           <button type="button" className="ob-skip" onClick={onBack} disabled={saving}>
             ← Voltar
           </button>
+          {onSkip && (
+            <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
+              Fazer depois
+            </button>
+          )}
         </div>
       </form>
     </>
@@ -889,10 +946,12 @@ function StageStep({
   company,
   onSubmit,
   onBack,
+  onSkip,
 }: {
   company: Company | null;
   onSubmit: (stage: BusinessStage) => Promise<void>;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const [stage, setStage] = useState<BusinessStage | ''>(company?.businessStage ?? '');
   const [error, setError] = useState('');
@@ -941,6 +1000,11 @@ function StageStep({
         <button type="button" className="ob-skip" onClick={onBack} disabled={saving}>
           ← Voltar
         </button>
+        {onSkip && (
+          <button type="button" className="ob-skip" onClick={onSkip} disabled={saving}>
+            Fazer depois
+          </button>
+        )}
       </div>
     </>
   );
@@ -953,6 +1017,7 @@ function MembersStep({
   onMembersChange,
   onContinue,
   onBack,
+  onSkip,
 }: {
   companyId: string;
   members: CompanyMember[];
@@ -960,6 +1025,7 @@ function MembersStep({
   onMembersChange: (m: CompanyMember[]) => void;
   onContinue: () => Promise<void> | void;
   onBack: () => void;
+  onSkip?: () => void;
 }) {
   const [mode, setMode] = useState<null | 'yes' | 'later'>(editing ? 'yes' : null);
   const [advancing, setAdvancing] = useState(false);
@@ -1023,6 +1089,11 @@ function MembersStep({
             <button type="button" className="ob-skip" onClick={onBack}>
               ← Voltar
             </button>
+            {onSkip && (
+              <button type="button" className="ob-skip" onClick={onSkip}>
+                Fazer depois
+              </button>
+            )}
           </div>
         </>
       )}
