@@ -38,9 +38,6 @@ type State =
       settlements: Settlement[];
     };
 
-/** Alvo do pagamento: uma dívida específica dentro de uma movimentação. */
-type PayTarget = { movement: MovementSettlement; debt: MovementDebt };
-
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? '?';
@@ -95,7 +92,6 @@ function makeMatcher(query: string): (haystack: string) => boolean {
 
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [paying, setPaying] = useState<PayTarget | null>(null);
   // Pagamento consolidado (net) do bloco "Resumo dos acertos".
   const [netPaying, setNetPaying] = useState<Settlement | null>(null);
   // Sócios com "Ver cálculo" aberto no detalhamento.
@@ -232,86 +228,6 @@ export function AcertosPage() {
         </div>
       )}
 
-      {/* ── acertos agrupados por movimentação ── */}
-      <section className="dash-panel">
-        <div className="dash-panel__head">
-          <h2>
-            {hasFilter
-              ? 'Resultados da busca'
-              : archiveYear
-                ? `Acertos de ${archiveYear}`
-                : 'Acertos pendentes'}
-          </h2>
-        </div>
-        {groups.length === 0 ? (
-          <div className="dash-emptyrow">
-            <p>
-              {hasFilter ? (
-                <>
-                  <strong>Nada encontrado.</strong> Nenhum acerto bate com "{query}". Tente outro
-                  nome, mês ou ano.
-                </>
-              ) : archiveYear ? (
-                <>
-                  <strong>Sem acertos em {archiveYear}.</strong> Nenhuma despesa rateada gerou
-                  dívida entre os sócios nesse ano.
-                </>
-              ) : (
-                <>
-                  <strong>Tudo certo entre os sócios.</strong> Quando uma despesa ou aporte
-                  reembolsável gerar dívida, o Plim mostra aqui quem deve o quê, por movimentação.
-                </>
-              )}
-            </p>
-          </div>
-        ) : (
-          <div className="ac-groups">
-            {groups.map((m) => (
-              <DividaCard
-                key={m.movementId}
-                movement={m}
-                currency={company.currencyCode}
-                onPay={(debt) => setPaying({ movement: m, debt })}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── histórico de pagamentos ── */}
-      {visiblePayments.length > 0 && (
-        <section className="dash-panel">
-          <div className="dash-panel__head">
-            <h2>Pagamentos registrados</h2>
-          </div>
-          <p className="dash-panel__hint">
-            {archiveYear
-              ? `Pagamentos de acerto registrados em ${archiveYear}.`
-              : 'O histórico fica guardado, dívidas quitadas saem da lista de pendentes.'}
-          </p>
-          <div className="dash-settlements">
-            {visiblePayments.map((p) => (
-              <div className="dash-settlement" key={p.id}>
-                <span className="dash-settlement__avatar" style={{ background: 'var(--color-status-positive-bg)', color: 'var(--color-status-positive)' }}>
-                  <IconArrowRight />
-                </span>
-                <span className="dash-settlement__text">
-                  <strong>{nameOf(p.fromMemberId)}</strong> pagou{' '}
-                  <strong data-financial>{formatMoney(p.amountCents, company.currencyCode)}</strong> para{' '}
-                  <strong>{nameOf(p.toMemberId)}</strong>
-                  <span className="ac-mov__meta" style={{ display: 'block' }}>
-                    {formatDateBr(p.paidOn)}
-                    {p.method ? ` · ${paymentMethodCatalog.find((m) => m.id === p.method)?.label}` : ''}
-                    {p.note ? ` · ${p.note}` : ''}
-                  </span>
-                </span>
-                <span className="ac-status ac-status--paid">Pago</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* ── Bloco A: Resumo dos acertos (o resultado consolidado + ação) ── */}
       {!archiveYear && (
         <section className="dash-panel">
@@ -441,28 +357,86 @@ export function AcertosPage() {
         </section>
       )}
 
-      {/* ── modal registrar pagamento (amarrado à movimentação) ── */}
-      <Modal
-        open={paying !== null}
-        title="Registrar pagamento"
-        subtitle={
-          paying
-            ? `${paying.debt.debtorName} → ${paying.movement.payerName} · ${paying.movement.description}`
-            : ''
-        }
-        onClose={() => setPaying(null)}
-      >
-        {paying && (
-          <PaymentForm
-            company={company}
-            target={paying}
-            onSaved={() => {
-              setPaying(null);
-              void load();
-            }}
-          />
+      {/* ── Detalhe por movimentação (só leitura: como cada despesa foi rateada) ── */}
+      <section className="dash-panel">
+        <div className="dash-panel__head">
+          <h2>
+            {hasFilter
+              ? 'Resultados da busca'
+              : archiveYear
+                ? `Acertos de ${archiveYear}`
+                : 'Detalhe por movimentação'}
+          </h2>
+        </div>
+        {!archiveYear && !hasFilter && groups.length > 0 && (
+          <p className="dash-panel__hint">
+            Como cada despesa compartilhada foi rateada e quem já quitou. Para registrar um
+            pagamento, use o Resumo dos acertos acima.
+          </p>
         )}
-      </Modal>
+        {groups.length === 0 ? (
+          <div className="dash-emptyrow">
+            <p>
+              {hasFilter ? (
+                <>
+                  <strong>Nada encontrado.</strong> Nenhum acerto bate com "{query}". Tente outro
+                  nome, mês ou ano.
+                </>
+              ) : archiveYear ? (
+                <>
+                  <strong>Sem acertos em {archiveYear}.</strong> Nenhuma despesa rateada gerou
+                  dívida entre os sócios nesse ano.
+                </>
+              ) : (
+                <>
+                  <strong>Nenhuma pendência por movimentação.</strong> Quando uma despesa
+                  compartilhada gerar dívida, o detalhe do rateio aparece aqui.
+                </>
+              )}
+            </p>
+          </div>
+        ) : (
+          <div className="ac-groups">
+            {groups.map((m) => (
+              <DividaCard key={m.movementId} movement={m} currency={company.currencyCode} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── histórico de pagamentos ── */}
+      {visiblePayments.length > 0 && (
+        <section className="dash-panel">
+          <div className="dash-panel__head">
+            <h2>Pagamentos registrados</h2>
+          </div>
+          <p className="dash-panel__hint">
+            {archiveYear
+              ? `Pagamentos de acerto registrados em ${archiveYear}.`
+              : 'O histórico fica guardado, dívidas quitadas saem da lista de pendentes.'}
+          </p>
+          <div className="dash-settlements">
+            {visiblePayments.map((p) => (
+              <div className="dash-settlement" key={p.id}>
+                <span className="dash-settlement__avatar" style={{ background: 'var(--color-status-positive-bg)', color: 'var(--color-status-positive)' }}>
+                  <IconArrowRight />
+                </span>
+                <span className="dash-settlement__text">
+                  <strong>{nameOf(p.fromMemberId)}</strong> pagou{' '}
+                  <strong data-financial>{formatMoney(p.amountCents, company.currencyCode)}</strong> para{' '}
+                  <strong>{nameOf(p.toMemberId)}</strong>
+                  <span className="ac-mov__meta" style={{ display: 'block' }}>
+                    {formatDateBr(p.paidOn)}
+                    {p.method ? ` · ${paymentMethodCatalog.find((m) => m.id === p.method)?.label}` : ''}
+                    {p.note ? ` · ${p.note}` : ''}
+                  </span>
+                </span>
+                <span className="ac-status ac-status--paid">Pago</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── modal registrar pagamento consolidado (net, do Resumo) ── */}
       <Modal
@@ -494,11 +468,9 @@ export function AcertosPage() {
 function DividaCard({
   movement,
   currency,
-  onPay,
 }: {
   movement: MovementSettlement;
   currency: string | null;
-  onPay: (debt: MovementDebt) => void;
 }) {
   const m = movement;
   const quitada = m.remainingCents === 0;
@@ -530,13 +502,7 @@ function DividaCard({
 
       <div className="ac-group__debts">
         {m.debts.map((d) => (
-          <ParticipanteRow
-            key={d.debtorId}
-            debt={d}
-            payerName={m.payerName}
-            currency={currency}
-            onPay={() => onPay(d)}
-          />
+          <ParticipanteRow key={d.debtorId} debt={d} payerName={m.payerName} currency={currency} />
         ))}
       </div>
 
@@ -561,17 +527,15 @@ function DividaCard({
   );
 }
 
-/** Uma linha por sócio dentro do card: pago (verde + data) ou em aberto (alerta). */
+/** Uma linha por sócio dentro do card (só leitura): pago (verde + data) ou em aberto. */
 function ParticipanteRow({
   debt,
   payerName,
   currency,
-  onPay,
 }: {
   debt: MovementDebt;
   payerName: string;
   currency: string | null;
-  onPay: () => void;
 }) {
   const d = debt;
   const status = d.remainingCents === 0 ? 'quitado' : d.paidCents > 0 ? 'parcial' : 'pendente';
@@ -606,113 +570,10 @@ function ParticipanteRow({
           </span>
         )}
       </span>
-      {status === 'quitado' ? (
-        <span className="ac-status ac-status--paid">Pago</span>
-      ) : (
-        <div className="ac-debt__actions">
-          {/* "Pendente" no topo do card + "em aberto R$X" no texto já indicam o
-              status; o selo aqui seria redundante. Só o botão de ação. */}
-          <Button onClick={onPay}>Registrar pagamento</Button>
-        </div>
-      )}
+      {/* Só leitura: pagar é pelo "Resumo dos acertos". Quitado ganha o selo
+          "Pago"; pendente já diz "em aberto R$X" no texto, sem selo redundante. */}
+      {status === 'quitado' && <span className="ac-status ac-status--paid">Pago</span>}
     </div>
-  );
-}
-
-/** Pagamento de UMA dívida (devedor → autor) de UMA movimentação. */
-function PaymentForm({
-  company,
-  target,
-  onSaved,
-}: {
-  company: Company;
-  target: PayTarget;
-  onSaved: () => void;
-}) {
-  const { movement, debt } = target;
-  const [amount, setAmount] = useState(maskMoneyBRL(String(debt.remainingCents / 100).replace('.', ',')));
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [method, setMethod] = useState<PaymentMethod | ''>('pix');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const cents = maskedMoneyToCents(amount);
-  const isPartial = cents != null && cents < debt.remainingCents;
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    if (cents == null) return setError('Informe um valor válido.');
-    if (cents > debt.remainingCents) {
-      return setError(
-        `O valor é maior que o pendente dessa movimentação (${formatMoney(debt.remainingCents, company.currencyCode)}).`,
-      );
-    }
-    setSaving(true);
-    try {
-      await financeApi.createSettlementPayment(company.id, {
-        fromMemberId: debt.debtorId,
-        toMemberId: movement.payerId,
-        amountCents: cents,
-        paidOn: date,
-        method: method || null,
-        note: note.trim() || null,
-        expenseId: movement.movementId,
-      });
-      onSaved();
-    } catch (err) {
-      setError(messageForError(err));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="mw" onSubmit={handleSubmit} noValidate>
-      {error && <div className="form-error">{error}</div>}
-      <p className="mw-hint" style={{ marginTop: 0 }}>
-        {debt.debtorName} deve {formatMoney(debt.remainingCents, company.currencyCode)} para{' '}
-        {movement.payerName} pela {movement.kind === 'contribution' ? 'parte do aporte' : 'parte da despesa'}{' '}
-        "{movement.description}".
-      </p>
-      <div className="mw-form">
-        <Input
-          label={`Valor pago (${company.currencyCode ?? 'BRL'})`}
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-          autoFocus
-        />
-        <div className="rc-grid">
-          <div className="field">
-            <label className="field__label">Data do pagamento</label>
-            <DateField value={date} onChange={setDate} max={new Date().toISOString().slice(0, 10)} />
-          </div>
-          <Select
-            label="Forma de pagamento"
-            value={method}
-            onChange={(v) => setMethod(v as PaymentMethod)}
-            options={paymentMethodCatalog.map((m) => ({ value: m.id, label: m.label }))}
-          />
-        </div>
-        <Input
-          label="Observação (opcional)"
-          placeholder="Ex.: Pix da metade combinada"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-      <p className="mw-hint">
-        {isPartial
-          ? `Pagamento parcial: sobra ${formatMoney(debt.remainingCents - (cents ?? 0), company.currencyCode)} nessa movimentação.`
-          : 'Esse valor quita a parte dele nessa movimentação.'}
-      </p>
-      <div className="mw-actions">
-        <Button type="submit" block disabled={saving}>
-          {saving ? 'Registrando…' : isPartial ? 'Registrar pagamento parcial' : 'Registrar e quitar'}
-        </Button>
-      </div>
-    </form>
   );
 }
 
