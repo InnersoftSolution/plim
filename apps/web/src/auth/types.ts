@@ -26,6 +26,12 @@ export interface AuthService {
   getSession(): Promise<AuthUser | null>;
   /** Token JWT para autenticar chamadas à API. Null se não logado. */
   getAccessToken(): Promise<string | null>;
+  /**
+   * Força a renovação do token (usa o refresh token). Retorna o novo access
+   * token, ou null se não deu (refresh token vencido/ausente). Usado quando a
+   * API responde 401 para tentar recuperar a sessão antes de mandar ao login.
+   */
+  refreshSession(): Promise<string | null>;
   /** Notifica mudanças de sessão (login, logout, refresh). Retorna unsubscribe. */
   onAuthStateChange(callback: (user: AuthUser | null) => void): () => void;
   /** Atualiza o nome do usuário logado (perfil). */

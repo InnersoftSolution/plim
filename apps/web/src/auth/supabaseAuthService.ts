@@ -92,6 +92,13 @@ export const supabaseAuthService: AuthService = {
     return data.session?.access_token ?? null;
   },
 
+  async refreshSession(): Promise<string | null> {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) return null;
+    return data.session?.access_token ?? null;
+  },
+
   onAuthStateChange(callback: (user: AuthUser | null) => void): () => void {
     const supabase = requireSupabase();
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {

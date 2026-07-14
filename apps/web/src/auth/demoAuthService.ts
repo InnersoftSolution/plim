@@ -91,6 +91,11 @@ export const demoAuthService: AuthService = {
     return null;
   },
 
+  async refreshSession(): Promise<string | null> {
+    // Modo demo não tem token para renovar.
+    return null;
+  },
+
   onAuthStateChange(callback: (user: AuthUser | null) => void): () => void {
     listeners.add(callback);
     return () => listeners.delete(callback);

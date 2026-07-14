@@ -40,6 +40,34 @@ export function clearApiCache(): void {
   inflight.clear();
 }
 
+// ── recuperação de sessão (401) ──────────────────────────────
+// Uma renovação por vez: vários 401 simultâneos compartilham o mesmo refresh.
+let refreshPromise: Promise<string | null> | null = null;
+function refreshOnce(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = authService.refreshSession().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+// Sessão morta de vez: desloga e manda pro login, sem mostrar erro na tela.
+let redirectingToLogin = false;
+async function goToLogin(): Promise<void> {
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  clearApiCache();
+  try {
+    await authService.logout();
+  } catch {
+    /* segue para o login de qualquer forma */
+  }
+  if (window.location.pathname !== '/login') {
+    window.location.assign('/login');
+  }
+}
+
 /** Invalida entradas cujo caminho contém o trecho (ex.: um companyId). */
 function invalidateByPath(path: string): void {
   const companyId = path.match(/\/companies\/([0-9a-f-]{36})/i)?.[1];
@@ -52,7 +80,7 @@ function invalidateByPath(path: string): void {
   }
 }
 
-async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function rawFetch<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   const token = await authService.getAccessToken();
   let response: Response;
   try {
@@ -72,6 +100,17 @@ async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    // Sessão expirada: tenta renovar o token e repetir uma vez. Se não recuperar,
+    // vai para o login (sem estourar o erro "Sessão inválida" na tela).
+    if (response.status === 401) {
+      if (!isRetry) {
+        const fresh = await refreshOnce();
+        if (fresh) return rawFetch<T>(path, init, true);
+      }
+      await goToLogin();
+      // Nunca resolve: a navegação assume; a UI não chega a mostrar erro.
+      return new Promise<T>(() => {});
+    }
     const code = (payload?.error as string) ?? 'UNKNOWN';
     const message = (payload?.message as string) ?? 'Algo deu errado.';
     throw new ApiError(code, message, response.status);
