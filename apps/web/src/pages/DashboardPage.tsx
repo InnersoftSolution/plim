@@ -114,6 +114,9 @@ function DashboardReady({
 }) {
   const { company, members, expenses, settlements, recurring, activities } = data;
   const { user } = useAuth();
+  const { companies, canCreateMultipleCompanies } = useActiveCompany();
+  // So mostra "trabalhando em X" para quem lida com multiempresa.
+  const showActiveCompany = companies.length > 1 || canCreateMultipleCompanies;
   const [modalOpen, setModalOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
   const activeCosts = recurring.costs.filter((c) => c.active);
@@ -203,9 +206,11 @@ function DashboardReady({
           )}
           <div>
           <h1 className="dash-page__title">olá, {firstName || 'por aqui'}</h1>
-          <p className="dash-page__active">
-            Você está trabalhando em <strong>{company.name}</strong>
-          </p>
+          {showActiveCompany && (
+            <p className="dash-page__active">
+              Você está trabalhando em <strong>{company.name}</strong>
+            </p>
+          )}
           <p className="dash-page__subtitle">
             {recommended
               ? 'O estado atual do seu negócio e o que fazer agora.'

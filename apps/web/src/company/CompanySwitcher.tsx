@@ -44,7 +44,7 @@ export function CompanySwitcher({ onNavigate }: { onNavigate?: () => void }) {
 
   // Fecha ao clicar fora ou apertar Esc.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !hasMenu) return;
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
@@ -69,6 +69,10 @@ export function CompanySwitcher({ onNavigate }: { onNavigate?: () => void }) {
     close();
     navigate('/dashboard');
   }
+
+  // Uma empresa e sem permissao de multiempresa: nao mostra o seletor (menu
+  // volta a ser como antes, so a logo + navegacao).
+  if (!hasMenu) return null;
 
   return (
     <div className="csw" ref={ref}>

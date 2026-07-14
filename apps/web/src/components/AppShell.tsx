@@ -3,7 +3,6 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminMe } from '../admin/useAdminMe';
 import { CompanySwitcher } from '../company/CompanySwitcher';
-import { Logo } from './Logo';
 import { LogoWhite } from './LogoWhite';
 import { Button } from './ui/Button';
 import './appshell.css';
@@ -58,7 +57,7 @@ export function AppShell() {
         <button className="shell-burger" aria-label="Abrir menu" onClick={() => setMenuOpen(true)}>
           <IconMenu />
         </button>
-        <Logo height={22} />
+        <LogoWhite height={24} />
       </header>
 
       {menuOpen && <div className="shell-backdrop" onClick={closeMenu} />}
