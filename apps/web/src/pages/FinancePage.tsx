@@ -578,7 +578,10 @@ function MovRow({
               {overdue ? 'Vencida' : 'A pagar'}
             </span>
           ) : paidExpense ? (
-            <span className="fin-mov__badge fin-mov__badge--paid">Paga</span>
+            <>
+              <span className="fin-mov__badge">Despesa</span>
+              <span className="fin-mov__badge fin-mov__badge--paid">Paga</span>
+            </>
           ) : (
             <span
               className={
@@ -590,8 +593,8 @@ function MovRow({
             </span>
           )}
           {e.recurringCostId && (
-            <span className="fin-mov__badge fin-mov__badge--rec" title="Gerada automaticamente do custo recorrente">
-              automática
+            <span className="fin-mov__badge fin-mov__badge--rec" title="Gerada a partir de um custo recorrente">
+              recorrente
             </span>
           )}
         </span>
