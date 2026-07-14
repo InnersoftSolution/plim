@@ -610,9 +610,8 @@ function ParticipanteRow({
         <span className="ac-status ac-status--paid">Pago</span>
       ) : (
         <div className="ac-debt__actions">
-          <span className={'ac-status' + (status === 'parcial' ? ' ac-status--partial' : '')}>
-            {status === 'parcial' ? 'Parcial' : 'Em aberto'}
-          </span>
+          {/* "Pendente" no topo do card + "em aberto R$X" no texto já indicam o
+              status; o selo aqui seria redundante. Só o botão de ação. */}
           <Button onClick={onPay}>Registrar pagamento</Button>
         </div>
       )}
