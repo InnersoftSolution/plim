@@ -1,4 +1,58 @@
-/* ── Saldo de cada sócio: card com resultado grande + mini extrato ── */
+/* ── Bloco A: Resumo dos acertos (quem paga pra quem, com ação) ── */
+.sac-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sac {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: var(--color-bg-surface);
+}
+.sac__avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.sac__body {
+  flex: 1;
+  min-width: 0;
+}
+.sac__line {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text-default);
+}
+.sac__amount {
+  color: var(--rose-600);
+}
+.sac__status {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-status-warning-bg);
+  color: #b97a10;
+}
+.sac .btn {
+  flex-shrink: 0;
+}
+
+/* ── Bloco B: Detalhamento por sócio (resultado + cálculo recolhível) ── */
 .sld-list {
   display: flex;
   flex-direction: column;
@@ -9,13 +63,6 @@
   border-radius: 16px;
   background: var(--color-bg-surface);
   padding: 16px 18px;
-  border-left: 3px solid var(--color-border-default);
-}
-.sld--pay {
-  border-left-color: var(--rose-500, #f43f5e);
-}
-.sld--receive {
-  border-left-color: var(--color-status-positive);
 }
 .sld__head {
   display: flex;
@@ -45,47 +92,78 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sld__net {
+.sld__chip {
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.2;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--color-bg-default);
+  color: var(--color-text-subtle);
 }
-.sld__net strong {
+.sld__chip--pay {
+  background: #ffe4e9;
+  color: var(--rose-600);
+}
+.sld__chip--receive {
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+}
+.sld__result {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sld__result-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.sld__result-value {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--color-text-subtle);
 }
-.sld--pay .sld__net strong {
+.sld--pay .sld__result-value {
   color: var(--rose-600);
 }
-.sld--receive .sld__net strong {
+.sld--receive .sld__result-value {
   color: var(--color-status-positive);
 }
-.sld__net small {
-  font-size: 11px;
+.sld__explain {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.sld__toggle {
+  margin-top: 10px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-top: 2px;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.sld__toggle:hover {
+  text-decoration: underline;
 }
 .sld__break {
-  margin-top: 12px;
+  margin-top: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--color-border-default);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .sld__row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
+  gap: 12px;
 }
 .sld__row dt {
   font-size: 13px;
@@ -98,10 +176,28 @@
   color: var(--color-text-default);
   white-space: nowrap;
 }
+.sld__row--final {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border-default);
+}
+.sld__row--final dt {
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.sld__note {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-subtle);
+}
 
 @media (max-width: 560px) {
-  .sld__break {
-    grid-template-columns: 1fr;
+  .sac {
+    flex-wrap: wrap;
+  }
+  .sac .btn {
+    width: 100%;
   }
 }
 

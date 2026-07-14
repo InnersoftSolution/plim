@@ -8,6 +8,7 @@ import {
   type MovementDebt,
   type MovementSettlement,
   type PaymentMethod,
+  type Settlement,
   type SettlementPayment,
 } from '@plim/shared';
 import { Button } from '../components/ui/Button';
@@ -34,6 +35,7 @@ type State =
       balances: MemberBalance[];
       movements: MovementSettlement[];
       payments: SettlementPayment[];
+      settlements: Settlement[];
     };
 
 /** Alvo do pagamento: uma dívida específica dentro de uma movimentação. */
@@ -94,6 +96,10 @@ function makeMatcher(query: string): (haystack: string) => boolean {
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [paying, setPaying] = useState<PayTarget | null>(null);
+  // Pagamento consolidado (net) do bloco "Resumo dos acertos".
+  const [netPaying, setNetPaying] = useState<Settlement | null>(null);
+  // Sócios com "Ver cálculo" aberto no detalhamento.
+  const [openCalc, setOpenCalc] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const { company: activeCompany } = useActiveCompany();
   // Arquivo por ano: /acertos/2025 abre uma página só daquele ano.
@@ -103,13 +109,14 @@ export function AcertosPage() {
 
   const load = useCallback(async () => {
     try {
-      const [members, balances, movements, payments] = await Promise.all([
+      const [members, balances, movements, payments, settlements] = await Promise.all([
         companyApi.listMembers(activeCompany.id),
         financeApi.getBalances(activeCompany.id),
         financeApi.getMovementSettlements(activeCompany.id),
         financeApi.listSettlementPayments(activeCompany.id),
+        financeApi.getSettlements(activeCompany.id),
       ]);
-      setState({ status: 'ready', company: activeCompany, members, balances, movements, payments });
+      setState({ status: 'ready', company: activeCompany, members, balances, movements, payments, settlements });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
@@ -123,7 +130,7 @@ export function AcertosPage() {
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="dash-muted">Crie sua empresa primeiro.</p>;
 
-  const { company, balances, movements, payments } = state;
+  const { company, balances, movements, payments, settlements } = state;
   const nameOf = (id: string) => state.members.find((m) => m.id === id)?.fullName ?? 'Sócio';
 
   // Anos anteriores com movimentação: viram cards de arquivo no topo.
@@ -305,68 +312,133 @@ export function AcertosPage() {
         </section>
       )}
 
-      {/* ── saldo de cada sócio (resumo líquido "de agora"; some no arquivo) ── */}
+      {/* ── Bloco A: Resumo dos acertos (o resultado consolidado + ação) ── */}
       {!archiveYear && (
-      <section className="dash-panel">
-        <div className="dash-panel__head">
-          <h2>Saldo de cada sócio</h2>
-        </div>
-        <p className="dash-panel__hint">
-          A parte que cabe a cada um nas despesas, menos o que já pagou. O saldo é o que ainda
-          falta acertar.
-        </p>
-        <div className="sld-list">
-          {balances.map((b) => {
-            const net = b.netCents;
-            // Acertos confirmados: o que o sócio já pagou e já recebeu de acerto.
-            const acertosPagos = payments
-              .filter((p) => p.status === 'confirmed' && p.fromMemberId === b.memberId)
-              .reduce((s, p) => s + p.amountCents, 0);
-            const acertosRecebidos = payments
-              .filter((p) => p.status === 'confirmed' && p.toMemberId === b.memberId)
-              .reduce((s, p) => s + p.amountCents, 0);
-            const tone = net > 0 ? 'receive' : net < 0 ? 'pay' : 'quite';
-            const label = net > 0 ? 'a receber' : net < 0 ? 'falta pagar' : 'tudo quite';
-            const fmt = (c: number) => formatMoney(c, company.currencyCode);
-            return (
-              <article className={'sld sld--' + tone} key={b.memberId}>
-                <div className="sld__head">
-                  <span className="sld__avatar">{initials(b.fullName)}</span>
-                  <span className="sld__name">{b.fullName}</span>
-                  <span className="sld__net">
-                    <strong data-financial>{net === 0 ? fmt(0) : fmt(Math.abs(net))}</strong>
-                    <small>{label}</small>
-                  </span>
-                </div>
-                <dl className="sld__break">
-                  <div className="sld__row">
-                    <dt>Parte nas despesas</dt>
-                    <dd data-financial>{fmt(b.owedCents)}</dd>
+        <section className="dash-panel">
+          <div className="dash-panel__head">
+            <h2>Resumo dos acertos</h2>
+          </div>
+          <p className="dash-panel__hint">
+            Quando alguém paga mais do que a parte dele, o Plim cruza as despesas e mostra quem ainda
+            precisa pagar e quem deve receber.
+          </p>
+          {settlements.length === 0 ? (
+            <div className="dash-emptyrow">
+              <p>
+                <strong>Tudo certo entre os sócios.</strong> Nenhum pagamento pendente no momento.
+              </p>
+            </div>
+          ) : (
+            <div className="sac-list">
+              {settlements.map((s) => (
+                <article className="sac" key={`${s.fromMemberId}-${s.toMemberId}`}>
+                  <span className="sac__avatar">{initials(s.fromName)}</span>
+                  <div className="sac__body">
+                    <p className="sac__line">
+                      <strong>{s.fromName}</strong> precisa pagar{' '}
+                      <strong className="sac__amount" data-financial>
+                        {formatMoney(s.amountCents, company.currencyCode)}
+                      </strong>{' '}
+                      para <strong>{s.toName}</strong>
+                    </p>
+                    <span className="sac__status">Pendente</span>
                   </div>
-                  {b.paidCents > 0 && (
-                    <div className="sld__row">
-                      <dt>Pagou em despesas</dt>
-                      <dd data-financial>{fmt(b.paidCents)}</dd>
-                    </div>
+                  <Button onClick={() => setNetPaying(s)}>Registrar pagamento</Button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Bloco B: Detalhamento por sócio (explica o cálculo; some no arquivo) ── */}
+      {!archiveYear && (
+        <section className="dash-panel">
+          <div className="dash-panel__head">
+            <h2>Detalhamento por sócio</h2>
+          </div>
+          <p className="dash-panel__hint">Entenda como o Plim chegou ao saldo de cada pessoa.</p>
+          <div className="sld-list">
+            {balances.map((b) => {
+              const net = b.netCents;
+              const acertosPagos = payments
+                .filter((p) => p.status === 'confirmed' && p.fromMemberId === b.memberId)
+                .reduce((s, p) => s + p.amountCents, 0);
+              const acertosRecebidos = payments
+                .filter((p) => p.status === 'confirmed' && p.toMemberId === b.memberId)
+                .reduce((s, p) => s + p.amountCents, 0);
+              const tone = net > 0 ? 'receive' : net < 0 ? 'pay' : 'quite';
+              const fmt = (c: number) => formatMoney(c, company.currencyCode);
+              const result =
+                net < 0 ? 'Precisa pagar' : net > 0 ? 'Vai receber' : 'Tudo certo';
+              const explain =
+                net < 0
+                  ? 'Esse saldo considera a parte que cabia, o que já pagou e os acertos registrados.'
+                  : net > 0
+                    ? 'Pagou mais despesas do que a parte que cabia, então tem valor a receber.'
+                    : 'As contas estão em dia com os outros sócios.';
+              const open = !!openCalc[b.memberId];
+              return (
+                <article className={'sld sld--' + tone} key={b.memberId}>
+                  <div className="sld__head">
+                    <span className="sld__avatar">{initials(b.fullName)}</span>
+                    <span className="sld__name">{b.fullName}</span>
+                    <span className={'sld__chip sld__chip--' + tone}>{result}</span>
+                  </div>
+                  <div className="sld__result">
+                    <span className="sld__result-label">{result}</span>
+                    <strong className="sld__result-value" data-financial>
+                      {net === 0 ? fmt(0) : fmt(Math.abs(net))}
+                    </strong>
+                  </div>
+                  <p className="sld__explain">{explain}</p>
+                  <button
+                    type="button"
+                    className="sld__toggle"
+                    aria-expanded={open}
+                    onClick={() => setOpenCalc((m) => ({ ...m, [b.memberId]: !open }))}
+                  >
+                    {open ? 'Ocultar cálculo' : 'Ver cálculo'}
+                  </button>
+                  {open && (
+                    <dl className="sld__break">
+                      <div className="sld__row">
+                        <dt>Parte que cabia a ele</dt>
+                        <dd data-financial>{fmt(b.owedCents)}</dd>
+                      </div>
+                      <div className="sld__row">
+                        <dt>Pagou despesas pela empresa</dt>
+                        <dd data-financial>{fmt(b.paidCents)}</dd>
+                      </div>
+                      {acertosPagos > 0 && (
+                        <div className="sld__row">
+                          <dt>Já pagou para sócios</dt>
+                          <dd data-financial>{fmt(acertosPagos)}</dd>
+                        </div>
+                      )}
+                      {acertosRecebidos > 0 && (
+                        <div className="sld__row">
+                          <dt>Já recebeu de sócios</dt>
+                          <dd data-financial>{fmt(acertosRecebidos)}</dd>
+                        </div>
+                      )}
+                      <div className="sld__row sld__row--final">
+                        <dt>Saldo final</dt>
+                        <dd data-financial>
+                          {result} {net === 0 ? '' : fmt(Math.abs(net))}
+                        </dd>
+                      </div>
+                    </dl>
                   )}
-                  {acertosPagos > 0 && (
-                    <div className="sld__row">
-                      <dt>Pagou em acertos</dt>
-                      <dd data-financial>{fmt(acertosPagos)}</dd>
-                    </div>
-                  )}
-                  {acertosRecebidos > 0 && (
-                    <div className="sld__row">
-                      <dt>Recebeu de acertos</dt>
-                      <dd data-financial>{fmt(acertosRecebidos)}</dd>
-                    </div>
-                  )}
-                </dl>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+                </article>
+              );
+            })}
+          </div>
+          <p className="sld__note">
+            <strong>Nota:</strong> aportes não entram nesses acertos. São tratados separadamente das
+            despesas compartilhadas.
+          </p>
+        </section>
       )}
 
       {/* ── modal registrar pagamento (amarrado à movimentação) ── */}
@@ -386,6 +458,25 @@ export function AcertosPage() {
             target={paying}
             onSaved={() => {
               setPaying(null);
+              void load();
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* ── modal registrar pagamento consolidado (net, do Resumo) ── */}
+      <Modal
+        open={netPaying !== null}
+        title="Registrar pagamento"
+        subtitle={netPaying ? `${netPaying.fromName} → ${netPaying.toName}` : ''}
+        onClose={() => setNetPaying(null)}
+      >
+        {netPaying && (
+          <NetPaymentForm
+            company={company}
+            settlement={netPaying}
+            onSaved={() => {
+              setNetPaying(null);
               void load();
             }}
           />
@@ -616,6 +707,102 @@ function PaymentForm({
         {isPartial
           ? `Pagamento parcial: sobra ${formatMoney(debt.remainingCents - (cents ?? 0), company.currencyCode)} nessa movimentação.`
           : 'Esse valor quita a parte dele nessa movimentação.'}
+      </p>
+      <div className="mw-actions">
+        <Button type="submit" block disabled={saving}>
+          {saving ? 'Registrando…' : isPartial ? 'Registrar pagamento parcial' : 'Registrar e quitar'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Pagamento consolidado do par (net), a partir do "Resumo dos acertos". */
+function NetPaymentForm({
+  company,
+  settlement,
+  onSaved,
+}: {
+  company: Company;
+  settlement: Settlement;
+  onSaved: () => void;
+}) {
+  const [amount, setAmount] = useState(
+    maskMoneyBRL(String(settlement.amountCents / 100).replace('.', ',')),
+  );
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [method, setMethod] = useState<PaymentMethod | ''>('pix');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const cents = maskedMoneyToCents(amount);
+  const isPartial = cents != null && cents < settlement.amountCents;
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (cents == null) return setError('Informe um valor válido.');
+    if (cents > settlement.amountCents) {
+      return setError(
+        `O valor é maior que o pendente entre eles (${formatMoney(settlement.amountCents, company.currencyCode)}).`,
+      );
+    }
+    setSaving(true);
+    try {
+      await financeApi.createSettlementPayment(company.id, {
+        fromMemberId: settlement.fromMemberId,
+        toMemberId: settlement.toMemberId,
+        amountCents: cents,
+        paidOn: date,
+        method: method || null,
+        note: note.trim() || null,
+      });
+      onSaved();
+    } catch (err) {
+      setError(messageForError(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="mw" onSubmit={handleSubmit} noValidate>
+      {error && <div className="form-error">{error}</div>}
+      <p className="mw-hint" style={{ marginTop: 0 }}>
+        {settlement.fromName} precisa pagar {formatMoney(settlement.amountCents, company.currencyCode)} para{' '}
+        {settlement.toName}, o saldo consolidado de todas as despesas entre eles.
+      </p>
+      <div className="mw-form">
+        <Input
+          label={`Valor pago (${company.currencyCode ?? 'BRL'})`}
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
+          autoFocus
+        />
+        <div className="rc-grid">
+          <div className="field">
+            <label className="field__label">Data do pagamento</label>
+            <DateField value={date} onChange={setDate} max={new Date().toISOString().slice(0, 10)} />
+          </div>
+          <Select
+            label="Forma de pagamento"
+            value={method}
+            onChange={(v) => setMethod(v as PaymentMethod)}
+            options={paymentMethodCatalog.map((m) => ({ value: m.id, label: m.label }))}
+          />
+        </div>
+        <Input
+          label="Observação (opcional)"
+          placeholder="Ex.: Pix do acerto do mês"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      <p className="mw-hint">
+        {isPartial
+          ? `Pagamento parcial: sobra ${formatMoney(settlement.amountCents - (cents ?? 0), company.currencyCode)} entre eles.`
+          : 'Esse valor zera o acerto entre os dois.'}
       </p>
       <div className="mw-actions">
         <Button type="submit" block disabled={saving}>
