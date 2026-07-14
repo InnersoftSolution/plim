@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
+  type Category,
   type Company,
   type CompanyMember,
   type Expense,
@@ -18,6 +19,7 @@ import { MovementWizard } from '../finance/MovementWizard';
 import { MovementEditForm } from '../finance/MovementEditForm';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
+import { categoryApi } from '../finance/categoryApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
 import { IconArrowRight, IconCheck, IconPlus, IconRepeat, IconWallet } from './dashIcons';
@@ -39,6 +41,7 @@ type State =
       members: CompanyMember[];
       expenses: Expense[];
       recurring: RecurringCostList;
+      categories: Category[];
     };
 
 type Filter = 'todos' | 'receitas' | 'despesas' | 'aportes' | 'recorrentes' | 'a-pagar';
@@ -64,12 +67,13 @@ export function FinancePage() {
 
   const load = useCallback(async () => {
     try {
-      const [members, expenses, recurring] = await Promise.all([
+      const [members, expenses, recurring, categories] = await Promise.all([
         companyApi.listMembers(activeCompany.id),
         financeApi.listExpenses(activeCompany.id),
         recurringApi.list(activeCompany.id),
+        categoryApi.list(activeCompany.id).catch(() => [] as Category[]),
       ]);
-      setState({ status: 'ready', company: activeCompany, members, expenses, recurring });
+      setState({ status: 'ready', company: activeCompany, members, expenses, recurring, categories });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
@@ -107,8 +111,10 @@ export function FinancePage() {
   if (state.status === 'error') return <p className="fin-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="fin-muted">Crie sua empresa primeiro.</p>;
 
-  const { company, members, expenses, recurring } = state;
+  const { company, members, expenses, recurring, categories } = state;
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
+  const categoryOf = (id: string | null) =>
+    id ? categories.find((c) => c.id === id) ?? null : null;
   const currency = company.currencyCode;
 
   /* ── números dos cards, só CONFIRMADAS e PAGAS entram (aporte não é gasto, RB002) ── */
@@ -445,6 +451,7 @@ export function FinancePage() {
             item={detail}
             currency={currency}
             nameOf={nameOf}
+            category={detail.kind !== 'recurring' ? categoryOf(detail.expense.categoryId) : null}
             generatesSettlement={generatesSettlement}
             busy={busyId != null}
             onDecide={async (id, d) => {
@@ -679,6 +686,7 @@ function MovDetail({
   item,
   currency,
   nameOf,
+  category,
   generatesSettlement,
   busy,
   onDecide,
@@ -692,6 +700,7 @@ function MovDetail({
   item: MovItem;
   currency: string | null;
   nameOf: (id: string) => string;
+  category: Category | null;
   generatesSettlement: (e: Expense) => boolean;
   busy: boolean;
   onDecide: (expenseId: string, decision: 'confirm' | 'refuse') => void;
@@ -899,6 +908,21 @@ function MovDetail({
               )}
               {item.expense.kind === 'revenue' && item.expense.source && (
                 <Row k="Origem" v={item.expense.source} />
+              )}
+              {item.expense.kind !== 'contribution' && (
+                <Row k="Categoria" v={category ? category.name : 'Sem categoria'} />
+              )}
+              {item.expense.tags.length > 0 && (
+                <div className="mw-review__row">
+                  <span>Tags</span>
+                  <span className="movd-tags">
+                    {item.expense.tags.map((t) => (
+                      <span className="movd-tag" key={t}>
+                        {t}
+                      </span>
+                    ))}
+                  </span>
+                </div>
               )}
               <Row
                 k={

@@ -57,7 +57,7 @@ export class InMemoryFinanceRepository implements FinanceRepository {
     patch: Partial<
       Pick<
         Expense,
-        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'
       >
     >,
   ): Promise<Expense> {

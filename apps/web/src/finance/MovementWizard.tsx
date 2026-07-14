@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import type { Company, CompanyMember, ExpenseSplitMode } from '@plim/shared';
+import { useEffect, useState } from 'react';
+import type { Category, Company, CompanyMember, ExpenseSplitMode } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
+import { categoryApi } from './categoryApi';
+import { CategoriaSelect, TagsInput } from './CategoryFields';
 import { RecurringCostForm } from './RecurringCostForm';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
@@ -133,8 +135,22 @@ export function MovementWizard({
   const [newAccount, setNewAccount] = useState('');
   /** Sócios que já acertaram a parte deles com o pagador (despesa já paga). */
   const [settledIds, setSettledIds] = useState<string[]>([]);
+  /** Categorias da empresa + a categoria/tags escolhidas para esta movimentação. */
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    categoryApi.list(company.id).then(setCategories).catch(() => setCategories([]));
+  }, [company.id]);
+
+  async function createCategoryInline(name: string, color: string): Promise<Category | null> {
+    const created = await categoryApi.create(company.id, { name, color });
+    setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  }
 
   const stepIdx = step === 'recurring' ? -1 : STEPS.indexOf(step);
   const isExpense = type === 'expense';
@@ -271,6 +287,8 @@ export function MovementWizard({
             paymentStatus === 'paid' && settledIds.length > 0
               ? settledIds.filter((id) => id !== memberId)
               : undefined,
+          categoryId,
+          tags,
         });
       } else if (type === 'revenue') {
         await financeApi.createRevenue(company.id, {
@@ -281,6 +299,8 @@ export function MovementWizard({
           source: source.trim() || null,
           receivedOn: date,
           note: note.trim() || null,
+          categoryId,
+          tags,
         });
       } else {
         await financeApi.createContribution(company.id, {
@@ -378,6 +398,18 @@ export function MovementWizard({
               onChange={(e) => setDescription(e.target.value)}
               autoFocus
             />
+            {(isExpense || isRevenue) && (
+              <>
+                <CategoriaSelect
+                  categories={categories}
+                  value={categoryId}
+                  onChange={setCategoryId}
+                  onCreate={createCategoryInline}
+                  movementType={isRevenue ? 'receita' : 'despesa'}
+                />
+                <TagsInput value={tags} onChange={setTags} />
+              </>
+            )}
             <Input
               label={`Valor (${company.currencyCode ?? 'BRL'})`}
               inputMode="decimal"

@@ -61,5 +61,9 @@ export interface Expense {
   recurringCostId: string | null;
   /** Competência da cobrança gerada (YYYY-MM-DD); par único com o custo. */
   recurringChargeOn: string | null;
+  /** Categoria principal (nulo = "Sem categoria"). */
+  categoryId: string | null;
+  /** Tags livres (ex.: "Adobe", "AWS"). */
+  tags: string[];
   createdAt: Date;
 }

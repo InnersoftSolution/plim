@@ -12,6 +12,7 @@ import { recurringRoutes } from './http/routes/recurring.routes';
 import { partnerRoutes } from './http/routes/partner.routes';
 import { activityRoutes } from './http/routes/activity.routes';
 import { checklistRoutes } from './http/routes/checklist.routes';
+import { categoryRoutes } from './http/routes/category.routes';
 import { adminRoutes } from './http/routes/admin.routes';
 import { CompanyService } from './services/company.service';
 import { AdvisorService } from './services/advisor.service';
@@ -21,6 +22,7 @@ import { PartnerService } from './services/partner.service';
 import { RecurringService } from './services/recurring.service';
 import { ActivityService } from './services/activity.service';
 import { ChecklistService } from './services/checklist.service';
+import { CategoryService } from './services/category.service';
 import { AdminService } from './services/admin.service';
 import type { CompanyRepository } from './repositories/company.repository';
 import type { JourneyRepository } from './repositories/journey.repository';
@@ -48,6 +50,9 @@ import { SupabaseRecurringRepository } from './repositories/supabase/recurring.r
 import { SupabaseActivityRepository } from './repositories/supabase/activity.repository.supabase';
 import { SupabaseChecklistRepository } from './repositories/supabase/checklist.repository.supabase';
 import type { ChecklistRepository } from './repositories/checklist.repository';
+import type { CategoryRepository } from './repositories/category.repository';
+import { InMemoryCategoryRepository } from './repositories/in-memory/category.repository.memory';
+import { SupabaseCategoryRepository } from './repositories/supabase/category.repository.supabase';
 import { SupabaseAdminRepository } from './repositories/supabase/admin.repository.supabase';
 import { env, isSupabaseConfigured, isLlmConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
@@ -109,6 +114,11 @@ export function buildApp(): FastifyInstance {
     : new InMemoryChecklistRepository();
   const checklistService = new ChecklistService(companyService, checklistRepository);
 
+  const categoryRepository: CategoryRepository = isSupabaseConfigured
+    ? new SupabaseCategoryRepository(getSupabaseAdmin())
+    : new InMemoryCategoryRepository();
+  const categoryService = new CategoryService(companyService, categoryRepository);
+
   // Painel Administrativo interno (equipe do Plim): permissão validada no service.
   const adminRepository: AdminRepository = isSupabaseConfigured
     ? new SupabaseAdminRepository(getSupabaseAdmin())
@@ -143,6 +153,7 @@ export function buildApp(): FastifyInstance {
   app.register(recurringRoutes, { service: recurringService });
   app.register(activityRoutes, { service: activityService });
   app.register(checklistRoutes, { service: checklistService });
+  app.register(categoryRoutes, { service: categoryService });
   app.register(adminRoutes, { service: adminService });
 
   app.setErrorHandler((error, _request, reply) => {

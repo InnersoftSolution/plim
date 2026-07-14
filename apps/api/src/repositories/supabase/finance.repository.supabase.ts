@@ -52,6 +52,8 @@ interface ExpenseRow {
   created_by_member_id: string | null;
   recurring_cost_id: string | null;
   recurring_charge_on: string | null;
+  category_id: string | null;
+  tags: string[] | null;
   created_at: string;
   expense_shares: { member_id: string; share_cents: number }[] | null;
 }
@@ -76,6 +78,8 @@ function toExpense(row: ExpenseRow): Expense {
     createdByMemberId: row.created_by_member_id,
     recurringCostId: row.recurring_cost_id ?? null,
     recurringChargeOn: row.recurring_charge_on ?? null,
+    categoryId: row.category_id ?? null,
+    tags: row.tags ?? [],
     shares: (row.expense_shares ?? []).map((s) => ({
       memberId: s.member_id,
       shareCents: s.share_cents,
@@ -109,6 +113,8 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         created_by_member_id: data.createdByMemberId,
         recurring_cost_id: data.recurringCostId,
         recurring_charge_on: data.recurringChargeOn,
+        category_id: data.categoryId,
+        tags: data.tags,
       })
       .select('id, created_at')
       .single<{ id: string; created_at: string }>();
@@ -213,7 +219,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     patch: Partial<
       Pick<
         Expense,
-        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'
       >
     >,
   ): Promise<Expense> {
@@ -227,6 +233,8 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     if (patch.splitMode !== undefined) row.split_mode = patch.splitMode;
     if (patch.source !== undefined) row.source = patch.source;
     if (patch.account !== undefined) row.account = patch.account;
+    if (patch.categoryId !== undefined) row.category_id = patch.categoryId;
+    if (patch.tags !== undefined) row.tags = patch.tags;
 
     if (Object.keys(row).length > 0) {
       const { error } = await this.db.from('expenses').update(row).eq('id', expenseId);

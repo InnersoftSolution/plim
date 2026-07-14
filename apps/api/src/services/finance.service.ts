@@ -151,6 +151,8 @@ export class FinanceService {
             createdByMemberId: null,
             recurringCostId: cost.id,
             recurringChargeOn: charge,
+            categoryId: null,
+            tags: [],
           });
         }
         charge = nextChargeDate(charge, cost.frequency);
@@ -200,6 +202,8 @@ export class FinanceService {
       createdByMemberId: conf.createdByMemberId,
       recurringCostId: null,
       recurringChargeOn: null,
+      categoryId: input.categoryId ?? null,
+      tags: input.tags ?? [],
     });
 
     // "Fulano já me pagou a parte dele": registra o acerto na hora, junto
@@ -280,6 +284,8 @@ export class FinanceService {
       createdByMemberId: conf.createdByMemberId,
       recurringCostId: null,
       recurringChargeOn: null,
+      categoryId: input.categoryId ?? null,
+      tags: input.tags ?? [],
     });
 
     // "Fulano já me pagou a parte dele" no momento do aporte: registra o acerto.
@@ -349,6 +355,8 @@ export class FinanceService {
       createdByMemberId: conf.createdByMemberId,
       recurringCostId: null,
       recurringChargeOn: null,
+      categoryId: input.categoryId ?? null,
+      tags: input.tags ?? [],
     });
   }
 
@@ -476,13 +484,15 @@ export class FinanceService {
     const patch: Partial<
       Pick<
         Expense,
-        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'
       >
     > = {};
     if (input.description !== undefined) patch.description = input.description;
     if (input.amountCents !== undefined) patch.amountCents = input.amountCents;
     if (input.spentOn !== undefined) patch.spentOn = input.spentOn;
     if (input.note !== undefined) patch.note = input.note;
+    if (input.categoryId !== undefined) patch.categoryId = input.categoryId;
+    if (input.tags !== undefined) patch.tags = input.tags;
     if (isRevenue) {
       if (input.source !== undefined) patch.source = input.source;
       if (input.account !== undefined) patch.account = input.account;

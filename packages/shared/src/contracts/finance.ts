@@ -126,6 +126,10 @@ export const createExpenseSchema = z.object({
    * de acerto de cada um automaticamente.
    */
   settledMemberIds: z.array(z.string().uuid()).optional(),
+  /** Categoria principal (nulo/ausente = "Sem categoria"). */
+  categoryId: z.string().uuid().nullable().optional(),
+  /** Tags livres opcionais. */
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
@@ -154,6 +158,8 @@ export const updateMovementSchema = z
     customShares: z.array(expenseShareSchema).optional(),
     source: z.string().trim().max(60).nullable().optional(),
     account: z.string().trim().max(60).nullable().optional(),
+    categoryId: z.string().uuid().nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar.' });
 export type UpdateMovementInput = z.infer<typeof updateMovementSchema>;
@@ -173,6 +179,10 @@ export const createRevenueSchema = z.object({
   source: z.string().trim().max(60).nullable().optional(),
   receivedOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
   note: z.string().trim().max(300).nullable().optional(),
+  /** Categoria principal (nulo/ausente = "Sem categoria"). */
+  categoryId: z.string().uuid().nullable().optional(),
+  /** Tags livres opcionais. */
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
 });
 export type CreateRevenueInput = z.infer<typeof createRevenueSchema>;
 
@@ -203,6 +213,10 @@ export const createContributionSchema = z.object({
    * (só vale para aporte reembolsável). O Plim registra o acerto na hora.
    */
   settledMemberIds: z.array(z.string().uuid()).optional(),
+  /** Categoria principal (nulo/ausente = "Sem categoria"). */
+  categoryId: z.string().uuid().nullable().optional(),
+  /** Tags livres opcionais. */
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
 });
 export type CreateContributionInput = z.infer<typeof createContributionSchema>;
 
@@ -233,6 +247,10 @@ export const expenseSchema = z.object({
   createdByMemberId: z.string().uuid().nullable(),
   /** Custo recorrente que gerou esta cobrança (nulo em lançamento manual). */
   recurringCostId: z.string().uuid().nullable().default(null),
+  /** Categoria principal da movimentação (nulo = "Sem categoria"). */
+  categoryId: z.string().uuid().nullable().default(null),
+  /** Tags livres, para granularidade extra (ex.: "Adobe", "AWS"). */
+  tags: z.array(z.string()).default([]),
   /** True quando o usuário logado é o pagador e a movimentação está pendente. */
   canConfirm: z.boolean().default(false),
   createdAt: z.string().datetime(),

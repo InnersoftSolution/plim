@@ -486,6 +486,22 @@
 .fin-mov__badge--overdue { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
 .fin-mov__badge--paid { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 
+/* tags no detalhe da movimentação */
+.movd-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.movd-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+}
+
 /* ── alerta de contas a pagar (Movimentações) ── */
 .fin-due {
   border: 1px solid var(--color-status-warning);

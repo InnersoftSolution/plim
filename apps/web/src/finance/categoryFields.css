@@ -1,0 +1,112 @@
+/* Campos de categoria e tags no cadastro/edição de movimentação. */
+.catf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.catf-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.catf-link:hover {
+  text-decoration: underline;
+}
+.catf-link--add {
+  margin-top: 2px;
+}
+.catf-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.catf-color {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+.catf-new__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+.catf-btn {
+  background: var(--color-brand-primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.catf-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── tags (chips) ── */
+.catf-tags__box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-surface);
+  min-height: 44px;
+}
+.catf-tags__box:focus-within {
+  border-color: var(--color-brand-primary);
+}
+.catf-tags__input {
+  flex: 1;
+  min-width: 90px;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 14px;
+  color: var(--color-text-default);
+  padding: 4px 2px;
+}
+.catf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+}
+.catf-chip__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.catf-chip__x:hover {
+  background: rgba(0, 0, 0, 0.08);
+}

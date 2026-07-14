@@ -1,11 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import type { Company, CompanyMember, Expense, ExpenseSplitMode, UpdateMovementInput } from '@plim/shared';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { Category, Company, CompanyMember, Expense, ExpenseSplitMode, UpdateMovementInput } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { financeApi, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
+import { categoryApi } from './categoryApi';
+import { CategoriaSelect, TagsInput } from './CategoryFields';
 import './wizard.css';
 
 /**
@@ -45,9 +47,23 @@ export function MovementEditForm({
   const [source, setSource] = useState(expense.source ?? '');
   const [account, setAccount] = useState(expense.account ?? '');
   const [note, setNote] = useState(expense.note ?? '');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState<string | null>(expense.categoryId ?? null);
+  const [tags, setTags] = useState<string[]>(expense.tags ?? []);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (isAporte) return; // aporte não usa categoria
+    categoryApi.list(company.id).then(setCategories).catch(() => setCategories([]));
+  }, [company.id, isAporte]);
+
+  async function createCategoryInline(name: string, color: string): Promise<Category | null> {
+    const created = await categoryApi.create(company.id, { name, color });
+    setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  }
 
   // Custom split não é editável por aqui (a UI só oferece proporcional/igual).
   const customBlocked = expense.splitMode === 'custom';
@@ -75,6 +91,13 @@ export function MovementEditForm({
     } else {
       if (paidBy !== expense.paidByMemberId) patch.paidByMemberId = paidBy;
       if (!customBlocked && splitMode !== expense.splitMode) patch.splitMode = splitMode;
+    }
+    if (!isAporte) {
+      if (categoryId !== (expense.categoryId ?? null)) patch.categoryId = categoryId;
+      const tagsChanged =
+        tags.length !== (expense.tags ?? []).length ||
+        tags.some((t, i) => t !== (expense.tags ?? [])[i]);
+      if (tagsChanged) patch.tags = tags;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -129,6 +152,18 @@ export function MovementEditForm({
           onChange={(e) => setDescription(e.target.value)}
           autoFocus
         />
+        {!isAporte && (
+          <>
+            <CategoriaSelect
+              categories={categories}
+              value={categoryId}
+              onChange={setCategoryId}
+              onCreate={createCategoryInline}
+              movementType={isRevenue ? 'receita' : 'despesa'}
+            />
+            <TagsInput value={tags} onChange={setTags} />
+          </>
+        )}
         <div className="rc-grid">
           <Input
             label={`Valor (${company.currencyCode ?? 'BRL'})`}
