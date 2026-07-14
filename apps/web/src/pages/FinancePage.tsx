@@ -140,8 +140,10 @@ export function FinancePage() {
       return true;
     })
     .map((e) => ({ kind: e.kind, expense: e }) as MovItem);
+  // Cadastro de recorrente é uma REGRA, não uma movimentação: em "Todos" só
+  // aparece a conta a pagar gerada por ele (senão parece a mesma despesa 2x).
   const recurringItems: MovItem[] =
-    filter === 'todos' || filter === 'recorrentes'
+    filter === 'recorrentes'
       ? recurring.costs.map((c) => ({ kind: 'recurring', cost: c }) as MovItem)
       : [];
   const items = [...recurringItems, ...dated];
