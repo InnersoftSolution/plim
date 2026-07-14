@@ -56,7 +56,8 @@ export function FinancePage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const { company: activeCompany } = useActiveCompany();
   const [filter, setFilter] = useState<Filter>('todos');
-  const [thisMonth, setThisMonth] = useState(false);
+  /** Período: '' tudo, 'month' este mês, ou um ano fechado ('2025'). */
+  const [period, setPeriod] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<MovItem | null>(null);
   const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
@@ -121,15 +122,23 @@ export function FinancePage() {
     id ? categories.find((c) => c.id === id) ?? null : null;
   const currency = company.currencyCode;
 
-  /* ── números dos cards, só CONFIRMADAS e PAGAS entram (aporte não é gasto, RB002) ── */
+  /* ── período: tudo, este mês, ou um ano fechado ── */
   const monthKey = new Date().toISOString().slice(0, 7);
+  const inPeriod = (e: Expense) =>
+    period === '' ||
+    (period === 'month' ? e.spentOn.startsWith(monthKey) : e.spentOn.startsWith(period));
+  // Anos com movimentação (para os chips de período; mais recente primeiro).
+  const years = [...new Set(expenses.map((e) => e.spentOn.slice(0, 4)))].sort().reverse();
+
+  /* ── números dos cards, só CONFIRMADAS e PAGAS entram (aporte não é gasto, RB002) ──
+   * Os cards respeitam o período: escolher "2025" vira o resumo daquele ano. */
   const confirmed = (e: Expense) => e.confirmationStatus === 'confirmed';
   const gastoCents = expenses
-    .filter((e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid')
+    .filter((e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid' && inPeriod(e))
     .reduce((s, e) => s + e.amountCents, 0);
   // Receita: dinheiro que entrou (não divide entre sócios, não é gasto).
   const receitaCents = expenses
-    .filter((e) => e.kind === 'revenue' && confirmed(e))
+    .filter((e) => e.kind === 'revenue' && confirmed(e) && inPeriod(e))
     .reduce((s, e) => s + e.amountCents, 0);
   // Saúde do negócio: recebido − gasto (aportes ficam à parte, são capital).
   const resultadoCents = receitaCents - gastoCents;
@@ -148,7 +157,7 @@ export function FinancePage() {
       if (filter === 'receitas' && e.kind !== 'revenue') return false;
       if (filter === 'recorrentes') return false;
       if (filter === 'a-pagar' && !isPayable(e)) return false;
-      if (thisMonth && !e.spentOn.startsWith(monthKey)) return false;
+      if (!inPeriod(e)) return false;
       if (categoryFilter === '__none__' && e.categoryId != null) return false;
       if (categoryFilter && categoryFilter !== '__none__' && e.categoryId !== categoryFilter) return false;
       return true;
@@ -170,7 +179,7 @@ export function FinancePage() {
         e.kind === 'expense' &&
         e.confirmationStatus === 'confirmed' &&
         e.paymentStatus === 'paid' &&
-        (!thisMonth || e.spentOn.startsWith(monthKey)),
+        inPeriod(e),
     );
     const total = paid.reduce((s, e) => s + e.amountCents, 0);
     const map = new Map<string, { id: string | null; totalCents: number; count: number }>();
@@ -229,18 +238,30 @@ export function FinancePage() {
    * Padrão: FLUXO (entrou x saiu) + projeção de gastos do próximo mês.
    * Aba "Aportes": série única de aportes por mês. */
   const isFlowChart = filter !== 'aportes';
+  // Ano fechado ('2025') mostra jan..dez daquele ano; senão, janela adaptativa.
+  const chartPeriod = /^\d{4}$/.test(period) ? period : '';
+  const isYearView = chartPeriod !== '';
   const chart = isFlowChart
-    ? buildFlowSeries(expenses, recurring.monthlyTotalCents)
-    : buildMonthlySeries(expenses, 'contribution', recurring.monthlyTotalCents);
+    ? buildFlowSeries(expenses, recurring.monthlyTotalCents, chartPeriod)
+    : buildMonthlySeries(expenses, 'contribution', recurring.monthlyTotalCents, chartPeriod);
   const showChart = filter !== 'recorrentes' && filter !== 'a-pagar' && !nothingYet;
+  const hasProjection = chart.points.some((p) => p.projected);
   const nextLabel = chart.points.find((p) => p.projected)?.label ?? 'próximo mês';
 
-  const chartTitle = isFlowChart ? 'Entradas e saídas' : 'Aportes por mês';
+  const chartTitle = isFlowChart
+    ? isYearView
+      ? `Entradas e saídas de ${chartPeriod}`
+      : 'Entradas e saídas'
+    : 'Aportes por mês';
   const chartSubtitle = isFlowChart
-    ? 'O que entrou (azul) e o que saiu (vermelho) por mês, com uma estimativa de gastos do próximo mês.'
+    ? isYearView
+      ? `Resumo do ano: o que entrou (azul) e o que saiu (vermelho) mês a mês em ${chartPeriod}.`
+      : 'O que entrou (azul) e o que saiu (vermelho) por mês, com uma estimativa de gastos do próximo mês.'
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
   const chartCaption = isFlowChart
-    ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
+    ? hasProjection
+      ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
+      : `Ano fechado, sem projeção. Volte para "Todos os períodos" para ver a estimativa do próximo mês.`
     : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
   const chartHelp = isFlowChart
     ? 'Azul é o que entrou (receitas), vermelho é o que saiu (despesas); a parte tracejada é o que ainda falta pagar no mês. A última barra é a projeção de gastos do próximo mês: média dos gastos registrados mais os custos recorrentes ativos. Passe o mouse em cada barra para ver o valor.'
@@ -276,8 +297,10 @@ export function FinancePage() {
           <span className="dash-stat__value" data-financial>{formatMoney(gastoCents, currency)}</span>
           <span className="dash-stat__hint">Só despesas, aportes não entram aqui.</span>
         </div>
-        <div className={'dash-stat' + (resultadoCents < 0 ? ' dash-stat--warn' : '')}>
-          <div className={'dash-stat__icon ' + (resultadoCents < 0 ? 'dash-stat__icon--warn' : 'dash-stat__icon--green')}>
+        {/* Resultado negativo é estado comum no início: número em vermelho basta,
+            sem borda de alerta (vermelho forte fica para conta vencida). */}
+        <div className="dash-stat">
+          <div className={'dash-stat__icon ' + (resultadoCents < 0 ? 'dash-stat__icon--ink' : 'dash-stat__icon--green')}>
             <IconRepeat />
           </div>
           <span className="dash-stat__label">Resultado</span>
@@ -407,11 +430,22 @@ export function FinancePage() {
         ))}
         <button
           type="button"
-          className={'fin-chip fin-chip--month' + (thisMonth ? ' fin-chip--active' : '')}
-          onClick={() => setThisMonth((v) => !v)}
+          className={'fin-chip fin-chip--month' + (period === 'month' ? ' fin-chip--active' : '')}
+          onClick={() => setPeriod((p) => (p === 'month' ? '' : 'month'))}
         >
           Este mês
         </button>
+        {years.map((y) => (
+          <button
+            key={y}
+            type="button"
+            className={'fin-chip' + (period === y ? ' fin-chip--active' : '')}
+            onClick={() => setPeriod((p) => (p === y ? '' : y))}
+            title={`Resumo de ${y}: cards, gráfico e lista só daquele ano`}
+          >
+            {y}
+          </button>
+        ))}
       </div>
 
       {/* ── evolução mensal + projeção ── */}
@@ -716,7 +750,9 @@ function MovRow({
             {e.dueDate ? dueLabel(e.dueDate) : 'a pagar'}
           </span>
         ) : conf.status === 'confirmed' ? (
-          <span className={'fin-mov__impact' + (isRevenue ? ' is-ok' : isAporte ? ' is-neutral' : gerou ? ' is-warn' : '')}>
+          // "gerou acerto" é informação, não alerta: cor neutra (vermelho só
+          // para vencida/recusada).
+          <span className={'fin-mov__impact' + (isRevenue ? ' is-ok' : ' is-neutral')}>
             {isRevenue ? 'entrou no caixa' : isAporte ? 'não é gasto' : gerou ? 'gerou acerto' : 'sem acerto'}
           </span>
         ) : (
@@ -1213,35 +1249,79 @@ const freqLabel = (id: string) => recurringFrequencyCatalog.find((f) => f.id ===
  * pagas), mais o "a pagar" do mês. A última barra é a projeção de gastos.
  * Determinística, R$0 de IA.
  */
+/**
+ * Janela de meses do gráfico. Nunca mostra 6 meses vazios: se os últimos 6
+ * meses não têm nada e existe histórico, a janela termina no mês mais recente
+ * com dados. Um ano fechado ('2025') vira jan..dez daquele ano.
+ */
+function chartWindow(period: string, dataMonths: string[]): { keys: string[]; projection: boolean } {
+  const now = new Date();
+  const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (/^\d{4}$/.test(period)) {
+    // Ano fechado: jan..dez, sem projeção (a projeção é da visão corrente).
+    const keys = Array.from({ length: 12 }, (_, i) => `${period}-${String(i + 1).padStart(2, '0')}`);
+    return { keys, projection: false };
+  }
+  let end = new Date(now.getFullYear(), now.getMonth(), 1);
+  const latest = [...dataMonths].sort().pop();
+  if (latest && latest < curKey) {
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+    const hasRecent = dataMonths.some((m) => m >= startKey && m <= curKey);
+    if (!hasRecent) end = new Date(Number(latest.slice(0, 4)), Number(latest.slice(5, 7)) - 1, 1);
+  }
+  const keys: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return { keys, projection: keys[keys.length - 1] === curKey };
+}
+
+/** Rótulo do mês; ganha o ano ("nov 25") quando não é o ano corrente. */
+function monthLabelOf(key: string): string {
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7));
+  const d = new Date(y, m - 1, 1);
+  const short = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+  return y === new Date().getFullYear() ? short : `${short} ${String(y).slice(2)}`;
+}
+
 function buildFlowSeries(
   expenses: Expense[],
   recurringMonthlyCents: number,
+  period: string,
 ): { points: ChartPoint[] } {
   const now = new Date();
-  const monthShort = (d: Date) =>
-    d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+  const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const confirmed = (e: Expense) => e.confirmationStatus === 'confirmed';
   const isIn = (e: Expense) => e.kind === 'revenue' && confirmed(e);
   const isOut = (e: Expense) => e.kind === 'expense' && confirmed(e) && (e.paymentStatus ?? 'paid') === 'paid';
   const isPending = (e: Expense) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'unpaid';
   const billMonth = (e: Expense) => (e.dueDate ?? e.spentOn).slice(0, 7);
 
+  const dataMonths = expenses
+    .filter((e) => isIn(e) || isOut(e) || isPending(e))
+    .map((e) => (isPending(e) ? billMonth(e) : e.spentOn.slice(0, 7)));
+  const { keys, projection } = chartWindow(period, dataMonths);
+
   const points: ChartPoint[] = [];
   const manualOutByMonth: number[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  for (const key of keys) {
     const inCents = expenses.filter((e) => isIn(e) && e.spentOn.startsWith(key)).reduce((s, e) => s + e.amountCents, 0);
     const outExp = expenses.filter((e) => isOut(e) && e.spentOn.startsWith(key));
     const outCents = outExp.reduce((s, e) => s + e.amountCents, 0);
     const pendingCents = expenses.filter((e) => isPending(e) && billMonth(e) === key).reduce((s, e) => s + e.amountCents, 0);
     manualOutByMonth.push(outExp.filter((e) => !e.recurringCostId).reduce((s, e) => s + e.amountCents, 0));
-    points.push({ key, label: monthShort(d), inCents, outCents, pendingCents, current: i === 0 });
+    points.push({ key, label: monthLabelOf(key), inCents, outCents, pendingCents, current: key === curKey });
   }
-  const withData = manualOutByMonth.filter((c) => c > 0);
-  const avg = withData.length > 0 ? Math.round(withData.reduce((s, c) => s + c, 0) / withData.length) : 0;
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  points.push({ key: 'proj', label: monthShort(next), outCents: avg + recurringMonthlyCents, projected: true });
+  if (projection) {
+    const withData = manualOutByMonth.filter((c) => c > 0);
+    const avg = withData.length > 0 ? Math.round(withData.reduce((s, c) => s + c, 0) / withData.length) : 0;
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextKey = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+    points.push({ key: 'proj', label: monthLabelOf(nextKey), outCents: avg + recurringMonthlyCents, projected: true });
+  }
   return { points };
 }
 
@@ -1249,10 +1329,10 @@ function buildMonthlySeries(
   expenses: Expense[],
   kind: 'expense' | 'contribution',
   recurringMonthlyCents: number,
+  period: string,
 ): { points: ChartPoint[] } {
   const now = new Date();
-  const monthShort = (d: Date) =>
-    d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+  const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const points: ChartPoint[] = [];
 
   // Regra do produto: só o que está CONFIRMADO e PAGO conta como gasto REAL.
@@ -1264,30 +1344,34 @@ function buildMonthlySeries(
     e.kind === kind && e.confirmationStatus === 'confirmed' && e.paymentStatus === 'unpaid';
   const billMonth = (e: Expense) => (e.dueDate ?? e.spentOn).slice(0, 7);
 
+  const dataMonths = expenses
+    .filter((e) => counted(e) || pendingBill(e))
+    .map((e) => (pendingBill(e) ? billMonth(e) : e.spentOn.slice(0, 7)));
+  const { keys, projection } = chartWindow(period, dataMonths);
+
   // Base da projeção: só lançamentos manuais. As cobranças geradas de custos
   // recorrentes já entram pela soma recorrente, sem contar duas vezes.
   const manualByMonth: number[] = [];
 
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  for (const key of keys) {
     const inMonth = expenses.filter((e) => counted(e) && e.spentOn.startsWith(key));
     const cents = inMonth.reduce((s, e) => s + e.amountCents, 0);
     const pendingCents = expenses
       .filter((e) => pendingBill(e) && billMonth(e) === key)
       .reduce((s, e) => s + e.amountCents, 0);
     manualByMonth.push(inMonth.filter((e) => !e.recurringCostId).reduce((s, e) => s + e.amountCents, 0));
-    points.push({ key, label: monthShort(d), cents, pendingCents, current: i === 0 });
+    points.push({ key, label: monthLabelOf(key), cents, pendingCents, current: key === curKey });
   }
 
-  if (kind === 'expense') {
+  if (kind === 'expense' && projection) {
     const withData = manualByMonth.filter((c) => c > 0);
     const avg =
       withData.length > 0 ? Math.round(withData.reduce((s, c) => s + c, 0) / withData.length) : 0;
     const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextKey = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
     points.push({
       key: 'proj',
-      label: monthShort(next),
+      label: monthLabelOf(nextKey),
       cents: avg + recurringMonthlyCents,
       projected: true,
     });

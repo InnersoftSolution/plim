@@ -21,7 +21,8 @@
   font-family: var(--font-mono);
   font-size: 16px;
   font-weight: 700;
-  color: var(--rose-600);
+  /* É um total informativo, não um alerta: cor de texto padrão. */
+  color: var(--color-text-default);
 }
 .gpc__empty {
   font-size: 14px;
@@ -103,6 +104,19 @@
 .gpc__meta small {
   font-size: 11px;
   color: var(--color-text-subtle);
+}
+
+.gpc__hint {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.gpc__hint a {
+  font-weight: 600;
+  color: var(--color-brand-primary);
 }
 
 @media (max-width: 640px) {

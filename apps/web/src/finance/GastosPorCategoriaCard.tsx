@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { formatMoney } from './financeApi';
 import './gastosCategoria.css';
 
@@ -56,6 +57,9 @@ export function GastosPorCategoriaCard({
   });
 
   const keyOf = (id: string | null) => id ?? '__none__';
+  // Nada categorizado ainda: o card vira orientação (jornada guiada).
+  const onlyUncategorized = rows.length === 1 && rows[0]!.id === null;
+  const categorizedCount = rows.filter((r) => r.id != null).length;
 
   return (
     <section className="gpc">
@@ -85,10 +89,10 @@ export function GastosPorCategoriaCard({
               ))}
             </g>
             <text x="70" y="66" textAnchor="middle" className="gpc__chart-label">
-              {rows.length}
+              {categorizedCount}
             </text>
             <text x="70" y="82" textAnchor="middle" className="gpc__chart-sub">
-              {rows.length === 1 ? 'categoria' : 'categorias'}
+              {categorizedCount === 1 ? 'categoria' : 'categorias'}
             </text>
           </svg>
         </div>
@@ -117,6 +121,13 @@ export function GastosPorCategoriaCard({
           })}
         </ul>
       </div>
+      {onlyUncategorized && (
+        <p className="gpc__hint">
+          Suas despesas ainda não têm categoria. Abra uma movimentação, toque em{' '}
+          <strong>Editar movimentação</strong> e escolha a categoria para ver aqui para onde o
+          dinheiro está indo. <Link to="/empresa/categorias">Gerenciar categorias</Link>
+        </p>
+      )}
     </section>
   );
 }
