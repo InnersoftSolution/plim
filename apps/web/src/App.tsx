@@ -78,6 +78,7 @@ export function App() {
             <Route path="/financeiro" element={<FinancePage />} />
             <Route path="/financeiro/:ano" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />
+            <Route path="/acertos/:ano" element={<AcertosPage />} />
             <Route path="/empresa/dados" element={<ConfiguracoesPage />} />
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
             <Route path="/socios" element={<SociedadePage />} />

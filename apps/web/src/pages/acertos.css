@@ -105,30 +105,127 @@
   }
 }
 
-/* Barra de filtros: por mês e por despesa. Mobile-first (empilha). */
-.ac-filters {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  align-items: end;
+/* ── busca inteligente (nome, mês ou ano num campo só) ── */
+.ac-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  background: var(--color-bg-surface);
 }
-.ac-filters__clear {
-  justify-self: start;
+.ac-search:focus-within {
+  border-color: var(--color-brand-primary);
+}
+.ac-search__icon {
+  flex-shrink: 0;
+  color: var(--color-text-subtle);
+  display: inline-flex;
+}
+.ac-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 13px 0;
+  font-size: 15px;
+  color: var(--color-text-default);
+}
+.ac-search__clear {
+  flex-shrink: 0;
   background: none;
   border: none;
-  padding: 4px 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-brand-primary);
   cursor: pointer;
 }
-.ac-filters__clear:hover {
+.ac-search__clear:hover {
   text-decoration: underline;
 }
-@media (min-width: 640px) {
-  .ac-filters {
-    grid-template-columns: minmax(160px, 220px) 1fr auto;
+
+/* ── arquivo por ano: link de voltar + cards dos anos anteriores ── */
+.fin-back {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  text-decoration: none;
+}
+.fin-back:hover {
+  text-decoration: underline;
+}
+.fin-years {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fin-years__title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+.fin-years__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 700px) {
+  .fin-years__grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
+}
+.fin-year {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: var(--color-bg-surface);
+  text-decoration: none;
+  transition: border-color 120ms ease;
+}
+.fin-year:hover {
+  border-color: var(--color-brand-primary);
+}
+.fin-year__badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+.fin-year__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fin-year__info strong {
+  font-size: 14px;
+  color: var(--color-text-default);
+}
+.fin-year__info small {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+.fin-year__cta {
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
 }
 
 /* Acertos por origem: cada movimentação é um bloco com as dívidas dos sócios. */

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import {
   paymentMethodCatalog,
   type Company,
@@ -50,24 +51,55 @@ function formatDateBr(iso: string): string {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
+function IconSearch() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
 const MONTHS_PT = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 ];
 
-/** "2026-07" -> "Julho de 2026". */
-function monthLabel(ym: string): string {
-  const [y, m] = ym.split('-').map(Number);
+/** Minúsculas sem acento, para busca tolerante ("março" casa com "marco"). */
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Texto pesquisável de uma data: dd/mm/aaaa, aaaa-mm-dd, nome do mês e ano. */
+function dateHaystack(iso: string): string {
+  const [y, m] = iso.split('-').map(Number);
   const name = MONTHS_PT[(m ?? 1) - 1] ?? '';
-  return `${name.charAt(0).toUpperCase()}${name.slice(1)} de ${y}`;
+  return `${formatDateBr(iso)} ${iso} ${name} de ${y} ${y}`;
+}
+
+/**
+ * Busca inteligente: quebra a busca em palavras e exige que TODAS apareçam no
+ * texto (nome + datas). Assim "studio", "março", "2025", "julho 2025" e
+ * "10/2025" funcionam num campo só.
+ */
+function makeMatcher(query: string): (haystack: string) => boolean {
+  const tokens = norm(query).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return () => true;
+  return (haystack: string) => {
+    const hay = norm(haystack);
+    return tokens.every((t) => hay.includes(t));
+  };
 }
 
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [paying, setPaying] = useState<PayTarget | null>(null);
-  const [monthFilter, setMonthFilter] = useState('');
-  const [movFilter, setMovFilter] = useState('');
+  const [query, setQuery] = useState('');
   const { company: activeCompany } = useActiveCompany();
+  // Arquivo por ano: /acertos/2025 abre uma página só daquele ano.
+  const { ano } = useParams();
+  const archiveYear = ano && /^\d{4}$/.test(ano) ? ano : null;
+  const currentYear = String(new Date().getFullYear());
 
   const load = useCallback(async () => {
     try {
@@ -94,25 +126,23 @@ export function AcertosPage() {
   const { company, balances, movements, payments } = state;
   const nameOf = (id: string) => state.members.find((m) => m.id === id)?.fullName ?? 'Sócio';
 
-  // Meses disponíveis (de movimentações e de pagamentos), mais recente primeiro.
-  const monthsSet = new Set<string>();
-  movements.forEach((m) => monthsSet.add(m.spentOn.slice(0, 7)));
-  payments.forEach((p) => monthsSet.add(p.paidOn.slice(0, 7)));
-  const months = [...monthsSet].sort().reverse();
+  // Anos anteriores com movimentação: viram cards de arquivo no topo.
+  const pastYears = [...new Set(movements.map((m) => m.spentOn.slice(0, 4)))]
+    .filter((y) => y < currentYear)
+    .sort()
+    .reverse();
 
-  // Despesas para o seletor "por despesa", respeitando o mês escolhido.
-  const movOptions = movements
-    .filter((m) => !monthFilter || m.spentOn.startsWith(monthFilter))
-    .map((m) => ({ value: m.movementId, label: `${m.description} · ${formatDateBr(m.spentOn)}` }));
-  // Se trocar de mês e a despesa selecionada não existir mais, ignora o filtro dela.
-  const activeMov = movFilter && movOptions.some((o) => o.value === movFilter) ? movFilter : '';
+  // Base do período: página de arquivo trava no ano; a principal mostra tudo.
+  const inYear = (iso: string) => !archiveYear || iso.startsWith(archiveYear);
+  const matches = makeMatcher(query);
+  const hasFilter = query.trim().length > 0;
 
-  const hasFilter = !!monthFilter || !!activeMov;
-  // Com filtro: mostra todas as movimentações que batem (inclusive já quitadas,
-  // pra ver quem pagou). Sem filtro: só as pendentes, como antes.
+  // Busca inteligente + arquivo. Com busca (ou no arquivo) mostra tudo, inclusive
+  // já quitadas; na home sem busca, só as pendentes.
   const groups = movements
-    .filter((m) => (!monthFilter || m.spentOn.startsWith(monthFilter)) && (!activeMov || m.movementId === activeMov))
-    .filter((m) => (hasFilter ? true : m.remainingCents > 0))
+    .filter((m) => inYear(m.spentOn))
+    .filter((m) => matches(`${m.description} ${m.payerName} ${dateHaystack(m.spentOn)}`))
+    .filter((m) => (hasFilter || archiveYear ? true : m.remainingCents > 0))
     // Recorrentes primeiro; dentro, pendentes antes de quitadas; depois mais recentes.
     .sort((a, b) => {
       if (a.recorrente !== b.recorrente) return a.recorrente ? -1 : 1;
@@ -121,50 +151,75 @@ export function AcertosPage() {
       if (ap !== bp) return ap - bp;
       return b.spentOn.localeCompare(a.spentOn);
     });
-  // Histórico de pagamentos também segue o mês selecionado.
-  const visiblePayments = payments.filter((p) => !monthFilter || p.paidOn.startsWith(monthFilter));
+  const visiblePayments = payments
+    .filter((p) => inYear(p.paidOn))
+    .filter((p) =>
+      matches(`${nameOf(p.fromMemberId)} ${nameOf(p.toMemberId)} ${p.note ?? ''} ${dateHaystack(p.paidOn)}`),
+    );
 
   return (
     <div className="dash">
       <div>
-        <h1 className="dash-page__title">Acertos entre sócios</h1>
+        {archiveYear && (
+          <Link className="fin-back" to="/acertos">
+            ← Voltar para os acertos atuais
+          </Link>
+        )}
+        <h1 className="dash-page__title">
+          {archiveYear ? `Acertos de ${archiveYear}` : 'Acertos entre sócios'}
+        </h1>
         <p className="dash-page__subtitle">
-          Cada movimentação compartilhada mostra quem ainda deve a parte dele e para quem. Os
-          pagamentos ficam amarrados à movimentação de origem.
+          {archiveYear
+            ? `Tudo que gerou acerto entre os sócios em ${archiveYear}, com quem pagou e quem quitou.`
+            : 'Cada movimentação compartilhada mostra quem ainda deve a parte dele e para quem. Os pagamentos ficam amarrados à movimentação de origem.'}
         </p>
       </div>
 
-      {/* ── barra de filtros: por mês e por despesa ── */}
-      {months.length > 0 && (
-        <div className="ac-filters">
-          <Select
-            label="Mês"
-            value={monthFilter}
-            onChange={(v) => {
-              setMonthFilter(v);
-              setMovFilter('');
-            }}
-            options={[
-              { value: '', label: 'Todos os meses' },
-              ...months.map((ym) => ({ value: ym, label: monthLabel(ym) })),
-            ]}
-          />
-          <Select
-            label="Despesa"
-            value={activeMov}
-            onChange={setMovFilter}
-            options={[{ value: '', label: 'Todas as movimentações' }, ...movOptions]}
+      {/* ── anos anteriores: cards de arquivo (só na página principal) ── */}
+      {!archiveYear && pastYears.length > 0 && (
+        <section className="fin-years">
+          <span className="fin-years__title">Anos anteriores</span>
+          <div className="fin-years__grid">
+            {pastYears.map((y) => {
+              const doAno = movements.filter((m) => m.spentOn.startsWith(y));
+              const totalAno = doAno.reduce((s, m) => s + m.amountCents, 0);
+              return (
+                <Link className="fin-year" to={`/acertos/${y}`} key={y}>
+                  <span className="fin-year__badge">{y}</span>
+                  <span className="fin-year__info">
+                    <strong>Ver acertos de {y}</strong>
+                    <small>
+                      {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
+                      {formatMoney(totalAno, company.currencyCode)} em despesas rateadas
+                    </small>
+                  </span>
+                  <span className="fin-year__cta" aria-hidden="true">
+                    <IconArrowRight />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── busca inteligente: nome, mês ou ano num campo só ── */}
+      {(movements.length > 0 || payments.length > 0) && (
+        <div className="ac-search">
+          <span className="ac-search__icon" aria-hidden="true">
+            <IconSearch />
+          </span>
+          <input
+            className="ac-search__input"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nome, mês ou ano (ex.: Studio, março, 2025)"
+            aria-label="Buscar acertos"
           />
           {hasFilter && (
-            <button
-              type="button"
-              className="ac-filters__clear"
-              onClick={() => {
-                setMonthFilter('');
-                setMovFilter('');
-              }}
-            >
-              Limpar filtros
+            <button type="button" className="ac-search__clear" onClick={() => setQuery('')}>
+              Limpar
             </button>
           )}
         </div>
@@ -173,15 +228,26 @@ export function AcertosPage() {
       {/* ── acertos agrupados por movimentação ── */}
       <section className="dash-panel">
         <div className="dash-panel__head">
-          <h2>{hasFilter ? 'Acertos por movimentação' : 'Acertos pendentes'}</h2>
+          <h2>
+            {hasFilter
+              ? 'Resultados da busca'
+              : archiveYear
+                ? `Acertos de ${archiveYear}`
+                : 'Acertos pendentes'}
+          </h2>
         </div>
         {groups.length === 0 ? (
           <div className="dash-emptyrow">
             <p>
               {hasFilter ? (
                 <>
-                  <strong>Nada neste filtro.</strong> Não há acertos para o mês ou a despesa
-                  selecionada. Troque o filtro ou limpe para ver todos.
+                  <strong>Nada encontrado.</strong> Nenhum acerto bate com "{query}". Tente outro
+                  nome, mês ou ano.
+                </>
+              ) : archiveYear ? (
+                <>
+                  <strong>Sem acertos em {archiveYear}.</strong> Nenhuma despesa rateada gerou
+                  dívida entre os sócios nesse ano.
                 </>
               ) : (
                 <>
@@ -212,8 +278,8 @@ export function AcertosPage() {
             <h2>Pagamentos registrados</h2>
           </div>
           <p className="dash-panel__hint">
-            {monthFilter
-              ? `Pagamentos de acerto de ${monthLabel(monthFilter)}.`
+            {archiveYear
+              ? `Pagamentos de acerto registrados em ${archiveYear}.`
               : 'O histórico fica guardado, dívidas quitadas saem da lista de pendentes.'}
           </p>
           <div className="dash-settlements">
@@ -239,7 +305,8 @@ export function AcertosPage() {
         </section>
       )}
 
-      {/* ── saldo de cada sócio (resumo líquido) ── */}
+      {/* ── saldo de cada sócio (resumo líquido "de agora"; some no arquivo) ── */}
+      {!archiveYear && (
       <section className="dash-panel">
         <div className="dash-panel__head">
           <h2>Saldo de cada sócio</h2>
@@ -300,6 +367,7 @@ export function AcertosPage() {
           })}
         </div>
       </section>
+      )}
 
       {/* ── modal registrar pagamento (amarrado à movimentação) ── */}
       <Modal
