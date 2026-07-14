@@ -5,6 +5,7 @@ import {
   type Company,
   type CompanyMember,
   type RecurringCategory,
+  type RecurringCost,
   type RecurringFrequency,
   type RecurringSplitMode,
 } from '@plim/shared';
@@ -24,26 +25,34 @@ import './wizard.css';
 export function RecurringCostForm({
   company,
   members,
+  cost,
   onSaved,
   onClose,
 }: {
   company: Company;
   members: CompanyMember[];
+  /** Quando presente, o formulário edita este custo em vez de criar um novo. */
+  cost?: RecurringCost | null;
   /** Chamado após cada salvamento (pra Home recarregar os números). */
   onSaved: () => void;
   /** Fecha o modal ("Ver dashboard"). */
   onClose: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<RecurringCategory | ''>('');
-  const [amount, setAmount] = useState('');
-  const [frequency, setFrequency] = useState<RecurringFrequency | ''>('monthly');
-  const [paidBy, setPaidBy] = useState(members[0]?.id ?? '');
-  const [splitMode, setSplitMode] = useState<RecurringSplitMode>('equity');
+  const isEditing = !!cost;
+  const [name, setName] = useState(cost?.name ?? '');
+  const [category, setCategory] = useState<RecurringCategory | ''>(cost?.category ?? '');
+  const [amount, setAmount] = useState(
+    cost ? maskMoneyBRL((cost.amountCents / 100).toFixed(2).replace('.', ',')) : '',
+  );
+  const [frequency, setFrequency] = useState<RecurringFrequency | ''>(cost?.frequency ?? 'monthly');
+  const [paidBy, setPaidBy] = useState(cost?.paidByMemberId ?? members[0]?.id ?? '');
+  const [splitMode, setSplitMode] = useState<RecurringSplitMode>(cost?.splitMode ?? 'equity');
   // Primeira cobrança já vem preenchida com hoje: o custo começa a cobrar de
   // imediato (vira conta a pagar dividida). O usuário pode adiar se quiser.
-  const [nextCharge, setNextCharge] = useState(() => new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState('');
+  const [nextCharge, setNextCharge] = useState(
+    () => cost?.nextChargeOn ?? new Date().toISOString().slice(0, 10),
+  );
+  const [note, setNote] = useState(cost?.note ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCents, setSavedCents] = useState<number | null>(null);
@@ -70,7 +79,7 @@ export function RecurringCostForm({
     if (!paidBy) return setError('Escolha quem paga.');
     setSaving(true);
     try {
-      await recurringApi.create(company.id, {
+      const payload = {
         name: name.trim(),
         category,
         amountCents,
@@ -79,7 +88,9 @@ export function RecurringCostForm({
         splitMode,
         nextChargeOn: nextCharge || null,
         note: note.trim() || null,
-      });
+      };
+      if (isEditing) await recurringApi.update(company.id, cost!.id, payload);
+      else await recurringApi.create(company.id, payload);
       setSavedCents(amountCents);
       onSaved();
     } catch (err) {
@@ -100,21 +111,29 @@ export function RecurringCostForm({
             </svg>
           </span>
           <h3 className="rc-success__title">
-            {frequency === 'once' ? 'Pagamento único registrado' : 'Custo recorrente cadastrado'}
+            {isEditing
+              ? 'Custo recorrente atualizado'
+              : frequency === 'once'
+                ? 'Pagamento único registrado'
+                : 'Custo recorrente cadastrado'}
           </h3>
           <p className="rc-success__msg">
-            {frequency === 'once'
-              ? 'Ficou salvo no histórico, sem afetar o custo mensal estimado.'
-              : 'O custo mensal foi atualizado. Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.'}
+            {isEditing
+              ? 'As alterações foram salvas. O custo mensal e as próximas cobranças já refletem os novos valores.'
+              : frequency === 'once'
+                ? 'Ficou salvo no histórico, sem afetar o custo mensal estimado.'
+                : 'O custo mensal foi atualizado. Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.'}
           </p>
         </div>
         <div className="mw-actions">
           <Button block onClick={onClose}>
             Ver dashboard
           </Button>
-          <button type="button" className="mw-back rc-again" onClick={reset}>
-            Adicionar outro custo
-          </button>
+          {!isEditing && (
+            <button type="button" className="mw-back rc-again" onClick={reset}>
+              Adicionar outro custo
+            </button>
+          )}
         </div>
       </div>
     );
@@ -216,7 +235,13 @@ export function RecurringCostForm({
       )}
       <div className="mw-actions">
         <Button type="submit" block disabled={saving}>
-          {saving ? 'Salvando…' : frequency === 'once' ? 'Salvar pagamento único' : 'Salvar custo recorrente'}
+          {saving
+            ? 'Salvando…'
+            : isEditing
+              ? 'Salvar alterações'
+              : frequency === 'once'
+                ? 'Salvar pagamento único'
+                : 'Salvar custo recorrente'}
         </Button>
       </div>
     </form>

@@ -15,6 +15,7 @@ import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { FinChart, type ChartPoint } from '../finance/FinChart';
 import { MovementWizard } from '../finance/MovementWizard';
+import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
@@ -53,6 +54,7 @@ export function FinancePage() {
   const [thisMonth, setThisMonth] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<MovItem | null>(null);
+  const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -459,6 +461,28 @@ export function FinancePage() {
               setDetail(null);
               navigate('/acertos');
             }}
+            onEditRecurring={(cost) => {
+              setDetail(null);
+              setEditingCost(cost);
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* ── editar custo recorrente ── */}
+      <Modal
+        open={editingCost != null}
+        title="Editar custo recorrente"
+        subtitle="Altere o valor, a frequência, a próxima cobrança ou quem paga."
+        onClose={() => setEditingCost(null)}
+      >
+        {editingCost && (
+          <RecurringCostForm
+            company={company}
+            members={members}
+            cost={editingCost}
+            onSaved={() => void load()}
+            onClose={() => setEditingCost(null)}
           />
         )}
       </Modal>
@@ -627,6 +651,7 @@ function MovDetail({
   onRemove,
   onClose,
   onSeeAcertos,
+  onEditRecurring,
 }: {
   item: MovItem;
   currency: string | null;
@@ -638,6 +663,7 @@ function MovDetail({
   onRemove: (expenseId: string) => Promise<void>;
   onClose: () => void;
   onSeeAcertos: () => void;
+  onEditRecurring: (cost: RecurringCost) => void;
 }) {
   // Exclusão em duas etapas: o botão vira uma confirmação no mesmo lugar.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -995,9 +1021,19 @@ function MovDetail({
         ) : (
           <>
             <div className="movd-actions__soon">
-              <button type="button" className="movd-btn" disabled title="Em breve">
-                Editar movimentação
-              </button>
+              {item.kind === 'recurring' ? (
+                <button
+                  type="button"
+                  className="movd-btn"
+                  onClick={() => onEditRecurring(item.cost)}
+                >
+                  Editar custo recorrente
+                </button>
+              ) : (
+                <button type="button" className="movd-btn" disabled title="Em breve">
+                  Editar movimentação
+                </button>
+              )}
               {exp && (
                 <button
                   type="button"
