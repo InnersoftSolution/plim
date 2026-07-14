@@ -52,6 +52,22 @@ export class InMemoryFinanceRepository implements FinanceRepository {
     return updated;
   }
 
+  async updateExpense(
+    expenseId: string,
+    patch: Partial<
+      Pick<
+        Expense,
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+      >
+    >,
+  ): Promise<Expense> {
+    const e = this.expenses.get(expenseId);
+    if (!e) throw new Error(`Movimentação ${expenseId} não encontrada`);
+    const updated: Expense = { ...e, ...patch };
+    this.expenses.set(expenseId, updated);
+    return updated;
+  }
+
   async deleteExpense(expenseId: string): Promise<void> {
     this.expenses.delete(expenseId);
   }

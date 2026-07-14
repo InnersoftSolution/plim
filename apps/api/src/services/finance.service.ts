@@ -4,11 +4,13 @@ import type {
   CreateRevenueInput,
   CreateSettlementPaymentInput,
   ExpenseShare,
+  ExpenseSplitMode,
   MemberBalance,
   MovementDebt,
   MovementSettlement,
   Settlement,
   SettlementPayment as SettlementPaymentDto,
+  UpdateMovementInput,
 } from '@plim/shared';
 import type { CompanyMember } from '../domain/company';
 import type { Expense, SettlementPayment } from '../domain/finance';
@@ -417,6 +419,114 @@ export class FinanceService {
       throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
     }
     await this.repo.deleteExpense(expenseId);
+  }
+
+  /**
+   * Edição de uma movimentação já registrada. Recalcula o rateio quando muda
+   * valor, divisão ou pagador. Barreiras:
+   * - cobrança gerada por custo recorrente edita-se pelo custo, não aqui.
+   * - se a movimentação já tem acertos registrados, mudanças estruturais
+   *   (valor/divisão/pagador) são bloqueadas para não corromper os pagamentos.
+   */
+  async updateExpense(
+    companyId: string,
+    expenseId: string,
+    input: UpdateMovementInput,
+    actingUserId?: string | null,
+  ): Promise<Expense> {
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
+    const expense = await this.repo.findExpenseById(companyId, expenseId);
+    if (!expense) {
+      throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
+    }
+    if (expense.recurringCostId != null) {
+      throw new DomainError(
+        'RECURRING_MOVEMENT',
+        'Essa cobrança vem de um custo recorrente. Edite pelo custo recorrente.',
+        409,
+      );
+    }
+
+    const isRevenue = expense.kind === 'revenue';
+    // Muda o "esqueleto" do rateio? (valor, divisão ou quem pagou)
+    const amountChanged = input.amountCents != null && input.amountCents !== expense.amountCents;
+    const splitChanged =
+      (input.splitMode != null && input.splitMode !== expense.splitMode) || input.customShares != null;
+    const payerChanged = input.paidByMemberId != null && input.paidByMemberId !== expense.paidByMemberId;
+    const structural = !isRevenue && (amountChanged || splitChanged || payerChanged);
+
+    if (structural) {
+      const payments = await this.repo.listPayments(companyId);
+      const hasSettlements = payments.some(
+        (p) => p.expenseId === expenseId && p.status === 'confirmed',
+      );
+      if (hasSettlements) {
+        throw new DomainError(
+          'HAS_SETTLEMENTS',
+          'Essa movimentação já tem acertos registrados. Remova os acertos antes de mudar valor, divisão ou quem pagou.',
+          409,
+        );
+      }
+    }
+
+    if (payerChanged && !members.some((m) => m.id === input.paidByMemberId)) {
+      throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
+    }
+
+    const patch: Partial<
+      Pick<
+        Expense,
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+      >
+    > = {};
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.amountCents !== undefined) patch.amountCents = input.amountCents;
+    if (input.spentOn !== undefined) patch.spentOn = input.spentOn;
+    if (input.note !== undefined) patch.note = input.note;
+    if (isRevenue) {
+      if (input.source !== undefined) patch.source = input.source;
+      if (input.account !== undefined) patch.account = input.account;
+    } else {
+      if (input.paidByMemberId !== undefined) patch.paidByMemberId = input.paidByMemberId;
+      if (input.splitMode !== undefined) patch.splitMode = input.splitMode;
+    }
+
+    // Recalcula o rateio se a despesa/aporte reembolsável tem partes e algo
+    // do esqueleto mudou. Aporte não reembolsável (sem partes) não rateia.
+    const hasShares = expense.shares.length > 0;
+    if (!isRevenue && hasShares && (amountChanged || splitChanged)) {
+      const amountCents = input.amountCents ?? expense.amountCents;
+      const splitMode = (input.splitMode ?? expense.splitMode) as ExpenseSplitMode;
+      patch.shares = this.recomputeShares(amountCents, splitMode, input.customShares, members);
+    }
+
+    return this.repo.updateExpense(expenseId, patch);
+  }
+
+  /** Recalcula as partes conforme o modo de rateio (equity/equal/custom). */
+  private recomputeShares(
+    amountCents: number,
+    splitMode: ExpenseSplitMode,
+    customShares: ExpenseShare[] | undefined,
+    members: CompanyMember[],
+  ): ExpenseShare[] {
+    if (splitMode === 'custom') {
+      const shares = customShares ?? [];
+      for (const s of shares) {
+        if (!members.some((m) => m.id === s.memberId)) {
+          throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio da divisão não encontrado.');
+        }
+      }
+      const total = shares.reduce((sum, s) => sum + s.shareCents, 0);
+      if (total !== amountCents) {
+        throw new DomainError('SPLIT_SUM_MISMATCH', 'As partes precisam somar exatamente o valor.');
+      }
+      return shares;
+    }
+    const weights =
+      splitMode === 'equal' ? members.map(() => 1) : members.map((m) => m.equityPercent ?? 0);
+    const cents = computeSplit(amountCents, weights);
+    return members.map((m, i) => ({ memberId: m.id, shareCents: cents[i]! }));
   }
 
   async listExpenses(companyId: string, actingUserId?: string | null) {

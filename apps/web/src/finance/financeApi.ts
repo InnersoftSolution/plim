@@ -8,6 +8,7 @@ import type {
   MovementSettlement,
   Settlement,
   SettlementPayment,
+  UpdateMovementInput,
 } from '@plim/shared';
 import { apiFetch } from '../lib/api';
 
@@ -73,6 +74,14 @@ export const financeApi = {
     return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}/pay`, {
       method: 'POST',
       body: JSON.stringify(paidOn ? { paidOn } : {}),
+    });
+  },
+
+  /** Edita uma movimentação já registrada (só os campos enviados). */
+  updateMovement(companyId: string, expenseId: string, input: UpdateMovementInput): Promise<Expense> {
+    return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
     });
   },
 

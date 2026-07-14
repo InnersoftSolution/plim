@@ -9,6 +9,11 @@ export interface FinanceRepository {
   updateConfirmation(expenseId: string, status: ConfirmationStatus): Promise<Expense>;
   /** Marca uma conta a pagar como paga (paymentStatus='paid', spentOn=paidOn). */
   markExpensePaid(expenseId: string, paidOn: string): Promise<Expense>;
+  /** Atualiza campos de uma movimentação (e substitui as partilhas se vierem). */
+  updateExpense(
+    expenseId: string,
+    patch: Partial<Pick<Expense, 'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'>>,
+  ): Promise<Expense>;
   createPayment(data: Omit<SettlementPayment, 'id' | 'createdAt'>): Promise<SettlementPayment>;
   listPayments(companyId: string): Promise<SettlementPayment[]>;
   /** Exclusão definitiva de uma movimentação (as partilhas caem em cascata). */

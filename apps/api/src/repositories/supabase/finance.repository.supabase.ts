@@ -208,6 +208,59 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     return (rows ?? []).map(toPayment);
   }
 
+  async updateExpense(
+    expenseId: string,
+    patch: Partial<
+      Pick<
+        Expense,
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account'
+      >
+    >,
+  ): Promise<Expense> {
+    // Monta só as colunas presentes no patch (camelCase → snake_case).
+    const row: Record<string, unknown> = {};
+    if (patch.description !== undefined) row.description = patch.description;
+    if (patch.amountCents !== undefined) row.amount_cents = patch.amountCents;
+    if (patch.spentOn !== undefined) row.spent_on = patch.spentOn;
+    if (patch.note !== undefined) row.note = patch.note;
+    if (patch.paidByMemberId !== undefined) row.paid_by_member_id = patch.paidByMemberId;
+    if (patch.splitMode !== undefined) row.split_mode = patch.splitMode;
+    if (patch.source !== undefined) row.source = patch.source;
+    if (patch.account !== undefined) row.account = patch.account;
+
+    if (Object.keys(row).length > 0) {
+      const { error } = await this.db.from('expenses').update(row).eq('id', expenseId);
+      if (error) throw new Error(`Falha ao atualizar movimentação: ${error.message}`);
+    }
+
+    // Rateio novo: apaga as partilhas antigas e insere as atuais.
+    if (patch.shares) {
+      const { error: delError } = await this.db
+        .from('expense_shares')
+        .delete()
+        .eq('expense_id', expenseId);
+      if (delError) throw new Error(`Falha ao atualizar rateio: ${delError.message}`);
+      if (patch.shares.length > 0) {
+        const { error: insError } = await this.db.from('expense_shares').insert(
+          patch.shares.map((s) => ({
+            expense_id: expenseId,
+            member_id: s.memberId,
+            share_cents: s.shareCents,
+          })),
+        );
+        if (insError) throw new Error(`Falha ao salvar rateio: ${insError.message}`);
+      }
+    }
+
+    const { data: updated, error: readError } = await this.db
+      .from('expenses')
+      .select('*, expense_shares(member_id, share_cents)')
+      .eq('id', expenseId)
+      .single<ExpenseRow>();
+    if (readError || !updated) throw new Error(`Falha ao reler movimentação: ${readError?.message}`);
+    return toExpense(updated);
+  }
+
   async deleteExpense(expenseId: string): Promise<void> {
     // As partilhas (expense_shares) caem em cascata pela FK.
     const { error } = await this.db.from('expenses').delete().eq('id', expenseId);

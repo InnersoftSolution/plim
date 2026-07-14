@@ -15,6 +15,7 @@ import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { FinChart, type ChartPoint } from '../finance/FinChart';
 import { MovementWizard } from '../finance/MovementWizard';
+import { MovementEditForm } from '../finance/MovementEditForm';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
 import { recurringApi } from '../finance/recurringApi';
@@ -55,6 +56,7 @@ export function FinancePage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<MovItem | null>(null);
   const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
+  const [editingMovement, setEditingMovement] = useState<Expense | null>(null);
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -467,6 +469,10 @@ export function FinancePage() {
               setDetail(null);
               setEditingCost(cost);
             }}
+            onEditMovement={(exp) => {
+              setDetail(null);
+              setEditingMovement(exp);
+            }}
           />
         )}
       </Modal>
@@ -485,6 +491,24 @@ export function FinancePage() {
             cost={editingCost}
             onSaved={() => void load()}
             onClose={() => setEditingCost(null)}
+          />
+        )}
+      </Modal>
+
+      {/* ── editar movimentação (despesa/aporte/entrada) ── */}
+      <Modal
+        open={editingMovement != null}
+        title="Editar movimentação"
+        subtitle="Corrija os dados. O Plim recalcula o rateio quando o valor ou a divisão muda."
+        onClose={() => setEditingMovement(null)}
+      >
+        {editingMovement && (
+          <MovementEditForm
+            company={company}
+            members={members}
+            expense={editingMovement}
+            onSaved={() => void load()}
+            onClose={() => setEditingMovement(null)}
           />
         )}
       </Modal>
@@ -663,6 +687,7 @@ function MovDetail({
   onClose,
   onSeeAcertos,
   onEditRecurring,
+  onEditMovement,
 }: {
   item: MovItem;
   currency: string | null;
@@ -675,6 +700,7 @@ function MovDetail({
   onClose: () => void;
   onSeeAcertos: () => void;
   onEditRecurring: (cost: RecurringCost) => void;
+  onEditMovement: (exp: Expense) => void;
 }) {
   // Exclusão em duas etapas: o botão vira uma confirmação no mesmo lugar.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -1042,11 +1068,15 @@ function MovDetail({
                 >
                   Editar custo recorrente
                 </button>
-              ) : (
-                <button type="button" className="movd-btn" disabled title="Em breve">
+              ) : exp && exp.recurringCostId ? (
+                <button type="button" className="movd-btn" disabled title="Edite pelo custo recorrente">
+                  Gerada por custo recorrente
+                </button>
+              ) : exp ? (
+                <button type="button" className="movd-btn" onClick={() => onEditMovement(exp)}>
                   Editar movimentação
                 </button>
-              )}
+              ) : null}
               {exp && (
                 <button
                   type="button"

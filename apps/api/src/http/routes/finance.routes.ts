@@ -5,6 +5,7 @@ import {
   createRevenueSchema,
   createSettlementPaymentSchema,
   payExpenseSchema,
+  updateMovementSchema,
 } from '@plim/shared';
 import { z } from 'zod';
 import type { FinanceService } from '../../services/finance.service';
@@ -63,6 +64,13 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     const { companyId, expenseId } = movParamsSchema.parse(request.params);
     const { paidOn } = payExpenseSchema.parse(request.body ?? {});
     return service.payExpense(companyId, expenseId, paidOn, request.user?.id ?? null);
+  });
+
+  // Edição de uma movimentação já registrada.
+  app.patch('/companies/:companyId/expenses/:expenseId', async (request) => {
+    const { companyId, expenseId } = movParamsSchema.parse(request.params);
+    const input = updateMovementSchema.parse(request.body);
+    return service.updateExpense(companyId, expenseId, input, request.user?.id ?? null);
   });
 
   // Exclusão definitiva (irreversível; o front confirma antes).

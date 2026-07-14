@@ -599,4 +599,67 @@ describe('FinanceService', () => {
       code: 'NOT_A_MEMBER',
     });
   });
+
+  it('editar valor recalcula o rateio da despesa', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    const updated = await finance.updateExpense(companyId, created.id, { amountCents: 20000 }, 'u1');
+    expect(updated.amountCents).toBe(20000);
+    expect(shareOf(updated.shares, ownerId)).toBe(12000); // 60%
+    expect(shareOf(updated.shares, partnerId)).toBe(8000); // 40%
+    expect(updated.shares.reduce((s, x) => s + x.shareCents, 0)).toBe(20000);
+  });
+
+  it('editar só a descrição não mexe no rateio', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    const updated = await finance.updateExpense(companyId, created.id, { description: 'Hosting' }, 'u1');
+    expect(updated.description).toBe('Hosting');
+    expect(shareOf(updated.shares, ownerId)).toBe(6000);
+    expect(shareOf(updated.shares, partnerId)).toBe(4000);
+  });
+
+  it('mudar divisão para partes iguais recalcula', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Almoço', amountCents: 9000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    const updated = await finance.updateExpense(companyId, created.id, { splitMode: 'equal' }, 'u1');
+    expect(updated.splitMode).toBe('equal');
+    // 3 sócios, 9000/3 = 3000 cada.
+    expect(updated.shares.every((s) => s.shareCents === 3000)).toBe(true);
+  });
+
+  it('bloqueia mudança estrutural quando já há acerto registrado', async () => {
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    // Sócio paga a parte dele → vira acerto amarrado a essa despesa.
+    await finance.createSettlementPayment(
+      companyId,
+      { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 4000, paidOn: '2026-05-01', expenseId: created.id },
+      'u1',
+    );
+    await expect(
+      finance.updateExpense(companyId, created.id, { amountCents: 20000 }, 'u1'),
+    ).rejects.toMatchObject({ code: 'HAS_SETTLEMENTS' });
+    // Mas editar a descrição (não estrutural) continua permitido.
+    const ok = await finance.updateExpense(companyId, created.id, { description: 'Hosting' }, 'u1');
+    expect(ok.description).toBe('Hosting');
+  });
+
+  it('editar movimentação inexistente devolve MOVEMENT_NOT_FOUND', async () => {
+    await expect(
+      finance.updateExpense(companyId, '00000000-0000-0000-0000-000000000000', { description: 'x' }, 'u1'),
+    ).rejects.toMatchObject({ code: 'MOVEMENT_NOT_FOUND' });
+  });
 });

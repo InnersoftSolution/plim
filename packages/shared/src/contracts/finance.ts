@@ -136,6 +136,29 @@ export const payExpenseSchema = z.object({
 export type PayExpenseInput = z.infer<typeof payExpenseSchema>;
 
 /**
+ * Edição de uma movimentação já registrada (despesa, aporte ou entrada).
+ * Todos os campos são opcionais: manda só o que mudou. Campos por tipo:
+ * - despesa/aporte: description, amountCents, spentOn, note, paidByMemberId, splitMode.
+ * - entrada (revenue): description, amountCents, spentOn, note, source, account.
+ * O back recalcula o rateio quando valor/divisão/pagador mudam. Se a
+ * movimentação já tiver acertos registrados, mudanças estruturais são barradas.
+ */
+export const updateMovementSchema = z
+  .object({
+    description: z.string().trim().min(1, 'Descreva a movimentação').max(120).optional(),
+    amountCents: z.number().int().positive('Valor deve ser maior que zero').optional(),
+    spentOn: z.string().date().optional(),
+    note: z.string().trim().max(300).nullable().optional(),
+    paidByMemberId: z.string().uuid().optional(),
+    splitMode: expenseSplitModeSchema.optional(),
+    customShares: z.array(expenseShareSchema).optional(),
+    source: z.string().trim().max(60).nullable().optional(),
+    account: z.string().trim().max(60).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar.' });
+export type UpdateMovementInput = z.infer<typeof updateMovementSchema>;
+
+/**
  * Criação de receita: dinheiro que ENTROU na empresa (venda, cliente, SaaS...).
  * É da empresa: não divide entre sócios, não é gasto. Entra no resultado.
  */
