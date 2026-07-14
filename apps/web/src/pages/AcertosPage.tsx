@@ -17,7 +17,7 @@ import { DateField } from '../components/ui/DateField';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from '../finance/financeApi';
-import { IconArrowRight } from './dashIcons';
+import { IconArrowRight, IconCheck } from './dashIcons';
 import './dashboard.css';
 import './acertos.css';
 import '../finance/wizard.css';
@@ -112,7 +112,15 @@ export function AcertosPage() {
   // pra ver quem pagou). Sem filtro: só as pendentes, como antes.
   const groups = movements
     .filter((m) => (!monthFilter || m.spentOn.startsWith(monthFilter)) && (!activeMov || m.movementId === activeMov))
-    .filter((m) => (hasFilter ? true : m.remainingCents > 0));
+    .filter((m) => (hasFilter ? true : m.remainingCents > 0))
+    // Recorrentes primeiro; dentro, pendentes antes de quitadas; depois mais recentes.
+    .sort((a, b) => {
+      if (a.recorrente !== b.recorrente) return a.recorrente ? -1 : 1;
+      const ap = a.remainingCents > 0 ? 0 : 1;
+      const bp = b.remainingCents > 0 ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return b.spentOn.localeCompare(a.spentOn);
+    });
   // Histórico de pagamentos também segue o mês selecionado.
   const visiblePayments = payments.filter((p) => !monthFilter || p.paidOn.startsWith(monthFilter));
 
@@ -186,81 +194,12 @@ export function AcertosPage() {
         ) : (
           <div className="ac-groups">
             {groups.map((m) => (
-              <article className="ac-group" key={m.movementId}>
-                <header className="ac-group__head">
-                  <div className="ac-group__id">
-                    <span className={'ac-group__badge' + (m.kind === 'contribution' ? ' ac-group__badge--aporte' : '')}>
-                      {m.kind === 'contribution' ? 'Aporte' : 'Despesa'}
-                    </span>
-                    <strong className="ac-group__title">{m.description}</strong>
-                    <span className="ac-group__meta">
-                      {m.kind === 'contribution' ? 'adiantado' : 'pago'} por {m.payerName} ·{' '}
-                      {formatDateBr(m.spentOn)} · total {formatMoney(m.amountCents, company.currencyCode)}
-                    </span>
-                  </div>
-                  {m.remainingCents > 0 ? (
-                    <span className="ac-group__total" data-financial>
-                      {formatMoney(m.remainingCents, company.currencyCode)}
-                      <small>pendente</small>
-                    </span>
-                  ) : (
-                    <span className="ac-status ac-status--paid">Tudo acertado</span>
-                  )}
-                </header>
-
-                <div className="ac-group__debts">
-                  {m.debts.map((d) => {
-                    const status =
-                      d.remainingCents === 0
-                        ? 'quitado'
-                        : d.paidCents > 0
-                          ? 'parcial'
-                          : 'pendente';
-                    return (
-                      <div className="ac-debt" key={d.debtorId}>
-                        <span className="ac-debt__avatar">{initials(d.debtorName)}</span>
-                        <span className="ac-debt__text">
-                          {status === 'quitado' ? (
-                            <>
-                              <strong>{d.debtorName}</strong> já pagou a parte dele,{' '}
-                              <strong data-financial>
-                                {formatMoney(d.originalCents, company.currencyCode)}
-                              </strong>{' '}
-                              para <strong>{m.payerName}</strong>
-                            </>
-                          ) : (
-                            <>
-                              <strong>{d.debtorName}</strong> deve{' '}
-                              <strong className="ac-debt__amount" data-financial>
-                                {formatMoney(d.remainingCents, company.currencyCode)}
-                              </strong>{' '}
-                              para <strong>{m.payerName}</strong>
-                              {d.paidCents > 0 && (
-                                <span className="ac-debt__sub">
-                                  já pagou {formatMoney(d.paidCents, company.currencyCode)} de{' '}
-                                  {formatMoney(d.originalCents, company.currencyCode)}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </span>
-                        {status === 'quitado' ? (
-                          <span className="ac-status ac-status--paid">Quitado</span>
-                        ) : (
-                          <div className="ac-debt__actions">
-                            <span className={'ac-status' + (status === 'parcial' ? ' ac-status--partial' : '')}>
-                              {status === 'parcial' ? 'Parcial' : 'Pendente'}
-                            </span>
-                            <Button onClick={() => setPaying({ movement: m, debt: d })}>
-                              Registrar pagamento
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </article>
+              <DividaCard
+                key={m.movementId}
+                movement={m}
+                currency={company.currencyCode}
+                onPay={(debt) => setPaying({ movement: m, debt })}
+              />
             ))}
           </div>
         )}
@@ -355,6 +294,140 @@ export function AcertosPage() {
           />
         )}
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * Card de uma dívida (movimentação de origem) com todos os participantes.
+ * Recorrentes ganham o selo "Recorrente"; o status geral vira "Quitada" quando
+ * ninguém deve mais.
+ */
+function DividaCard({
+  movement,
+  currency,
+  onPay,
+}: {
+  movement: MovementSettlement;
+  currency: string | null;
+  onPay: (debt: MovementDebt) => void;
+}) {
+  const m = movement;
+  const quitada = m.remainingCents === 0;
+  return (
+    <article className="ac-group" key={m.movementId}>
+      <header className="ac-group__head">
+        <div className="ac-group__id">
+          <div className="ac-group__badges">
+            <span className={'ac-group__badge' + (m.kind === 'contribution' ? ' ac-group__badge--aporte' : '')}>
+              {m.kind === 'contribution' ? 'Aporte' : 'Despesa'}
+            </span>
+            {m.recorrente && <span className="ac-group__badge ac-group__badge--rec">Recorrente</span>}
+            <span className={'ac-status' + (quitada ? ' ac-status--paid' : '')}>
+              {quitada ? 'Quitada' : 'Pendente'}
+            </span>
+          </div>
+          <strong className="ac-group__title">{m.description}</strong>
+          <span className="ac-group__meta">
+            {m.kind === 'contribution' ? 'adiantado' : 'pago'} por {m.payerName} · {formatDateBr(m.spentOn)}
+          </span>
+        </div>
+        {!quitada && (
+          <span className="ac-group__total" data-financial>
+            {formatMoney(m.remainingCents, currency)}
+            <small>em aberto</small>
+          </span>
+        )}
+      </header>
+
+      <div className="ac-group__debts">
+        {m.debts.map((d) => (
+          <ParticipanteRow
+            key={d.debtorId}
+            debt={d}
+            payerName={m.payerName}
+            currency={currency}
+            onPay={() => onPay(d)}
+          />
+        ))}
+      </div>
+
+      <footer className="ac-group__foot">
+        <span>
+          Total da dívida <strong data-financial>{formatMoney(m.amountCents, currency)}</strong>
+        </span>
+        <span>
+          {quitada ? (
+            'Tudo acertado'
+          ) : (
+            <>
+              Em aberto{' '}
+              <strong className="ac-debt__amount" data-financial>
+                {formatMoney(m.remainingCents, currency)}
+              </strong>
+            </>
+          )}
+        </span>
+      </footer>
+    </article>
+  );
+}
+
+/** Uma linha por sócio dentro do card: pago (verde + data) ou em aberto (alerta). */
+function ParticipanteRow({
+  debt,
+  payerName,
+  currency,
+  onPay,
+}: {
+  debt: MovementDebt;
+  payerName: string;
+  currency: string | null;
+  onPay: () => void;
+}) {
+  const d = debt;
+  const status = d.remainingCents === 0 ? 'quitado' : d.paidCents > 0 ? 'parcial' : 'pendente';
+  return (
+    <div className="ac-debt" key={d.debtorId}>
+      <span className={'ac-debt__avatar' + (status === 'quitado' ? ' ac-debt__avatar--paid' : '')}>
+        {status === 'quitado' ? <IconCheck /> : initials(d.debtorName)}
+      </span>
+      <span className="ac-debt__text">
+        <strong>{d.debtorName}</strong> · cabe{' '}
+        <strong data-financial>{formatMoney(d.originalCents, currency)}</strong>
+        {status === 'quitado' ? (
+          <span className="ac-debt__sub ac-debt__sub--paid">
+            pagou {formatMoney(d.originalCents, currency)} para {payerName}
+            {d.lastPaidOn ? ` em ${formatDateBr(d.lastPaidOn)}` : ''}
+          </span>
+        ) : status === 'parcial' ? (
+          <span className="ac-debt__sub">
+            pagou {formatMoney(d.paidCents, currency)} · em aberto{' '}
+            <strong className="ac-debt__amount" data-financial>
+              {formatMoney(d.remainingCents, currency)}
+            </strong>{' '}
+            para {payerName}
+          </span>
+        ) : (
+          <span className="ac-debt__sub">
+            em aberto{' '}
+            <strong className="ac-debt__amount" data-financial>
+              {formatMoney(d.remainingCents, currency)}
+            </strong>{' '}
+            para {payerName}
+          </span>
+        )}
+      </span>
+      {status === 'quitado' ? (
+        <span className="ac-status ac-status--paid">Pago</span>
+      ) : (
+        <div className="ac-debt__actions">
+          <span className={'ac-status' + (status === 'parcial' ? ' ac-status--partial' : '')}>
+            {status === 'parcial' ? 'Parcial' : 'Em aberto'}
+          </span>
+          <Button onClick={onPay}>Registrar pagamento</Button>
+        </div>
+      )}
     </div>
   );
 }

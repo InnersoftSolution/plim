@@ -51,6 +51,12 @@
   gap: 4px;
   min-width: 0;
 }
+.ac-group__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .ac-group__badge {
   align-self: flex-start;
   font-size: 10px;
@@ -65,6 +71,10 @@
 .ac-group__badge--aporte {
   background: var(--color-status-positive-bg);
   color: var(--color-status-positive);
+}
+.ac-group__badge--rec {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
 }
 .ac-group__title {
   font-size: 15px;
@@ -117,6 +127,13 @@
   font-size: 12px;
   font-weight: 700;
 }
+.ac-debt__avatar--paid {
+  background: var(--color-status-positive-bg);
+  color: var(--color-status-positive);
+}
+.ac-debt__sub--paid {
+  color: var(--color-status-positive);
+}
 .ac-debt__text {
   flex: 1;
   min-width: 0;
@@ -137,6 +154,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.ac-group__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-default);
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 620px) {

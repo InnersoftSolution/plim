@@ -538,9 +538,15 @@ export class FinanceService {
       const debts: MovementDebt[] = [];
       for (const share of m.shares) {
         if (share.memberId === payerId || share.shareCents <= 0) continue;
-        const directlyPaid = payments
-          .filter((p) => p.expenseId === m.id && p.fromMemberId === share.memberId && p.toMemberId === payerId)
-          .reduce((sum, p) => sum + p.amountCents, 0);
+        const direct = payments.filter(
+          (p) => p.expenseId === m.id && p.fromMemberId === share.memberId && p.toMemberId === payerId,
+        );
+        const directlyPaid = direct.reduce((sum, p) => sum + p.amountCents, 0);
+        // Data do pagamento mais recente amarrado a essa dívida (para exibição).
+        const lastPaidOn = direct.reduce<string | null>(
+          (acc, p) => (acc == null || p.paidOn > acc ? p.paidOn : acc),
+          null,
+        );
         let remaining = Math.max(0, share.shareCents - directlyPaid);
         if (remaining > 0) {
           const k = `${share.memberId}->${payerId}`;
@@ -557,6 +563,7 @@ export class FinanceService {
           originalCents: share.shareCents,
           paidCents: share.shareCents - remaining,
           remainingCents: remaining,
+          lastPaidOn,
         });
       }
       if (debts.length === 0) continue;
@@ -568,6 +575,7 @@ export class FinanceService {
         amountCents: m.amountCents,
         payerId,
         payerName: nameOf(payerId),
+        recorrente: m.recurringCostId != null,
         remainingCents: debts.reduce((sum, d) => sum + d.remainingCents, 0),
         debts,
       });

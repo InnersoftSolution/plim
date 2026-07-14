@@ -243,6 +243,8 @@ export const movementDebtSchema = z.object({
   paidCents: z.number().int().nonnegative(),
   /** originalCents menos paidCents. */
   remainingCents: z.number().int().nonnegative(),
+  /** Data do último pagamento amarrado a essa dívida (YYYY-MM-DD). Nulo se nada pago. */
+  lastPaidOn: z.string().nullable().default(null),
 });
 export type MovementDebt = z.infer<typeof movementDebtSchema>;
 
@@ -256,6 +258,8 @@ export const movementSettlementSchema = z.object({
   /** Quem adiantou / pagou (recebe os acertos). */
   payerId: z.string().uuid(),
   payerName: z.string(),
+  /** True quando a movimentação veio de um custo recorrente. */
+  recorrente: z.boolean().default(false),
   /** Total ainda pendente nessa movimentacao (soma dos remaining). */
   remainingCents: z.number().int().nonnegative(),
   debts: z.array(movementDebtSchema),
