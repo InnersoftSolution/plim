@@ -245,22 +245,34 @@ export function AcertosPage() {
           <h2>Saldo de cada sócio</h2>
         </div>
         <p className="dash-panel__hint">
-          Resumo líquido de tudo: "pagou" é o que saiu do bolso; "cabe" é a parte de cada um.
-          Pagamentos de acerto já estão descontados.
+          A conta de cada sócio: a parte que cabe a ele nas despesas, menos o que já pagou (em
+          despesas do bolso e em acertos). O que sobra é o valor da direita.
         </p>
         <div className="dash-settlements">
           {balances.map((b) => {
             const net = b.netCents;
-            const label = net > 0 ? 'a receber' : net < 0 ? 'a pagar' : 'quite';
+            // Acertos confirmados: o que o sócio já pagou e já recebeu de acerto.
+            const acertosPagos = payments
+              .filter((p) => p.status === 'confirmed' && p.fromMemberId === b.memberId)
+              .reduce((s, p) => s + p.amountCents, 0);
+            const acertosRecebidos = payments
+              .filter((p) => p.status === 'confirmed' && p.toMemberId === b.memberId)
+              .reduce((s, p) => s + p.amountCents, 0);
+            const label = net > 0 ? 'a receber' : net < 0 ? 'falta pagar' : 'quite';
             const color = net > 0 ? 'var(--color-status-positive)' : net < 0 ? 'var(--rose-600)' : 'var(--color-text-subtle)';
             return (
               <div className="dash-settlement" key={b.memberId}>
                 <span className="dash-settlement__avatar">{initials(b.fullName)}</span>
                 <span className="dash-settlement__text">
-                  <strong>{b.fullName}</strong> · pagou {formatMoney(b.paidCents, company.currencyCode)} · cabe{' '}
-                  {formatMoney(b.owedCents, company.currencyCode)}
+                  <strong>{b.fullName}</strong>
+                  <span className="ac-mov__meta" style={{ display: 'block' }}>
+                    cabe {formatMoney(b.owedCents, company.currencyCode)} nas despesas · pagou{' '}
+                    {formatMoney(b.paidCents, company.currencyCode)} em despesas
+                    {acertosPagos > 0 && <> · pagou {formatMoney(acertosPagos, company.currencyCode)} em acertos</>}
+                    {acertosRecebidos > 0 && <> · recebeu {formatMoney(acertosRecebidos, company.currencyCode)} de acertos</>}
+                  </span>
                 </span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color }}>
+                <strong style={{ fontFamily: 'var(--font-mono)', color, whiteSpace: 'nowrap' }}>
                   {net === 0 ? '—' : formatMoney(Math.abs(net), company.currencyCode)}
                   <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 6, color: 'var(--color-text-subtle)' }}>
                     {label}
