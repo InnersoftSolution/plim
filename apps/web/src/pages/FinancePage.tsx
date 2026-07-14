@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
@@ -56,8 +56,14 @@ export function FinancePage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const { company: activeCompany } = useActiveCompany();
   const [filter, setFilter] = useState<Filter>('todos');
-  /** Período: '' tudo, 'month' este mês, ou um ano fechado ('2025'). */
-  const [period, setPeriod] = useState('');
+  // Arquivo por ano: /financeiro/2025 abre uma página só daquele ano.
+  const { ano } = useParams();
+  const archiveYear = ano && /^\d{4}$/.test(ano) ? ano : null;
+  const currentYear = String(new Date().getFullYear());
+  /** Período da tela principal: ano corrente (padrão) ou 'month' (este mês). */
+  const [period, setPeriod] = useState(currentYear);
+  /** Período efetivo: a página de arquivo trava no ano dela. */
+  const effPeriod = archiveYear ?? period;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<MovItem | null>(null);
   const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
@@ -124,13 +130,16 @@ export function FinancePage() {
     id ? categories.find((c) => c.id === id) ?? null : null;
   const currency = company.currencyCode;
 
-  /* ── período: tudo, este mês, ou um ano fechado ── */
+  /* ── período: ano corrente (padrão), este mês, ou o ano do arquivo ── */
   const monthKey = new Date().toISOString().slice(0, 7);
   const inPeriod = (e: Expense) =>
-    period === '' ||
-    (period === 'month' ? e.spentOn.startsWith(monthKey) : e.spentOn.startsWith(period));
-  // Anos com movimentação (para os chips de período; mais recente primeiro).
-  const years = [...new Set(expenses.map((e) => e.spentOn.slice(0, 4)))].sort().reverse();
+    effPeriod === 'month' ? e.spentOn.startsWith(monthKey) : e.spentOn.startsWith(effPeriod);
+  // Anos anteriores com movimentação: viram cards de arquivo ("Visualizar
+  // movimentações de 2025"). A tela principal fica só com o ano corrente.
+  const pastYears = [...new Set(expenses.map((e) => e.spentOn.slice(0, 4)))]
+    .filter((y) => y < currentYear)
+    .sort()
+    .reverse();
 
   /* ── números dos cards, só CONFIRMADAS e PAGAS entram (aporte não é gasto, RB002) ──
    * Os cards respeitam o período: escolher "2025" vira o resumo daquele ano. */
@@ -255,9 +264,10 @@ export function FinancePage() {
    * Padrão: FLUXO (entrou x saiu) + projeção de gastos do próximo mês.
    * Aba "Aportes": série única de aportes por mês. */
   const isFlowChart = filter !== 'aportes';
-  // Ano fechado ('2025') mostra jan..dez daquele ano; senão, janela adaptativa.
-  const chartPeriod = /^\d{4}$/.test(period) ? period : '';
-  const isYearView = chartPeriod !== '';
+  // Página de arquivo mostra jan..dez do ano; a principal usa a janela
+  // adaptativa com projeção (o dia a dia continua olhando para frente).
+  const chartPeriod = archiveYear ?? '';
+  const isYearView = archiveYear != null;
   const chart = isFlowChart
     ? buildFlowSeries(expenses, recurring.monthlyTotalCents, chartPeriod)
     : buildMonthlySeries(expenses, 'contribution', recurring.monthlyTotalCents, chartPeriod);
@@ -278,7 +288,7 @@ export function FinancePage() {
   const chartCaption = isFlowChart
     ? hasProjection
       ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
-      : `Ano fechado, sem projeção. Volte para "Todos os períodos" para ver a estimativa do próximo mês.`
+      : `Ano fechado: sem projeção, o histórico completo de ${archiveYear}.`
     : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
   const chartHelp = isFlowChart
     ? 'Azul é o que entrou (receitas), vermelho é o que saiu (despesas); a parte tracejada é o que ainda falta pagar no mês. A última barra é a projeção de gastos do próximo mês: média dos gastos registrados mais os custos recorrentes ativos. Passe o mouse em cada barra para ver o valor.'
@@ -292,12 +302,23 @@ export function FinancePage() {
       {/* ── cabeçalho ── */}
       <div className="fin-head fin-head--row">
         <div>
-          <h1>Movimentações</h1>
-          <p>Acompanhe tudo que entrou, saiu ou foi investido na empresa.</p>
+          {archiveYear && (
+            <Link className="fin-back" to="/financeiro">
+              ← Voltar para {currentYear}
+            </Link>
+          )}
+          <h1>{archiveYear ? `Movimentações de ${archiveYear}` : 'Movimentações'}</h1>
+          <p>
+            {archiveYear
+              ? `Ano fechado: tudo que entrou e saiu em ${archiveYear}.`
+              : 'Acompanhe tudo que entrou, saiu ou foi investido na empresa.'}
+          </p>
         </div>
-        <Button onClick={() => setWizardOpen(true)}>
-          <IconPlus /> Adicionar movimentação
-        </Button>
+        {!archiveYear && (
+          <Button onClick={() => setWizardOpen(true)}>
+            <IconPlus /> Adicionar movimentação
+          </Button>
+        )}
       </div>
 
       {/* ── cards de resumo: saúde do negócio (recebido − gasto) ── */}
@@ -337,6 +358,7 @@ export function FinancePage() {
                 : 'Recebido menos gasto, a saúde do negócio.'}
           </span>
         </div>
+        {!archiveYear && (
         <button
           type="button"
           className={'dash-stat dash-stat--btn' + (overduePayable.length > 0 ? ' dash-stat--warn' : '')}
@@ -355,10 +377,11 @@ export function FinancePage() {
                 : `${payable.length} conta${payable.length === 1 ? '' : 's'} a pagar em aberto.`}
           </span>
         </button>
+        )}
       </div>
 
-      {/* ── aguardando MINHA confirmação ── */}
-      {toConfirm.length > 0 && (
+      {/* ── aguardando MINHA confirmação (operacional: só na tela principal) ── */}
+      {!archiveYear && toConfirm.length > 0 && (
         <section className="fin-confirm">
           <span className="fin-confirm__title">Confirme estes pagamentos</span>
           {toConfirm.map((e) => (
@@ -382,8 +405,8 @@ export function FinancePage() {
         </section>
       )}
 
-      {/* ── alerta: contas a pagar (vencidas + a vencer) ── */}
-      {payable.length > 0 && (
+      {/* ── alerta: contas a pagar (vencidas + a vencer), só na tela principal ── */}
+      {!archiveYear && payable.length > 0 && (
         <section className={'fin-due' + (overduePayable.length > 0 ? ' fin-due--alert' : '')}>
           <div className="fin-due__head">
             <span className="fin-due__title">
@@ -445,24 +468,15 @@ export function FinancePage() {
             {label}
           </button>
         ))}
-        <button
-          type="button"
-          className={'fin-chip fin-chip--month' + (period === 'month' ? ' fin-chip--active' : '')}
-          onClick={() => setPeriod((p) => (p === 'month' ? '' : 'month'))}
-        >
-          Este mês
-        </button>
-        {years.map((y) => (
+        {!archiveYear && (
           <button
-            key={y}
             type="button"
-            className={'fin-chip' + (period === y ? ' fin-chip--active' : '')}
-            onClick={() => setPeriod((p) => (p === y ? '' : y))}
-            title={`Resumo de ${y}: cards, gráfico e lista só daquele ano`}
+            className={'fin-chip fin-chip--month' + (period === 'month' ? ' fin-chip--active' : '')}
+            onClick={() => setPeriod((p) => (p === 'month' ? currentYear : 'month'))}
           >
-            {y}
+            Este mês
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── evolução mensal + projeção ── */}
@@ -586,6 +600,36 @@ export function FinancePage() {
             );
           })}
         </div>
+      )}
+
+      {/* ── arquivo: anos anteriores viram cards, a tela fica só com o corrente ── */}
+      {!archiveYear && pastYears.length > 0 && (
+        <section className="fin-years">
+          <span className="fin-years__title">Anos anteriores</span>
+          <div className="fin-years__grid">
+            {pastYears.map((y) => {
+              const doAno = expenses.filter((e) => e.spentOn.startsWith(y));
+              const gastoAno = doAno
+                .filter((e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid')
+                .reduce((s, e) => s + e.amountCents, 0);
+              return (
+                <Link className="fin-year" to={`/financeiro/${y}`} key={y}>
+                  <span className="fin-year__badge">{y}</span>
+                  <span className="fin-year__info">
+                    <strong>Visualizar movimentações de {y}</strong>
+                    <small>
+                      {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
+                      {formatMoney(gastoAno, currency)} em despesas
+                    </small>
+                  </span>
+                  <span className="fin-year__cta" aria-hidden="true">
+                    <IconArrowRight />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* ── wizard (mesmo da Home) ── */}

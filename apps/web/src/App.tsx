@@ -76,6 +76,7 @@ export function App() {
           <Route element={<RequireAuth><ActiveCompanyProvider><AppShell /></ActiveCompanyProvider></RequireAuth>}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/financeiro" element={<FinancePage />} />
+            <Route path="/financeiro/:ano" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />
             <Route path="/empresa/dados" element={<ConfiguracoesPage />} />
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
