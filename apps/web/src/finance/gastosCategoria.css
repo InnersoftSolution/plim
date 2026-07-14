@@ -36,6 +36,13 @@
 .gpc__chart {
   flex-shrink: 0;
 }
+.gpc__arc {
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+.gpc__arc:hover {
+  opacity: 0.75;
+}
 .gpc__chart-label {
   font-size: 22px;
   font-weight: 700;

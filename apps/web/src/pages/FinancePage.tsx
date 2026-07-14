@@ -23,7 +23,7 @@ import { financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
-import { IconArrowRight, IconCheck, IconPlus, IconRepeat, IconWallet } from './dashIcons';
+import { IconArrowRight, IconCheck, IconChevronDown, IconPlus, IconRepeat, IconWallet } from './dashIcons';
 import './dashboard.css';
 import './finance.css';
 
@@ -65,6 +65,8 @@ export function FinancePage() {
   // Filtro por categoria vindo do card "Gastos por categoria" ('' nenhum,
   // '__none__' sem categoria, ou id da categoria).
   const [categoryFilter, setCategoryFilter] = useState('');
+  // Meses abertos na lista agrupada (undefined = só o mais recente aberto).
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -171,6 +173,21 @@ export function FinancePage() {
       : [];
   const items = [...recurringItems, ...dated];
   const nothingYet = expenses.length === 0 && recurring.costs.length === 0;
+
+  // Lista enxuta: movimentações agrupadas por mês, seções colapsáveis
+  // (só o mês mais recente aberto por padrão). Recorrentes seguem em lista
+  // plana, são regras, não têm data de competência.
+  const monthGroups = (() => {
+    const map = new Map<string, MovItem[]>();
+    for (const it of dated) {
+      if (it.kind === 'recurring') continue;
+      const key = it.expense.spentOn.slice(0, 7);
+      const arr = map.get(key);
+      if (arr) arr.push(it);
+      else map.set(key, [it]);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  })();
 
   /* ── gastos por categoria (só despesas pagas e confirmadas do período) ── */
   const gastoCat = (() => {
@@ -507,7 +524,7 @@ export function FinancePage() {
         <div className="fin-card">
           <p className="fin-empty">Nada nesse filtro. Troque o filtro ou registre uma nova movimentação.</p>
         </div>
-      ) : (
+      ) : filter === 'recorrentes' ? (
         <div className="fin-movs">
           {items.map((item) => (
             <MovRow
@@ -520,6 +537,54 @@ export function FinancePage() {
               onOpen={() => setDetail(item)}
             />
           ))}
+        </div>
+      ) : (
+        <div className="fin-groups">
+          {monthGroups.map(([key, group], idx) => {
+            const containsFlash =
+              flashId != null &&
+              group.some((g) => g.kind !== 'recurring' && g.expense.id === flashId);
+            const open = (openMonths[key] ?? idx === 0) || containsFlash;
+            const gastoMes = group
+              .filter((g) => g.kind !== 'recurring' && g.expense.kind === 'expense')
+              .reduce((s, g) => s + (g.kind !== 'recurring' ? g.expense.amountCents : 0), 0);
+            return (
+              <section className={'fin-group' + (open ? ' fin-group--open' : '')} key={key}>
+                <button
+                  type="button"
+                  className="fin-group__head"
+                  aria-expanded={open}
+                  onClick={() => setOpenMonths((m) => ({ ...m, [key]: !open }))}
+                >
+                  <span className="fin-group__title">{monthFullLabel(key)}</span>
+                  <span className="fin-group__count">
+                    {group.length} {group.length === 1 ? 'movimentação' : 'movimentações'}
+                  </span>
+                  <span className="fin-group__total">
+                    {gastoMes > 0 && <span data-financial>{formatMoney(gastoMes, currency)}</span>}
+                    <span className="fin-group__chev" aria-hidden="true">
+                      <IconChevronDown />
+                    </span>
+                  </span>
+                </button>
+                {open && (
+                  <div className="fin-group__body fin-movs">
+                    {group.map((item) => (
+                      <MovRow
+                        key={item.kind === 'recurring' ? `rc-${item.cost.id}` : item.expense.id}
+                        item={item}
+                        currency={currency}
+                        nameOf={nameOf}
+                        flash={item.kind !== 'recurring' && flashId === item.expense.id}
+                        generatesSettlement={generatesSettlement}
+                        onOpen={() => setDetail(item)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -1276,6 +1341,14 @@ function chartWindow(period: string, dataMonths: string[]): { keys: string[]; pr
     keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
   return { keys, projection: keys[keys.length - 1] === curKey };
+}
+
+/** Rótulo completo do mês para os grupos da lista ("Julho de 2026"). */
+function monthFullLabel(key: string): string {
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7));
+  const s = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** Rótulo do mês; ganha o ano ("nov 25") quando não é o ano corrente. */

@@ -51,7 +51,7 @@ export function GastosPorCategoriaCard({
   let acc = 0;
   const arcs = rows.map((r) => {
     const dash = r.pct * C;
-    const seg = { color: r.color, dash, offset: C - acc };
+    const seg = { row: r, dash, offset: C - acc };
     acc += dash;
     return seg;
   });
@@ -74,19 +74,29 @@ export function GastosPorCategoriaCard({
           <svg viewBox="0 0 140 140" width="140" height="140">
             <g transform="rotate(-90 70 70)">
               <circle cx="70" cy="70" r={R} fill="none" stroke="var(--color-border-default)" strokeWidth="16" />
-              {arcs.map((a, i) => (
-                <circle
-                  key={i}
-                  cx="70"
-                  cy="70"
-                  r={R}
-                  fill="none"
-                  stroke={a.color}
-                  strokeWidth="16"
-                  strokeDasharray={`${a.dash} ${C - a.dash}`}
-                  strokeDashoffset={a.offset}
-                />
-              ))}
+              {arcs.map((a) => {
+                const key = keyOf(a.row.id);
+                return (
+                  <circle
+                    key={key}
+                    className="gpc__arc"
+                    cx="70"
+                    cy="70"
+                    r={R}
+                    fill="none"
+                    stroke={a.row.color}
+                    strokeWidth="16"
+                    strokeDasharray={`${a.dash} ${C - a.dash}`}
+                    strokeDashoffset={a.offset}
+                    onClick={() => onSelect(selected === key ? '' : key)}
+                  >
+                    {/* Tooltip nativo: nome, valor e % da fatia. */}
+                    <title>
+                      {`${a.row.name}: ${formatMoney(a.row.totalCents, currency)} (${Math.round(a.row.pct * 100)}% · ${a.row.count} mov.)`}
+                    </title>
+                  </circle>
+                );
+              })}
             </g>
             <text x="70" y="66" textAnchor="middle" className="gpc__chart-label">
               {categorizedCount}
@@ -110,7 +120,10 @@ export function GastosPorCategoriaCard({
                   <span className="gpc__dot" style={{ background: r.color }} aria-hidden="true" />
                   <span className="gpc__name">{r.name}</span>
                   <span className="gpc__meta">
-                    <strong data-financial>{formatMoney(r.totalCents, currency)}</strong>
+                    {/* Valor na cor da fatia: liga a lista ao gráfico de relance. */}
+                    <strong data-financial style={{ color: r.color }}>
+                      {formatMoney(r.totalCents, currency)}
+                    </strong>
                     <small>
                       {Math.round(r.pct * 100)}% · {r.count} mov.
                     </small>
