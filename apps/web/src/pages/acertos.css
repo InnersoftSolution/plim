@@ -277,13 +277,22 @@
 @media (max-width: 620px) {
   .ac-debt {
     flex-wrap: wrap;
+    row-gap: 10px;
   }
   .ac-debt__text {
     flex-basis: calc(100% - 46px);
   }
+  /* Ação em largura cheia, uma linha; o selo de status é redundante aqui
+     (o texto já diz "em aberto R$X"), então some no mobile. */
   .ac-debt__actions {
-    margin-left: 46px;
+    margin-left: 0;
     width: 100%;
-    justify-content: space-between;
+  }
+  .ac-debt__actions .ac-status {
+    display: none;
+  }
+  .ac-debt__actions .btn {
+    flex: 1;
+    white-space: nowrap;
   }
 }
