@@ -19,7 +19,7 @@ import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
-import { IconArrowRight, IconPlus, IconRepeat, IconWallet } from './dashIcons';
+import { IconArrowRight, IconCheck, IconPlus, IconRepeat, IconWallet } from './dashIcons';
 import './dashboard.css';
 import './finance.css';
 
@@ -544,6 +544,8 @@ function MovRow({
   const toPay = isPayable(e);
   const bucket = toPay ? dueBucket(e) : null;
   const overdue = bucket === 'overdue';
+  // Despesa confirmada e já paga: estado resolvido, verde com selo "Paga".
+  const paidExpense = e.kind === 'expense' && !toPay && conf.status === 'confirmed';
   return (
     <button
       type="button"
@@ -560,11 +562,13 @@ function MovRow({
               ? 'fin-mov__icon--aporte'
               : toPay
                 ? 'fin-mov__icon--due'
-                : 'fin-mov__icon--despesa')
+                : paidExpense
+                  ? 'fin-mov__icon--paid'
+                  : 'fin-mov__icon--despesa')
         }
         aria-hidden="true"
       >
-        {isAporte || isRevenue ? <IconArrowRight /> : <IconWallet />}
+        {paidExpense ? <IconCheck /> : isAporte || isRevenue ? <IconArrowRight /> : <IconWallet />}
       </span>
       <div className="fin-mov__body">
         <span className="fin-mov__desc">
@@ -573,6 +577,8 @@ function MovRow({
             <span className={'fin-mov__badge fin-mov__badge--due' + (overdue ? ' fin-mov__badge--overdue' : '')}>
               {overdue ? 'Vencida' : 'A pagar'}
             </span>
+          ) : paidExpense ? (
+            <span className="fin-mov__badge fin-mov__badge--paid">Paga</span>
           ) : (
             <span
               className={
@@ -680,6 +686,8 @@ function MovDetail({
   // Conta a pagar (jornada de vencimento).
   const toPay = exp != null && isPayable(exp);
   const overdue = toPay && dueBucket(exp!) === 'overdue';
+  // Despesa confirmada e já quitada: estado resolvido ("Paga", verde).
+  const paidExpense = isDespesa && !toPay && cst === 'confirmed';
   const impactLines = toPay
     ? [
         'Esta é uma conta a pagar: um lembrete com data de vencimento.',
@@ -753,8 +761,8 @@ function MovDetail({
       <div className="movd-head">
         <div className="movd-head__row">
           <span className={`movd-badge movd-badge--${cfg.tone}`}>{toPay ? 'Conta a pagar' : cfg.tipo}</span>
-          <span className="movd-status">
-            {toPay ? (overdue ? 'Vencida' : 'A pagar') : exp ? confLabel(cst) : cfg.status}
+          <span className={'movd-status' + (paidExpense ? ' movd-status--paid' : '')}>
+            {toPay ? (overdue ? 'Vencida' : 'A pagar') : paidExpense ? 'Paga' : exp ? confLabel(cst) : cfg.status}
           </span>
         </div>
         <h3 className="movd-title">{cfg.title}</h3>

@@ -379,6 +379,7 @@
 .movd-badge--aporte { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .movd-badge--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .movd-status { font-size: 12px; font-weight: 600; color: var(--color-text-subtle); }
+.movd-status--paid { color: var(--color-status-positive); }
 .movd-title {
   font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
   color: var(--color-text-default); margin-top: 4px;
@@ -461,6 +462,7 @@
 .fin-mov__icon--revenue { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__icon--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__icon--due { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
+.fin-mov__icon--paid { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__desc {
   display: flex;
   align-items: center;
@@ -482,6 +484,7 @@
 .fin-mov__badge--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__badge--due { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .fin-mov__badge--overdue { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
+.fin-mov__badge--paid { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 
 /* ── alerta de contas a pagar (Movimentações) ── */
 .fin-due {
