@@ -140,10 +140,13 @@ export function AcertosPage() {
   const matches = makeMatcher(query);
   const hasFilter = query.trim().length > 0;
 
+  // Detalhe por movimentação: só o ano corrente na página principal (2025 e
+  // anteriores ficam nos cards de arquivo). No arquivo, trava no ano dele.
+  const detailYear = archiveYear ?? currentYear;
   // Busca inteligente + arquivo. Com busca (ou no arquivo) mostra tudo, inclusive
   // já quitadas; na home sem busca, só as pendentes.
   const groups = movements
-    .filter((m) => inYear(m.spentOn))
+    .filter((m) => m.spentOn.startsWith(detailYear))
     .filter((m) => matches(`${m.description} ${m.payerName} ${dateHaystack(m.spentOn)}`))
     .filter((m) => (hasFilter || archiveYear ? true : m.remainingCents > 0))
     // Recorrentes primeiro; dentro, pendentes antes de quitadas; depois mais recentes.
@@ -217,7 +220,7 @@ export function AcertosPage() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome, mês ou ano (ex.: Studio, março, 2025)"
+            placeholder="Buscar por nome ou mês (ex.: Studio, março)"
             aria-label="Buscar acertos"
           />
           {hasFilter && (
@@ -365,13 +368,13 @@ export function AcertosPage() {
               ? 'Resultados da busca'
               : archiveYear
                 ? `Acertos de ${archiveYear}`
-                : 'Detalhe por movimentação'}
+                : `Detalhe por movimentação de ${currentYear}`}
           </h2>
         </div>
         {!archiveYear && !hasFilter && groups.length > 0 && (
           <p className="dash-panel__hint">
-            Como cada despesa compartilhada foi rateada e quem já quitou. Para registrar um
-            pagamento, use o Resumo dos acertos acima.
+            Como cada despesa de {currentYear} foi rateada e quem já quitou. Para anos anteriores, use
+            os cards de "Anos anteriores" no topo. Para pagar, use o Resumo dos acertos acima.
           </p>
         )}
         {groups.length === 0 ? (
@@ -379,8 +382,8 @@ export function AcertosPage() {
             <p>
               {hasFilter ? (
                 <>
-                  <strong>Nada encontrado.</strong> Nenhum acerto bate com "{query}". Tente outro
-                  nome, mês ou ano.
+                  <strong>Nada encontrado em {currentYear}.</strong> Nenhum acerto de {currentYear}{' '}
+                  bate com "{query}". Para anos anteriores, abra o card do ano no topo.
                 </>
               ) : archiveYear ? (
                 <>
@@ -389,8 +392,8 @@ export function AcertosPage() {
                 </>
               ) : (
                 <>
-                  <strong>Nenhuma pendência por movimentação.</strong> Quando uma despesa
-                  compartilhada gerar dívida, o detalhe do rateio aparece aqui.
+                  <strong>Nenhuma pendência de {currentYear}.</strong> Quando uma despesa
+                  compartilhada de {currentYear} gerar dívida, o detalhe do rateio aparece aqui.
                 </>
               )}
             </p>
