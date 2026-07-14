@@ -3,7 +3,7 @@ import { InMemoryCompanyRepository } from '../repositories/in-memory/company.rep
 import { InMemoryFinanceRepository } from '../repositories/in-memory/finance.repository.memory';
 import { InMemoryRecurringRepository } from '../repositories/in-memory/recurring.repository.memory';
 import { CompanyService } from './company.service';
-import { FinanceService, nextChargeDate } from './finance.service';
+import { FinanceService, nextChargeDate, lastDayOfMonthIso } from './finance.service';
 import { RecurringService } from './recurring.service';
 
 /** Data de N dias atrás (YYYY-MM-DD, UTC). */
@@ -25,6 +25,15 @@ describe('nextChargeDate', () => {
   });
   it('pagamento único não tem próxima cobrança', () => {
     expect(nextChargeDate('2026-01-01', 'once')).toBeNull();
+  });
+});
+
+describe('lastDayOfMonthIso', () => {
+  it('retorna o último dia do mês (trata mês curto e bissexto)', () => {
+    expect(lastDayOfMonthIso('2026-01-10')).toBe('2026-01-31');
+    expect(lastDayOfMonthIso('2026-02-05')).toBe('2026-02-28');
+    expect(lastDayOfMonthIso('2024-02-15')).toBe('2024-02-29');
+    expect(lastDayOfMonthIso('2026-07-13')).toBe('2026-07-31');
   });
 });
 
@@ -117,15 +126,31 @@ describe('Materialização de custos recorrentes', () => {
     expect(expenses.filter((e) => e.recurringCostId === cost.id)).toHaveLength(1);
   });
 
-  it('cobrança futura e custo inativo não materializam', async () => {
+  it('cobrança do PRÓXIMO mês e custo inativo não materializam', async () => {
     const future = new Date();
-    future.setUTCDate(future.getUTCDate() + 10);
+    future.setUTCMonth(future.getUTCMonth() + 1, 1); // 1º dia do próximo mês (fora do mês atual)
     await createCost({ name: 'Futuro', nextChargeOn: future.toISOString().slice(0, 10) });
     const inativo = await createCost({ name: 'Inativo' });
     await recurring.update(companyId, inativo.id, { active: false }, 'u1');
 
     const expenses = await finance.listExpenses(companyId, 'u1');
     expect(expenses).toHaveLength(0);
+  });
+
+  it('cobrança que vence mais tarde no mês já vira conta a pagar (a vencer)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const endOfMonth = lastDayOfMonthIso(today);
+    const cost = await createCost({ name: 'Coworking', nextChargeOn: endOfMonth });
+    const expenses = await finance.listExpenses(companyId, 'u1');
+    const charge = expenses.find((e) => e.recurringCostId === cost.id)!;
+    expect(charge).toBeDefined();
+    expect(charge.paymentStatus).toBe('unpaid'); // conta a pagar do mês, antes do vencimento
+    expect(charge.dueDate).toBe(endOfMonth);
+    // A próxima cobrança avança para o mês seguinte (não duplica no mês atual).
+    const { costs } = await recurring.list(companyId, 'u1');
+    expect(costs.find((c) => c.id === cost.id)!.nextChargeOn).toBe(
+      nextChargeDate(endOfMonth, 'monthly'),
+    );
   });
 
   it('recupera atraso: 3 meses vencidos geram 3 cobranças de uma vez', async () => {

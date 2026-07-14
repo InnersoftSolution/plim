@@ -25,6 +25,13 @@ import { DomainError, NotFoundError } from '../lib/errors';
  * Mensal/trimestral/anual preservam o dia, ajustando quando o mês é mais
  * curto (31 jan + 1 mês = 28/29 fev). 'other' é tratado como mensal.
  */
+/** Último dia do mês de uma data ISO (YYYY-MM-DD) → YYYY-MM-DD. */
+export function lastDayOfMonthIso(iso: string): string {
+  const [y, m] = iso.split('-').map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); // dia 0 do mês seguinte = último deste
+  return `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+}
+
 export function nextChargeDate(chargeOn: string, frequency: RecurringCost['frequency']): string | null {
   if (frequency === 'once') return null;
   const [y, m, d] = chargeOn.split('-').map(Number) as [number, number, number];
@@ -101,6 +108,10 @@ export class FinanceService {
     today = new Date().toISOString().slice(0, 10),
   ): Promise<void> {
     if (!this.recurringRepo) return;
+    // Materializa as cobranças ATÉ O FIM DO MÊS ATUAL (não só até hoje): uma
+    // conta que vence mais pra frente no mês (ex.: dia 20) já entra como conta a
+    // pagar do mês, aparecendo em "A vencer" e no gráfico antes do vencimento.
+    const horizon = lastDayOfMonthIso(today);
     const costs = await this.recurringRepo.list(companyId);
     for (const cost of costs) {
       if (!cost.active) continue;
@@ -108,11 +119,11 @@ export class FinanceService {
       // conta a pagar). 'once' sem data fica só como registro, não cobra sozinho.
       const start =
         cost.nextChargeOn ?? (cost.frequency !== 'once' ? today : null);
-      if (!start || start > today) continue;
+      if (!start || start > horizon) continue;
 
       let charge: string | null = start;
       // Trava de segurança: no máximo 24 competências por vez (2 anos mensais).
-      for (let guard = 0; charge != null && charge <= today && guard < 24; guard++) {
+      for (let guard = 0; charge != null && charge <= horizon && guard < 24; guard++) {
         const already = await this.repo.findExpenseByRecurringCharge(cost.id, charge);
         if (!already) {
           const weights = members.map((m) =>
