@@ -486,6 +486,30 @@
 .fin-mov__badge--overdue { background: var(--rose-50, #fff1f2); color: var(--rose-600); }
 .fin-mov__badge--paid { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 
+/* filtro por categoria ativo (vindo do card Gastos por categoria) */
+.fin-catfilter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-bg-brand-soft);
+  font-size: 13px;
+  color: var(--color-text-default);
+}
+.fin-catfilter button {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.fin-catfilter button:hover {
+  text-decoration: underline;
+}
+
 /* tags no detalhe da movimentação */
 .movd-tags {
   display: inline-flex;

@@ -17,6 +17,7 @@ import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { FinChart, type ChartPoint } from '../finance/FinChart';
 import { MovementWizard } from '../finance/MovementWizard';
 import { MovementEditForm } from '../finance/MovementEditForm';
+import { GastosPorCategoriaCard } from '../finance/GastosPorCategoriaCard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
@@ -60,6 +61,9 @@ export function FinancePage() {
   const [detail, setDetail] = useState<MovItem | null>(null);
   const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
   const [editingMovement, setEditingMovement] = useState<Expense | null>(null);
+  // Filtro por categoria vindo do card "Gastos por categoria" ('' nenhum,
+  // '__none__' sem categoria, ou id da categoria).
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -145,6 +149,8 @@ export function FinancePage() {
       if (filter === 'recorrentes') return false;
       if (filter === 'a-pagar' && !isPayable(e)) return false;
       if (thisMonth && !e.spentOn.startsWith(monthKey)) return false;
+      if (categoryFilter === '__none__' && e.categoryId != null) return false;
+      if (categoryFilter && categoryFilter !== '__none__' && e.categoryId !== categoryFilter) return false;
       return true;
     })
     .map((e) => ({ kind: e.kind, expense: e }) as MovItem);
@@ -156,6 +162,42 @@ export function FinancePage() {
       : [];
   const items = [...recurringItems, ...dated];
   const nothingYet = expenses.length === 0 && recurring.costs.length === 0;
+
+  /* ── gastos por categoria (só despesas pagas e confirmadas do período) ── */
+  const gastoCat = (() => {
+    const paid = expenses.filter(
+      (e) =>
+        e.kind === 'expense' &&
+        e.confirmationStatus === 'confirmed' &&
+        e.paymentStatus === 'paid' &&
+        (!thisMonth || e.spentOn.startsWith(monthKey)),
+    );
+    const total = paid.reduce((s, e) => s + e.amountCents, 0);
+    const map = new Map<string, { id: string | null; totalCents: number; count: number }>();
+    for (const e of paid) {
+      const key = e.categoryId ?? '__none__';
+      const cur = map.get(key) ?? { id: e.categoryId ?? null, totalCents: 0, count: 0 };
+      cur.totalCents += e.amountCents;
+      cur.count += 1;
+      map.set(key, cur);
+    }
+    const rows = [...map.values()]
+      .map((r) => {
+        const cat = r.id ? categoryOf(r.id) : null;
+        return {
+          id: r.id,
+          name: cat?.name ?? 'Sem categoria',
+          color: cat?.color ?? '#94a3b8',
+          totalCents: r.totalCents,
+          count: r.count,
+          pct: total > 0 ? r.totalCents / total : 0,
+        };
+      })
+      .sort((a, b) => b.totalCents - a.totalCents);
+    return { rows, total };
+  })();
+  // Card só faz sentido nas abas gerais de despesa.
+  const showGastoCat = (filter === 'todos' || filter === 'despesas') && gastoCat.rows.length > 0;
 
   /** Despesa gera acerto quando outra pessoa (além de quem pagou) tem parte nela. */
   function generatesSettlement(e: Expense): boolean {
@@ -385,6 +427,34 @@ export function FinancePage() {
             helpText={chartHelp}
           />
         </>
+      )}
+
+      {/* ── gastos por categoria (análise + filtro) ── */}
+      {showGastoCat && (
+        <GastosPorCategoriaCard
+          rows={gastoCat.rows}
+          totalCents={gastoCat.total}
+          currency={currency}
+          selected={categoryFilter}
+          onSelect={(key) => setCategoryFilter(key)}
+        />
+      )}
+
+      {/* filtro por categoria ativo */}
+      {categoryFilter && (
+        <div className="fin-catfilter">
+          <span>
+            Mostrando:{' '}
+            <strong>
+              {categoryFilter === '__none__'
+                ? 'Sem categoria'
+                : categoryOf(categoryFilter)?.name ?? 'Categoria'}
+            </strong>
+          </span>
+          <button type="button" onClick={() => setCategoryFilter('')}>
+            Limpar filtro
+          </button>
+        </div>
       )}
 
       {/* ── lista ── */}
