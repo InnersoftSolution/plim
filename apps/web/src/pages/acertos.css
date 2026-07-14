@@ -1,3 +1,110 @@
+/* ── Saldo de cada sócio: card com resultado grande + mini extrato ── */
+.sld-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sld {
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: var(--color-bg-surface);
+  padding: 16px 18px;
+  border-left: 3px solid var(--color-border-default);
+}
+.sld--pay {
+  border-left-color: var(--rose-500, #f43f5e);
+}
+.sld--receive {
+  border-left-color: var(--color-status-positive);
+}
+.sld__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sld__avatar {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.sld__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sld__net {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+.sld__net strong {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+}
+.sld--pay .sld__net strong {
+  color: var(--rose-600);
+}
+.sld--receive .sld__net strong {
+  color: var(--color-status-positive);
+}
+.sld__net small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+.sld__break {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-default);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+}
+.sld__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.sld__row dt {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.sld__row dd {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-default);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .sld__break {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Barra de filtros: por mês e por despesa. Mobile-first (empilha). */
 .ac-filters {
   display: grid;

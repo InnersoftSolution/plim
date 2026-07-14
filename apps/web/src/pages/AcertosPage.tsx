@@ -245,10 +245,10 @@ export function AcertosPage() {
           <h2>Saldo de cada sócio</h2>
         </div>
         <p className="dash-panel__hint">
-          A conta de cada sócio: a parte que cabe a ele nas despesas, menos o que já pagou (em
-          despesas do bolso e em acertos). O que sobra é o valor da direita.
+          A parte que cabe a cada um nas despesas, menos o que já pagou. O saldo é o que ainda
+          falta acertar.
         </p>
-        <div className="dash-settlements">
+        <div className="sld-list">
           {balances.map((b) => {
             const net = b.netCents;
             // Acertos confirmados: o que o sócio já pagou e já recebeu de acerto.
@@ -258,27 +258,44 @@ export function AcertosPage() {
             const acertosRecebidos = payments
               .filter((p) => p.status === 'confirmed' && p.toMemberId === b.memberId)
               .reduce((s, p) => s + p.amountCents, 0);
-            const label = net > 0 ? 'a receber' : net < 0 ? 'falta pagar' : 'quite';
-            const color = net > 0 ? 'var(--color-status-positive)' : net < 0 ? 'var(--rose-600)' : 'var(--color-text-subtle)';
+            const tone = net > 0 ? 'receive' : net < 0 ? 'pay' : 'quite';
+            const label = net > 0 ? 'a receber' : net < 0 ? 'falta pagar' : 'tudo quite';
+            const fmt = (c: number) => formatMoney(c, company.currencyCode);
             return (
-              <div className="dash-settlement" key={b.memberId}>
-                <span className="dash-settlement__avatar">{initials(b.fullName)}</span>
-                <span className="dash-settlement__text">
-                  <strong>{b.fullName}</strong>
-                  <span className="ac-mov__meta" style={{ display: 'block' }}>
-                    cabe {formatMoney(b.owedCents, company.currencyCode)} nas despesas · pagou{' '}
-                    {formatMoney(b.paidCents, company.currencyCode)} em despesas
-                    {acertosPagos > 0 && <> · pagou {formatMoney(acertosPagos, company.currencyCode)} em acertos</>}
-                    {acertosRecebidos > 0 && <> · recebeu {formatMoney(acertosRecebidos, company.currencyCode)} de acertos</>}
+              <article className={'sld sld--' + tone} key={b.memberId}>
+                <div className="sld__head">
+                  <span className="sld__avatar">{initials(b.fullName)}</span>
+                  <span className="sld__name">{b.fullName}</span>
+                  <span className="sld__net">
+                    <strong data-financial>{net === 0 ? fmt(0) : fmt(Math.abs(net))}</strong>
+                    <small>{label}</small>
                   </span>
-                </span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color, whiteSpace: 'nowrap' }}>
-                  {net === 0 ? '—' : formatMoney(Math.abs(net), company.currencyCode)}
-                  <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 6, color: 'var(--color-text-subtle)' }}>
-                    {label}
-                  </span>
-                </strong>
-              </div>
+                </div>
+                <dl className="sld__break">
+                  <div className="sld__row">
+                    <dt>Parte nas despesas</dt>
+                    <dd data-financial>{fmt(b.owedCents)}</dd>
+                  </div>
+                  {b.paidCents > 0 && (
+                    <div className="sld__row">
+                      <dt>Pagou em despesas</dt>
+                      <dd data-financial>{fmt(b.paidCents)}</dd>
+                    </div>
+                  )}
+                  {acertosPagos > 0 && (
+                    <div className="sld__row">
+                      <dt>Pagou em acertos</dt>
+                      <dd data-financial>{fmt(acertosPagos)}</dd>
+                    </div>
+                  )}
+                  {acertosRecebidos > 0 && (
+                    <div className="sld__row">
+                      <dt>Recebeu de acertos</dt>
+                      <dd data-financial>{fmt(acertosRecebidos)}</dd>
+                    </div>
+                  )}
+                </dl>
+              </article>
             );
           })}
         </div>
