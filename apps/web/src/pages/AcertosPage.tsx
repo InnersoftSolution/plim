@@ -50,9 +50,23 @@ function formatDateBr(iso: string): string {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
+const MONTHS_PT = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+/** "2026-07" -> "Julho de 2026". */
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const name = MONTHS_PT[(m ?? 1) - 1] ?? '';
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} de ${y}`;
+}
+
 export function AcertosPage() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [paying, setPaying] = useState<PayTarget | null>(null);
+  const [monthFilter, setMonthFilter] = useState('');
+  const [movFilter, setMovFilter] = useState('');
   const { company: activeCompany } = useActiveCompany();
 
   const load = useCallback(async () => {
@@ -79,7 +93,28 @@ export function AcertosPage() {
 
   const { company, balances, movements, payments } = state;
   const nameOf = (id: string) => state.members.find((m) => m.id === id)?.fullName ?? 'Sócio';
-  const pending = movements.filter((m) => m.remainingCents > 0);
+
+  // Meses disponíveis (de movimentações e de pagamentos), mais recente primeiro.
+  const monthsSet = new Set<string>();
+  movements.forEach((m) => monthsSet.add(m.spentOn.slice(0, 7)));
+  payments.forEach((p) => monthsSet.add(p.paidOn.slice(0, 7)));
+  const months = [...monthsSet].sort().reverse();
+
+  // Despesas para o seletor "por despesa", respeitando o mês escolhido.
+  const movOptions = movements
+    .filter((m) => !monthFilter || m.spentOn.startsWith(monthFilter))
+    .map((m) => ({ value: m.movementId, label: `${m.description} · ${formatDateBr(m.spentOn)}` }));
+  // Se trocar de mês e a despesa selecionada não existir mais, ignora o filtro dela.
+  const activeMov = movFilter && movOptions.some((o) => o.value === movFilter) ? movFilter : '';
+
+  const hasFilter = !!monthFilter || !!activeMov;
+  // Com filtro: mostra todas as movimentações que batem (inclusive já quitadas,
+  // pra ver quem pagou). Sem filtro: só as pendentes, como antes.
+  const groups = movements
+    .filter((m) => (!monthFilter || m.spentOn.startsWith(monthFilter)) && (!activeMov || m.movementId === activeMov))
+    .filter((m) => (hasFilter ? true : m.remainingCents > 0));
+  // Histórico de pagamentos também segue o mês selecionado.
+  const visiblePayments = payments.filter((p) => !monthFilter || p.paidOn.startsWith(monthFilter));
 
   return (
     <div className="dash">
@@ -91,21 +126,66 @@ export function AcertosPage() {
         </p>
       </div>
 
-      {/* ── acertos pendentes, agrupados por movimentação ── */}
+      {/* ── barra de filtros: por mês e por despesa ── */}
+      {months.length > 0 && (
+        <div className="ac-filters">
+          <Select
+            label="Mês"
+            value={monthFilter}
+            onChange={(v) => {
+              setMonthFilter(v);
+              setMovFilter('');
+            }}
+            options={[
+              { value: '', label: 'Todos os meses' },
+              ...months.map((ym) => ({ value: ym, label: monthLabel(ym) })),
+            ]}
+          />
+          <Select
+            label="Despesa"
+            value={activeMov}
+            onChange={setMovFilter}
+            options={[{ value: '', label: 'Todas as movimentações' }, ...movOptions]}
+          />
+          {hasFilter && (
+            <button
+              type="button"
+              className="ac-filters__clear"
+              onClick={() => {
+                setMonthFilter('');
+                setMovFilter('');
+              }}
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── acertos agrupados por movimentação ── */}
       <section className="dash-panel">
         <div className="dash-panel__head">
-          <h2>Acertos pendentes</h2>
+          <h2>{hasFilter ? 'Acertos por movimentação' : 'Acertos pendentes'}</h2>
         </div>
-        {pending.length === 0 ? (
+        {groups.length === 0 ? (
           <div className="dash-emptyrow">
             <p>
-              <strong>Tudo certo entre os sócios.</strong> Quando uma despesa ou aporte reembolsável
-              gerar dívida, o Plim mostra aqui quem deve o quê, por movimentação.
+              {hasFilter ? (
+                <>
+                  <strong>Nada neste filtro.</strong> Não há acertos para o mês ou a despesa
+                  selecionada. Troque o filtro ou limpe para ver todos.
+                </>
+              ) : (
+                <>
+                  <strong>Tudo certo entre os sócios.</strong> Quando uma despesa ou aporte
+                  reembolsável gerar dívida, o Plim mostra aqui quem deve o quê, por movimentação.
+                </>
+              )}
             </p>
           </div>
         ) : (
           <div className="ac-groups">
-            {pending.map((m) => (
+            {groups.map((m) => (
               <article className="ac-group" key={m.movementId}>
                 <header className="ac-group__head">
                   <div className="ac-group__id">
@@ -118,10 +198,14 @@ export function AcertosPage() {
                       {formatDateBr(m.spentOn)} · total {formatMoney(m.amountCents, company.currencyCode)}
                     </span>
                   </div>
-                  <span className="ac-group__total" data-financial>
-                    {formatMoney(m.remainingCents, company.currencyCode)}
-                    <small>pendente</small>
-                  </span>
+                  {m.remainingCents > 0 ? (
+                    <span className="ac-group__total" data-financial>
+                      {formatMoney(m.remainingCents, company.currencyCode)}
+                      <small>pendente</small>
+                    </span>
+                  ) : (
+                    <span className="ac-status ac-status--paid">Tudo acertado</span>
+                  )}
                 </header>
 
                 <div className="ac-group__debts">
@@ -136,16 +220,28 @@ export function AcertosPage() {
                       <div className="ac-debt" key={d.debtorId}>
                         <span className="ac-debt__avatar">{initials(d.debtorName)}</span>
                         <span className="ac-debt__text">
-                          <strong>{d.debtorName}</strong> deve{' '}
-                          <strong className="ac-debt__amount" data-financial>
-                            {formatMoney(d.remainingCents, company.currencyCode)}
-                          </strong>{' '}
-                          para <strong>{m.payerName}</strong>
-                          {d.paidCents > 0 && d.remainingCents > 0 && (
-                            <span className="ac-debt__sub">
-                              já pagou {formatMoney(d.paidCents, company.currencyCode)} de{' '}
-                              {formatMoney(d.originalCents, company.currencyCode)}
-                            </span>
+                          {status === 'quitado' ? (
+                            <>
+                              <strong>{d.debtorName}</strong> já pagou a parte dele,{' '}
+                              <strong data-financial>
+                                {formatMoney(d.originalCents, company.currencyCode)}
+                              </strong>{' '}
+                              para <strong>{m.payerName}</strong>
+                            </>
+                          ) : (
+                            <>
+                              <strong>{d.debtorName}</strong> deve{' '}
+                              <strong className="ac-debt__amount" data-financial>
+                                {formatMoney(d.remainingCents, company.currencyCode)}
+                              </strong>{' '}
+                              para <strong>{m.payerName}</strong>
+                              {d.paidCents > 0 && (
+                                <span className="ac-debt__sub">
+                                  já pagou {formatMoney(d.paidCents, company.currencyCode)} de{' '}
+                                  {formatMoney(d.originalCents, company.currencyCode)}
+                                </span>
+                              )}
+                            </>
                           )}
                         </span>
                         {status === 'quitado' ? (
@@ -171,16 +267,18 @@ export function AcertosPage() {
       </section>
 
       {/* ── histórico de pagamentos ── */}
-      {payments.length > 0 && (
+      {visiblePayments.length > 0 && (
         <section className="dash-panel">
           <div className="dash-panel__head">
             <h2>Pagamentos registrados</h2>
           </div>
           <p className="dash-panel__hint">
-            O histórico fica guardado, dívidas quitadas saem da lista de pendentes.
+            {monthFilter
+              ? `Pagamentos de acerto de ${monthLabel(monthFilter)}.`
+              : 'O histórico fica guardado, dívidas quitadas saem da lista de pendentes.'}
           </p>
           <div className="dash-settlements">
-            {payments.map((p) => (
+            {visiblePayments.map((p) => (
               <div className="dash-settlement" key={p.id}>
                 <span className="dash-settlement__avatar" style={{ background: 'var(--color-status-positive-bg)', color: 'var(--color-status-positive)' }}>
                   <IconArrowRight />
