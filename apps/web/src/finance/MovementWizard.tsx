@@ -94,8 +94,9 @@ const TYPE_CARDS: {
 /** Origens comuns de receita (chips de um toque; "+" abre origem própria). */
 const REVENUE_SOURCES = ['Asaas', 'Mercado Livre', 'Stripe', 'Pix', 'Cliente direto', 'Boleto'];
 
-type WizStep = 'type' | 'details' | 'people' | 'review';
-const STEPS: WizStep[] = ['type', 'details', 'people', 'review'];
+// Jornada enxuta: tipo → dados (com pessoas/divisão juntas) → revisão.
+type WizStep = 'type' | 'details' | 'review';
+const STEPS: WizStep[] = ['type', 'details', 'review'];
 
 export function MovementWizard({
   company,
@@ -349,7 +350,11 @@ export function MovementWizard({
                 key={t.id}
                 className={'mw-card' + (type === t.id ? ' is-active' : '') + (t.soon ? ' is-soon' : '')}
                 disabled={t.soon}
-                onClick={() => setType(t.id)}
+                onClick={() => {
+                  // Escolher o tipo já avança: um toque a menos na jornada.
+                  setType(t.id);
+                  next(t.id === 'recurring' ? 'recurring' : 'details');
+                }}
               >
                 <span className="mw-card__label">
                   {t.label}
@@ -359,11 +364,6 @@ export function MovementWizard({
                 <span className="mw-card__impact">{t.impact}</span>
               </button>
             ))}
-          </div>
-          <div className="mw-actions">
-            <Button block disabled={!type} onClick={() => next(type === 'recurring' ? 'recurring' : 'details')}>
-              Continuar
-            </Button>
           </div>
         </>
       )}
@@ -438,8 +438,8 @@ export function MovementWizard({
                 </div>
                 <p className="mw-hint">
                   {paymentStatus === 'paid'
-                    ? 'Já paga: entra no total gasto e nos acertos entre os sócios. No próximo passo você registra quem pagou e a parte de cada sócio.'
-                    : 'A pagar: vira um lembrete com vencimento. Só entra nos cálculos quando você marcar como paga. No próximo passo você define quem vai pagar e a parte de cada sócio.'}
+                    ? 'Já paga: entra no total gasto e nos acertos entre os sócios. Logo abaixo você registra quem pagou e a parte de cada um.'
+                    : 'A pagar: vira um lembrete com vencimento. Só entra nos cálculos quando você marcar como paga. Logo abaixo você define quem vai pagar.'}
                 </p>
               </div>
             )}
@@ -563,48 +563,15 @@ export function MovementWizard({
                 )}
               </div>
             )}
-            <div className="field">
-              <label className="field__label">Observação (opcional)</label>
-              <textarea
-                className="field__input rc-textarea"
-                placeholder={
-                  isExpense
-                    ? 'Ex.: renovação anual do domínio.'
-                    : isRevenue
-                      ? 'Ex.: assinatura mensal do cliente X.'
-                      : 'Ex.: aporte combinado na reunião de junho.'
-                }
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={300}
-                rows={2}
+            {/* pessoas/divisão na MESMA tela (antes era um passo à parte) */}
+            {!isRevenue && (
+              <Select
+                label={isUnpaid ? 'Quem vai pagar' : isExpense ? 'Quem pagou' : 'Sócio que aportou'}
+                value={memberId}
+                onChange={setMemberId}
+                options={members.map((m) => ({ value: m.id, label: m.fullName }))}
               />
-            </div>
-          </div>
-          <div className="mw-actions">
-            <Button block onClick={() => validateDetails() && next(isRevenue || (soloMember && !isExpense) ? 'review' : 'people')}>
-              Continuar
-            </Button>
-            <button type="button" className="mw-back" onClick={() => next('type')}>
-              ← Voltar
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── 3: pessoas / divisão ── */}
-      {step === 'people' && (
-        <>
-          <p className="mw-lead">
-            {isUnpaid ? 'Quem vai pagar e como dividir' : isExpense ? 'Quem pagou e como dividir' : 'Quem fez o aporte'}
-          </p>
-          <div className="mw-form">
-            <Select
-              label={isUnpaid ? 'Quem vai pagar' : isExpense ? 'Quem pagou' : 'Sócio que aportou'}
-              value={memberId}
-              onChange={setMemberId}
-              options={members.map((m) => ({ value: m.id, label: m.fullName }))}
-            />
+            )}
             {isExpense && (
               <div className="field">
                 <label className="field__label">Como dividir entre os sócios</label>
@@ -643,7 +610,7 @@ export function MovementWizard({
                 )}
               </div>
             )}
-            {!isExpense && (
+            {type === 'contribution' && (
               <div className="field">
                 <label className="field__label">Os sócios vão te reembolsar?</label>
                 <div className="fin-split">
@@ -708,19 +675,36 @@ export function MovementWizard({
                 )}
               </div>
             )}
+            <div className="field">
+              <label className="field__label">Observação (opcional)</label>
+              <textarea
+                className="field__input rc-textarea"
+                placeholder={
+                  isExpense
+                    ? 'Ex.: renovação anual do domínio.'
+                    : isRevenue
+                      ? 'Ex.: assinatura mensal do cliente X.'
+                      : 'Ex.: aporte combinado na reunião de junho.'
+                }
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={300}
+                rows={2}
+              />
+            </div>
           </div>
           <div className="mw-actions">
-            <Button block onClick={() => next('review')}>
-              Continuar
+            <Button block onClick={() => validateDetails() && next('review')}>
+              Revisar e salvar
             </Button>
-            <button type="button" className="mw-back" onClick={() => next('details')}>
+            <button type="button" className="mw-back" onClick={() => next('type')}>
               ← Voltar
             </button>
           </div>
         </>
       )}
 
-      {/* ── 4: revisão ── */}
+      {/* ── 3: revisão ── */}
       {step === 'review' && (
         <>
           <p className="mw-lead">Confere pra mim?</p>
@@ -837,7 +821,7 @@ export function MovementWizard({
             <button
               type="button"
               className="mw-back"
-              onClick={() => next(isRevenue || (soloMember && !isExpense) ? 'details' : 'people')}
+              onClick={() => next('details')}
               disabled={saving}
             >
               ← Voltar
