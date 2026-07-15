@@ -23,7 +23,16 @@ import { financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
-import { IconArrowRight, IconCheck, IconChevronDown, IconPlus, IconRepeat, IconWallet } from './dashIcons';
+import {
+  IconArrowRight,
+  IconCheck,
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconPlus,
+  IconRepeat,
+  IconWallet,
+} from './dashIcons';
 import './dashboard.css';
 import './finance.css';
 
@@ -73,6 +82,9 @@ export function FinancePage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   // Meses abertos na lista agrupada (undefined = só o mais recente aberto).
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  // Visão da lista: cartões (padrão) ou tabela anual (com paginação).
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [tablePage, setTablePage] = useState(1);
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -103,6 +115,11 @@ export function FinancePage() {
       setFilter(f);
     }
   }, [searchParams]);
+
+  // Trocou de filtro/período/visão: volta a tabela para a primeira página.
+  useEffect(() => {
+    setTablePage(1);
+  }, [filter, categoryFilter, effPeriod, viewMode]);
 
   // Chegou da Home clicando numa movimentação (?mov=id): rola até ela e destaca.
   useEffect(() => {
@@ -182,6 +199,19 @@ export function FinancePage() {
       : [];
   const items = [...recurringItems, ...dated];
   const nothingYet = expenses.length === 0 && recurring.costs.length === 0;
+
+  // Visão em tabela (anual): linhas planas ordenadas por data, 10 por página.
+  const TABLE_PAGE_SIZE = 10;
+  const tableRows = dated
+    .filter((it): it is Extract<MovItem, { expense: Expense }> => it.kind !== 'recurring')
+    .map((it) => it.expense)
+    .sort((a, b) => (a.spentOn < b.spentOn ? 1 : a.spentOn > b.spentOn ? -1 : 0));
+  const tableTotalPages = Math.max(1, Math.ceil(tableRows.length / TABLE_PAGE_SIZE));
+  const tablePageSafe = Math.min(tablePage, tableTotalPages);
+  const tablePageRows = tableRows.slice(
+    (tablePageSafe - 1) * TABLE_PAGE_SIZE,
+    tablePageSafe * TABLE_PAGE_SIZE,
+  );
 
   // Lista enxuta: movimentações agrupadas por mês, seções colapsáveis
   // (só o mês mais recente aberto por padrão). Recorrentes seguem em lista
@@ -522,6 +552,21 @@ export function FinancePage() {
         </div>
       )}
 
+      {/* ── alternância cartões / tabela (não vale para recorrentes) ── */}
+      {!nothingYet && items.length > 0 && filter !== 'recorrentes' && (
+        <div className="fin-viewtoggle">
+          <button
+            type="button"
+            className="fin-viewbtn"
+            onClick={() => setViewMode((v) => (v === 'table' ? 'cards' : 'table'))}
+          >
+            {viewMode === 'table'
+              ? 'Ver em cartões'
+              : `Ver ${effPeriod === 'month' ? 'este mês' : effPeriod} em tabela`}
+          </button>
+        </div>
+      )}
+
       {/* ── lista ── */}
       {nothingYet ? (
         <div className="fin-card fin-emptybox">
@@ -552,6 +597,18 @@ export function FinancePage() {
             />
           ))}
         </div>
+      ) : viewMode === 'table' ? (
+        <MovTable
+          rows={tablePageRows}
+          currency={currency}
+          nameOf={nameOf}
+          categoryNameOf={(id) => categoryOf(id)?.name ?? null}
+          page={tablePageSafe}
+          totalPages={tableTotalPages}
+          totalRows={tableRows.length}
+          onPage={setTablePage}
+          onOpen={(e) => setDetail({ kind: e.kind, expense: e } as MovItem)}
+        />
       ) : (
         <div className="fin-groups">
           {monthGroups.map(([key, group], idx) => {
@@ -880,6 +937,127 @@ function confLabel(status: string): string {
       : status === 'cancelled'
         ? 'Cancelada'
         : 'Confirmada';
+}
+
+/** Tipo e status compactos de uma movimentação, para a tabela. */
+function movTypeLabel(e: Expense): string {
+  return e.kind === 'revenue' ? 'Entrada' : e.kind === 'contribution' ? 'Aporte' : 'Despesa';
+}
+function movStatus(e: Expense): { label: string; cls: string } {
+  if (e.kind === 'revenue') return { label: 'Recebida', cls: 'is-ok' };
+  if (e.kind === 'contribution') return { label: 'Registrado', cls: 'is-neutral' };
+  if (isPayable(e)) {
+    return dueBucket(e) === 'overdue'
+      ? { label: 'Vencida', cls: 'is-refused' }
+      : { label: 'A pagar', cls: 'is-pending' };
+  }
+  return e.confirmationStatus === 'confirmed'
+    ? { label: 'Paga', cls: 'is-ok' }
+    : { label: confLabel(e.confirmationStatus), cls: 'is-neutral' };
+}
+
+/**
+ * Visão em tabela (anual): uma linha por movimentação, ordenada por data.
+ * Paginada (10/página) e com rolagem horizontal no mobile. Base pronta para
+ * um futuro "Baixar planilha".
+ */
+function MovTable({
+  rows,
+  currency,
+  nameOf,
+  categoryNameOf,
+  page,
+  totalPages,
+  totalRows,
+  onPage,
+  onOpen,
+}: {
+  rows: Expense[];
+  currency: string | null;
+  nameOf: (id: string) => string;
+  categoryNameOf: (id: string | null) => string | null;
+  page: number;
+  totalPages: number;
+  totalRows: number;
+  onPage: (p: number) => void;
+  onOpen: (e: Expense) => void;
+}) {
+  return (
+    <div className="fin-table-card">
+      <div className="fin-tablewrap">
+        <table className="fin-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Movimentação</th>
+              <th>Categoria</th>
+              <th>Tipo</th>
+              <th>Status</th>
+              <th>Quem pagou</th>
+              <th className="fin-table__num">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e) => {
+              const st = movStatus(e);
+              return (
+                <tr key={e.id} onClick={() => onOpen(e)} tabIndex={0}>
+                  <td className="fin-table__date">{formatDate(e.spentOn)}</td>
+                  <td className="fin-table__desc">{e.description}</td>
+                  <td>{categoryNameOf(e.categoryId) ?? '—'}</td>
+                  <td>{movTypeLabel(e)}</td>
+                  <td>
+                    <span className={'fin-table__status ' + st.cls}>{st.label}</span>
+                  </td>
+                  <td>{nameOf(e.paidByMemberId)}</td>
+                  <td className="fin-table__num" data-financial>
+                    {formatMoney(e.amountCents, currency)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="fin-tablefoot">
+        <span className="fin-tablefoot__count">
+          {totalRows} {totalRows === 1 ? 'movimentação' : 'movimentações'}
+        </span>
+        {totalPages > 1 && (
+          <div className="fin-pager">
+            <button
+              type="button"
+              className="fin-pager__btn"
+              disabled={page <= 1}
+              onClick={() => onPage(page - 1)}
+              aria-label="Página anterior"
+            >
+              <IconChevronLeft />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                type="button"
+                key={p}
+                className={'fin-pager__num' + (p === page ? ' is-active' : '')}
+                onClick={() => onPage(p)}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="fin-pager__btn"
+              disabled={page >= totalPages}
+              onClick={() => onPage(page + 1)}
+              aria-label="Próxima página"
+            >
+              <IconChevronRight />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** Rótulos/cores por status de confirmação. */
