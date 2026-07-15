@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Category, Company, CompanyMember, Expense, ExpenseSplitMode, UpdateMovementInput } from '@plim/shared';
+import type { Category, Company, CompanyMember, Contact, ContactType, Expense, ExpenseSplitMode, UpdateMovementInput } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -7,7 +7,9 @@ import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { financeApi, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
+import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
+import { ContatoSelect } from './ContactFields';
 import './wizard.css';
 
 /**
@@ -50,18 +52,27 @@ export function MovementEditForm({
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(expense.categoryId ?? null);
   const [tags, setTags] = useState<string[]>(expense.tags ?? []);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactId, setContactId] = useState<string | null>(expense.contactId ?? null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (isAporte) return; // aporte não usa categoria
+    if (isAporte) return; // aporte não usa categoria nem contato
     categoryApi.list(company.id).then(setCategories).catch(() => setCategories([]));
+    contactApi.list(company.id).then(setContacts).catch(() => setContacts([]));
   }, [company.id, isAporte]);
 
   async function createCategoryInline(name: string, color: string): Promise<Category | null> {
     const created = await categoryApi.create(company.id, { name, color });
     setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  }
+
+  async function createContactInline(name: string, type: ContactType): Promise<Contact | null> {
+    const created = await contactApi.create(company.id, { name, type });
+    setContacts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
     return created;
   }
 
@@ -94,6 +105,7 @@ export function MovementEditForm({
     }
     if (!isAporte) {
       if (categoryId !== (expense.categoryId ?? null)) patch.categoryId = categoryId;
+      if (contactId !== (expense.contactId ?? null)) patch.contactId = contactId;
       const tagsChanged =
         tags.length !== (expense.tags ?? []).length ||
         tags.some((t, i) => t !== (expense.tags ?? [])[i]);
@@ -160,6 +172,13 @@ export function MovementEditForm({
               onChange={setCategoryId}
               onCreate={createCategoryInline}
               movementType={isRevenue ? 'receita' : 'despesa'}
+            />
+            <ContatoSelect
+              contacts={contacts}
+              value={contactId}
+              onChange={setContactId}
+              onCreate={createContactInline}
+              label={isRevenue ? 'Recebido de quem (opcional)' : 'Pago para quem (opcional)'}
             />
             <TagsInput value={tags} onChange={setTags} />
           </>

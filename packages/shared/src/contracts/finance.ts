@@ -130,6 +130,8 @@ export const createExpenseSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   /** Tags livres opcionais. */
   tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+  /** Contato: pago para quem (fornecedor/prestador). Opcional. */
+  contactId: z.string().uuid().nullable().optional(),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
@@ -160,6 +162,7 @@ export const updateMovementSchema = z
     account: z.string().trim().max(60).nullable().optional(),
     categoryId: z.string().uuid().nullable().optional(),
     tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+    contactId: z.string().uuid().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar.' });
 export type UpdateMovementInput = z.infer<typeof updateMovementSchema>;
@@ -183,6 +186,8 @@ export const createRevenueSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   /** Tags livres opcionais. */
   tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+  /** Contato: recebido de quem (cliente). Opcional. */
+  contactId: z.string().uuid().nullable().optional(),
 });
 export type CreateRevenueInput = z.infer<typeof createRevenueSchema>;
 
@@ -251,6 +256,8 @@ export const expenseSchema = z.object({
   categoryId: z.string().uuid().nullable().default(null),
   /** Tags livres, para granularidade extra (ex.: "Adobe", "AWS"). */
   tags: z.array(z.string()).default([]),
+  /** Contato: pago para quem (despesa) / recebido de quem (entrada). */
+  contactId: z.string().uuid().nullable().default(null),
   /** True quando o usuário logado é o pagador e a movimentação está pendente. */
   canConfirm: z.boolean().default(false),
   createdAt: z.string().datetime(),

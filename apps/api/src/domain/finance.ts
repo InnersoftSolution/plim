@@ -65,5 +65,7 @@ export interface Expense {
   categoryId: string | null;
   /** Tags livres (ex.: "Adobe", "AWS"). */
   tags: string[];
+  /** Contato: pago para quem (despesa) / recebido de quem (entrada). */
+  contactId: string | null;
   createdAt: Date;
 }

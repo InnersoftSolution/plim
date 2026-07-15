@@ -153,6 +153,7 @@ export class FinanceService {
             recurringChargeOn: charge,
             categoryId: null,
             tags: [],
+            contactId: null,
           });
         }
         charge = nextChargeDate(charge, cost.frequency);
@@ -204,6 +205,7 @@ export class FinanceService {
       recurringChargeOn: null,
       categoryId: input.categoryId ?? null,
       tags: input.tags ?? [],
+      contactId: input.contactId ?? null,
     });
 
     // "Fulano já me pagou a parte dele": registra o acerto na hora, junto
@@ -286,6 +288,7 @@ export class FinanceService {
       recurringChargeOn: null,
       categoryId: input.categoryId ?? null,
       tags: input.tags ?? [],
+      contactId: null,
     });
 
     // "Fulano já me pagou a parte dele" no momento do aporte: registra o acerto.
@@ -357,6 +360,7 @@ export class FinanceService {
       recurringChargeOn: null,
       categoryId: input.categoryId ?? null,
       tags: input.tags ?? [],
+      contactId: input.contactId ?? null,
     });
   }
 
@@ -484,7 +488,7 @@ export class FinanceService {
     const patch: Partial<
       Pick<
         Expense,
-        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags' | 'contactId'
       >
     > = {};
     if (input.description !== undefined) patch.description = input.description;
@@ -493,6 +497,7 @@ export class FinanceService {
     if (input.note !== undefined) patch.note = input.note;
     if (input.categoryId !== undefined) patch.categoryId = input.categoryId;
     if (input.tags !== undefined) patch.tags = input.tags;
+    if (input.contactId !== undefined) patch.contactId = input.contactId;
     if (isRevenue) {
       if (input.source !== undefined) patch.source = input.source;
       if (input.account !== undefined) patch.account = input.account;

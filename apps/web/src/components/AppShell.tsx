@@ -32,6 +32,7 @@ const NAV: NavEntry[] = [
       { to: '/empresa/dados', label: 'Dados da empresa' },
       { to: '/socios', label: 'Sócios' },
       { to: '/empresa/categorias', label: 'Categorias' },
+      { to: '/empresa/contatos', label: 'Contatos' },
       { to: '/empresa/checklist', label: 'Checklist da empresa' },
     ],
   },

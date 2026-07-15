@@ -100,3 +100,28 @@
     justify-content: flex-end;
   }
 }
+
+/* ── linhas de contato (gestão de contatos reusa a lista) ── */
+.cat-row--contact {
+  align-items: flex-start;
+}
+.contact-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.contact-meta {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contact-edit {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

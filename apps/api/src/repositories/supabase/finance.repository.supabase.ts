@@ -54,6 +54,7 @@ interface ExpenseRow {
   recurring_charge_on: string | null;
   category_id: string | null;
   tags: string[] | null;
+  contact_id: string | null;
   created_at: string;
   expense_shares: { member_id: string; share_cents: number }[] | null;
 }
@@ -80,6 +81,7 @@ function toExpense(row: ExpenseRow): Expense {
     recurringChargeOn: row.recurring_charge_on ?? null,
     categoryId: row.category_id ?? null,
     tags: row.tags ?? [],
+    contactId: row.contact_id ?? null,
     shares: (row.expense_shares ?? []).map((s) => ({
       memberId: s.member_id,
       shareCents: s.share_cents,
@@ -115,6 +117,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         recurring_charge_on: data.recurringChargeOn,
         category_id: data.categoryId,
         tags: data.tags,
+        contact_id: data.contactId,
       })
       .select('id, created_at')
       .single<{ id: string; created_at: string }>();
@@ -219,7 +222,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     patch: Partial<
       Pick<
         Expense,
-        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'
+        'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags' | 'contactId'
       >
     >,
   ): Promise<Expense> {
@@ -235,6 +238,7 @@ export class SupabaseFinanceRepository implements FinanceRepository {
     if (patch.account !== undefined) row.account = patch.account;
     if (patch.categoryId !== undefined) row.category_id = patch.categoryId;
     if (patch.tags !== undefined) row.tags = patch.tags;
+    if (patch.contactId !== undefined) row.contact_id = patch.contactId;
 
     if (Object.keys(row).length > 0) {
       const { error } = await this.db.from('expenses').update(row).eq('id', expenseId);

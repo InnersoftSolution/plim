@@ -657,6 +657,18 @@ describe('FinanceService', () => {
     expect(ok.description).toBe('Hosting');
   });
 
+  it('despesa guarda o contato (pago para quem) e a edição troca', async () => {
+    const contactId = '11111111-1111-4111-8111-111111111111';
+    const created = await finance.createExpense(
+      companyId,
+      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity', contactId },
+      'u1',
+    );
+    expect(created.contactId).toBe(contactId);
+    const cleared = await finance.updateExpense(companyId, created.id, { contactId: null }, 'u1');
+    expect(cleared.contactId).toBeNull();
+  });
+
   it('editar movimentação inexistente devolve MOVEMENT_NOT_FOUND', async () => {
     await expect(
       finance.updateExpense(companyId, '00000000-0000-0000-0000-000000000000', { description: 'x' }, 'u1'),

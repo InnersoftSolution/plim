@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Category, Company, CompanyMember, ExpenseSplitMode } from '@plim/shared';
+import type { Category, Company, CompanyMember, Contact, ContactType, ExpenseSplitMode } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -7,7 +7,9 @@ import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
+import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
+import { ContatoSelect } from './ContactFields';
 import { RecurringCostForm } from './RecurringCostForm';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
@@ -140,16 +142,26 @@ export function MovementWizard({
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  /** Contatos da empresa + o escolhido (pago para / recebido de). */
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactId, setContactId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     categoryApi.list(company.id).then(setCategories).catch(() => setCategories([]));
+    contactApi.list(company.id).then(setContacts).catch(() => setContacts([]));
   }, [company.id]);
 
   async function createCategoryInline(name: string, color: string): Promise<Category | null> {
     const created = await categoryApi.create(company.id, { name, color });
     setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  }
+
+  async function createContactInline(name: string, type: ContactType): Promise<Contact | null> {
+    const created = await contactApi.create(company.id, { name, type });
+    setContacts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
     return created;
   }
 
@@ -290,6 +302,7 @@ export function MovementWizard({
               : undefined,
           categoryId,
           tags,
+          contactId,
         });
       } else if (type === 'revenue') {
         await financeApi.createRevenue(company.id, {
@@ -302,6 +315,7 @@ export function MovementWizard({
           note: note.trim() || null,
           categoryId,
           tags,
+          contactId,
         });
       } else {
         await financeApi.createContribution(company.id, {
@@ -406,6 +420,13 @@ export function MovementWizard({
                   onChange={setCategoryId}
                   onCreate={createCategoryInline}
                   movementType={isRevenue ? 'receita' : 'despesa'}
+                />
+                <ContatoSelect
+                  contacts={contacts}
+                  value={contactId}
+                  onChange={setContactId}
+                  onCreate={createContactInline}
+                  label={isRevenue ? 'Recebido de quem (opcional)' : 'Pago para quem (opcional)'}
                 />
                 <TagsInput value={tags} onChange={setTags} />
               </>

@@ -6,6 +6,7 @@ import {
   type Category,
   type Company,
   type CompanyMember,
+  type Contact,
   type Expense,
   type RecurringCost,
   type RecurringCostList,
@@ -21,6 +22,7 @@ import { GastosPorCategoriaCard } from '../finance/GastosPorCategoriaCard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
+import { contactApi } from '../finance/contactApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
 import {
@@ -52,6 +54,7 @@ type State =
       expenses: Expense[];
       recurring: RecurringCostList;
       categories: Category[];
+      contacts: Contact[];
     };
 
 type Filter = 'todos' | 'receitas' | 'despesas' | 'aportes' | 'recorrentes' | 'a-pagar';
@@ -92,13 +95,14 @@ export function FinancePage() {
 
   const load = useCallback(async () => {
     try {
-      const [members, expenses, recurring, categories] = await Promise.all([
+      const [members, expenses, recurring, categories, contacts] = await Promise.all([
         companyApi.listMembers(activeCompany.id),
         financeApi.listExpenses(activeCompany.id),
         recurringApi.list(activeCompany.id),
         categoryApi.list(activeCompany.id).catch(() => [] as Category[]),
+        contactApi.list(activeCompany.id).catch(() => [] as Contact[]),
       ]);
-      setState({ status: 'ready', company: activeCompany, members, expenses, recurring, categories });
+      setState({ status: 'ready', company: activeCompany, members, expenses, recurring, categories, contacts });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
@@ -141,10 +145,12 @@ export function FinancePage() {
   if (state.status === 'error') return <p className="fin-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="fin-muted">Crie sua empresa primeiro.</p>;
 
-  const { company, members, expenses, recurring, categories } = state;
+  const { company, members, expenses, recurring, categories, contacts } = state;
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
   const categoryOf = (id: string | null) =>
     id ? categories.find((c) => c.id === id) ?? null : null;
+  const contactNameOf = (id: string | null) =>
+    id ? contacts.find((c) => c.id === id)?.name ?? null : null;
   const currency = company.currencyCode;
 
   /* ── período: ano corrente (padrão), este mês, ou o ano do arquivo ── */
@@ -223,7 +229,7 @@ export function FinancePage() {
       const s = String(v ?? '');
       return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['Data', 'Movimentação', 'Categoria', 'Tipo', 'Status', 'Quem pagou', 'Valor'];
+    const header = ['Data', 'Movimentação', 'Categoria', 'Contato', 'Tipo', 'Status', 'Quem pagou', 'Valor'];
     const lines = [header.join(sep)];
     for (const e of tableRows) {
       lines.push(
@@ -231,6 +237,7 @@ export function FinancePage() {
           formatDate(e.spentOn),
           e.description,
           categoryOf(e.categoryId)?.name ?? 'Sem categoria',
+          contactNameOf(e.contactId) ?? '',
           movTypeLabel(e),
           movStatus(e).label,
           nameOf(e.paidByMemberId),
@@ -648,6 +655,7 @@ export function FinancePage() {
           currency={currency}
           nameOf={nameOf}
           categoryNameOf={(id) => categoryOf(id)?.name ?? null}
+          contactNameOf={contactNameOf}
           page={tablePageSafe}
           totalPages={tableTotalPages}
           totalRows={tableRows.length}
@@ -768,6 +776,7 @@ export function FinancePage() {
             currency={currency}
             nameOf={nameOf}
             category={detail.kind !== 'recurring' ? categoryOf(detail.expense.categoryId) : null}
+            contactName={detail.kind !== 'recurring' ? contactNameOf(detail.expense.contactId) : null}
             generatesSettlement={generatesSettlement}
             busy={busyId != null}
             onDecide={async (id, d) => {
@@ -1022,6 +1031,7 @@ function MovTable({
   currency,
   nameOf,
   categoryNameOf,
+  contactNameOf,
   page,
   totalPages,
   totalRows,
@@ -1033,6 +1043,7 @@ function MovTable({
   currency: string | null;
   nameOf: (id: string) => string;
   categoryNameOf: (id: string | null) => string | null;
+  contactNameOf: (id: string | null) => string | null;
   page: number;
   totalPages: number;
   totalRows: number;
@@ -1054,6 +1065,7 @@ function MovTable({
               <th>Data</th>
               <th>Movimentação</th>
               <th>Categoria</th>
+              <th>Contato</th>
               <th>Tipo</th>
               <th>Status</th>
               <th>Quem pagou</th>
@@ -1068,6 +1080,7 @@ function MovTable({
                   <td className="fin-table__date">{formatDate(e.spentOn)}</td>
                   <td className="fin-table__desc">{e.description}</td>
                   <td>{categoryNameOf(e.categoryId) ?? '—'}</td>
+                  <td>{contactNameOf(e.contactId) ?? '—'}</td>
                   <td>{movTypeLabel(e)}</td>
                   <td>
                     <span className={'fin-table__status ' + st.cls}>{st.label}</span>
@@ -1143,6 +1156,7 @@ function MovDetail({
   currency,
   nameOf,
   category,
+  contactName,
   generatesSettlement,
   busy,
   onDecide,
@@ -1157,6 +1171,7 @@ function MovDetail({
   currency: string | null;
   nameOf: (id: string) => string;
   category: Category | null;
+  contactName: string | null;
   generatesSettlement: (e: Expense) => boolean;
   busy: boolean;
   onDecide: (expenseId: string, decision: 'confirm' | 'refuse') => void;
@@ -1366,7 +1381,15 @@ function MovDetail({
                 <Row k="Origem" v={item.expense.source} />
               )}
               {item.expense.kind !== 'contribution' && (
-                <Row k="Categoria" v={category ? category.name : 'Sem categoria'} />
+                <>
+                  <Row k="Categoria" v={category ? category.name : 'Sem categoria'} />
+                  {contactName && (
+                    <Row
+                      k={item.expense.kind === 'revenue' ? 'Recebido de' : 'Pago para'}
+                      v={contactName}
+                    />
+                  )}
+                </>
               )}
               {item.expense.tags.length > 0 && (
                 <div className="mw-review__row">

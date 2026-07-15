@@ -12,7 +12,7 @@ export interface FinanceRepository {
   /** Atualiza campos de uma movimentação (e substitui as partilhas se vierem). */
   updateExpense(
     expenseId: string,
-    patch: Partial<Pick<Expense, 'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags'>>,
+    patch: Partial<Pick<Expense, 'description' | 'amountCents' | 'spentOn' | 'note' | 'paidByMemberId' | 'splitMode' | 'shares' | 'source' | 'account' | 'categoryId' | 'tags' | 'contactId'>>,
   ): Promise<Expense>;
   createPayment(data: Omit<SettlementPayment, 'id' | 'createdAt'>): Promise<SettlementPayment>;
   listPayments(companyId: string): Promise<SettlementPayment[]>;
