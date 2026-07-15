@@ -245,12 +245,17 @@ export function FinancePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
+    a.rel = 'noopener';
     const periodTag = archiveYear ?? (effPeriod === 'month' ? 'mes-atual' : effPeriod);
     a.download = `movimentacoes-${periodTag}.csv`;
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    // Revogar/remover s\u00F3 depois: revogar na hora cancela o download em alguns
+    // navegadores (o clique parece "n\u00E3o fazer nada").
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 1500);
   }
 
   // Lista enxuta: movimentações agrupadas por mês, seções colapsáveis
