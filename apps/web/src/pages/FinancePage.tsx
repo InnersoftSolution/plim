@@ -213,6 +213,46 @@ export function FinancePage() {
     tablePageSafe * TABLE_PAGE_SIZE,
   );
 
+  /**
+   * Exporta a tabela INTEIRA do período (não só a página) em CSV amigável ao
+   * Excel/Sheets pt-BR: separador ';', decimal com vírgula, BOM para acentos.
+   */
+  function downloadCsv() {
+    const sep = ';';
+    const esc = (v: string) => {
+      const s = String(v ?? '');
+      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ['Data', 'Movimentação', 'Categoria', 'Tipo', 'Status', 'Quem pagou', 'Valor'];
+    const lines = [header.join(sep)];
+    for (const e of tableRows) {
+      lines.push(
+        [
+          formatDate(e.spentOn),
+          e.description,
+          categoryOf(e.categoryId)?.name ?? 'Sem categoria',
+          movTypeLabel(e),
+          movStatus(e).label,
+          nameOf(e.paidByMemberId),
+          (e.amountCents / 100).toFixed(2).replace('.', ','),
+        ]
+          .map(esc)
+          .join(sep),
+      );
+    }
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const periodTag = archiveYear ?? (effPeriod === 'month' ? 'mes-atual' : effPeriod);
+    a.download = `movimentacoes-${periodTag}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // Lista enxuta: movimentações agrupadas por mês, seções colapsáveis
   // (só o mês mais recente aberto por padrão). Recorrentes seguem em lista
   // plana, são regras, não têm data de competência.
@@ -607,6 +647,7 @@ export function FinancePage() {
           totalPages={tableTotalPages}
           totalRows={tableRows.length}
           onPage={setTablePage}
+          onDownload={downloadCsv}
           onOpen={(e) => setDetail({ kind: e.kind, expense: e } as MovItem)}
         />
       ) : (
@@ -939,6 +980,16 @@ function confLabel(status: string): string {
         : 'Confirmada';
 }
 
+function IconDownload() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </svg>
+  );
+}
+
 /** Tipo e status compactos de uma movimentação, para a tabela. */
 function movTypeLabel(e: Expense): string {
   return e.kind === 'revenue' ? 'Entrada' : e.kind === 'contribution' ? 'Aporte' : 'Despesa';
@@ -970,6 +1021,7 @@ function MovTable({
   totalPages,
   totalRows,
   onPage,
+  onDownload,
   onOpen,
 }: {
   rows: Expense[];
@@ -980,10 +1032,16 @@ function MovTable({
   totalPages: number;
   totalRows: number;
   onPage: (p: number) => void;
+  onDownload: () => void;
   onOpen: (e: Expense) => void;
 }) {
   return (
     <div className="fin-table-card">
+      <div className="fin-tablehead">
+        <button type="button" className="fin-downloadbtn" onClick={onDownload}>
+          <IconDownload /> Baixar planilha
+        </button>
+      </div>
       <div className="fin-tablewrap">
         <table className="fin-table">
           <thead>

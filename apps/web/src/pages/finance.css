@@ -517,6 +517,29 @@
   background: var(--color-bg-surface);
   overflow: hidden;
 }
+.fin-tablehead {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+.fin-downloadbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+.fin-downloadbtn:hover {
+  filter: brightness(0.94);
+}
 .fin-tablewrap {
   overflow-x: auto;
 }
