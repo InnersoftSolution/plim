@@ -4,12 +4,22 @@ import type {
   UpdateCompanyInput,
   UpdateMemberInput,
 } from '@plim/shared';
-import type { Company, CompanyMember, CompanyUpdate } from '../domain/company';
+import type {
+  Company,
+  CompanyMember,
+  CompanyMemberWithInvite,
+  CompanyUpdate,
+} from '../domain/company';
 import type { CompanyRepository } from '../repositories/company.repository';
 import { DomainError, NotFoundError } from '../lib/errors';
 import { canCreateMultipleCompanies } from '../lib/company-access';
 import type { LogoStorage } from '../lib/logo-storage';
 import type { InviteSender } from '../lib/invite-sender';
+
+/** Registrador mínimo (compatível com app.log do Fastify). Opcional. */
+export interface ServiceLogger {
+  error(obj: unknown, msg?: string): void;
+}
 
 /** Limite da logo: 5MB ja decodificados. */
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
@@ -30,6 +40,7 @@ export class CompanyService {
     private readonly repo: CompanyRepository,
     private readonly logoStorage?: LogoStorage,
     private readonly inviteSender?: InviteSender,
+    private readonly logger?: ServiceLogger,
   ) {}
 
   /**
@@ -201,7 +212,7 @@ export class CompanyService {
     }
   }
 
-  async addMember(companyId: string, input: AddMemberInput, actingUserId?: string | null): Promise<CompanyMember> {
+  async addMember(companyId: string, input: AddMemberInput, actingUserId?: string | null): Promise<CompanyMemberWithInvite> {
     await this.assertMembership(companyId, actingUserId);
 
     // E-mail é opcional nesta fase; só checa duplicidade quando informado.
@@ -228,12 +239,17 @@ export class CompanyService {
     });
 
     // Cadastrou com e-mail? O convite sai na hora. Se o envio falhar, o
-    // cadastro NAO falha junto: fica "não convidado" e dá para reenviar.
+    // cadastro NAO falha junto: fica "não convidado", loga o motivo real e
+    // devolve inviteOutcome:'failed' para a tela oferecer reenviar.
     if (member.email && this.inviteSender) {
       try {
         return await this.sendMemberInvite(companyId, member, actingUserId);
-      } catch {
-        return member;
+      } catch (err) {
+        this.logger?.error(
+          { err, memberId: member.id, companyId, email: member.email },
+          'convite de sócio: envio falhou no cadastro (member fica não convidado)',
+        );
+        return { ...member, inviteOutcome: 'failed' };
       }
     }
     return member;
@@ -244,7 +260,7 @@ export class CompanyService {
     companyId: string,
     memberId: string,
     actingUserId?: string | null,
-  ): Promise<CompanyMember> {
+  ): Promise<CompanyMemberWithInvite> {
     await this.assertMembership(companyId, actingUserId);
     const member = await this.repo.findMemberById(companyId, memberId);
     if (!member) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
@@ -264,20 +280,22 @@ export class CompanyService {
     companyId: string,
     member: CompanyMember,
     actingUserId?: string | null,
-  ): Promise<CompanyMember> {
+  ): Promise<CompanyMemberWithInvite> {
     const [company, inviter] = await Promise.all([
       this.repo.findCompanyById(companyId),
       actingUserId ? this.repo.findMemberByUserId(companyId, actingUserId) : null,
     ]);
-    await this.inviteSender!.sendInvite({
+    const outcome = await this.inviteSender!.sendInvite({
       email: member.email!,
       fullName: member.fullName,
       companyName: company?.name ?? 'a empresa',
       inviterName: inviter?.fullName ?? 'Um sócio',
     });
     // "already_registered" também conta como convidado: o vínculo acontece
-    // sozinho no próximo login dessa pessoa (claim por e-mail).
-    return this.repo.updateMember(member.id, { invitationStatus: 'invited' });
+    // sozinho no próximo login dessa pessoa (claim por e-mail). Mas NÃO sai
+    // e-mail nesse caso — o front usa inviteOutcome para avisar a pessoa.
+    const updated = await this.repo.updateMember(member.id, { invitationStatus: 'invited' });
+    return { ...updated, inviteOutcome: outcome };
   }
 
   /**

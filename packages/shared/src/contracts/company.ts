@@ -140,8 +140,15 @@ export const companyMemberSchema = z.object({
   notes: z.string().nullable(),
   status: z.enum(['invited', 'active']),
   invitationStatus: invitationStatusSchema,
+  /**
+   * Desfecho transitório do último convite (só nas respostas de cadastrar/convidar):
+   * 'sent' saiu e-mail · 'already_registered' a pessoa já tem conta, é só entrar ·
+   * 'failed' o envio falhou, dá para reenviar. Ausente na listagem de sócios.
+   */
+  inviteOutcome: z.enum(['sent', 'already_registered', 'failed']).optional(),
 });
 export type CompanyMember = z.infer<typeof companyMemberSchema>;
+export type MemberInviteOutcome = NonNullable<CompanyMember['inviteOutcome']>;
 
 export const companySchema = z.object({
   id: z.string().uuid(),

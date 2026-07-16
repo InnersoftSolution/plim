@@ -4,6 +4,7 @@ import {
   functionalRoleCatalog,
   type Company,
   type CompanyMember,
+  type MemberInviteOutcome,
 } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -26,6 +27,24 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'empty' }
   | { status: 'ready'; company: Company; members: CompanyMember[] };
+
+/**
+ * Mensagem honesta conforme o desfecho do convite. O ponto-chave é o
+ * 'already_registered': o Supabase NÃO reenvia e-mail para quem já tem conta,
+ * então dizer "convite enviado" enganava o sócio (ficava esperando um e-mail
+ * que nunca chegava). Aqui cada caso recebe a orientação certa.
+ */
+function inviteOutcomeText(email: string | null, outcome?: MemberInviteOutcome): string {
+  const who = email ?? 'a pessoa';
+  switch (outcome) {
+    case 'already_registered':
+      return `${who} já tem conta no Plim. Não precisa de convite: é só a pessoa entrar em app.plim.work (ou usar "Esqueci a senha" se não lembrar).`;
+    case 'failed':
+      return `O convite para ${who} não saiu agora. Toque em "Reenviar convite" em instantes.`;
+    default:
+      return `Convite enviado para ${who}. A pessoa recebe um e-mail para entrar no Plim.`;
+  }
+}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -125,8 +144,8 @@ export function SociedadePage() {
     setInvitingId(m.id);
     setNotice('');
     try {
-      await companyApi.inviteMember(company.id, m.id);
-      setNotice(`Convite enviado para ${m.email}. A pessoa recebe um e-mail para entrar no Plim.`);
+      const res = await companyApi.inviteMember(company.id, m.id);
+      setNotice(inviteOutcomeText(m.email, res.inviteOutcome));
       await load();
     } catch (err) {
       setNotice(messageForError(err));
@@ -315,8 +334,8 @@ export function SociedadePage() {
             existingEmails={members.map((m) => m.email).filter((e): e is string => e != null)}
             onDone={(created) => {
               setAddOpen(false);
-              if (created?.email && created.invitationStatus === 'invited') {
-                setNotice(`Sócio adicionado. Convite enviado para ${created.email}.`);
+              if (created?.email) {
+                setNotice(`Sócio adicionado. ${inviteOutcomeText(created.email, created.inviteOutcome)}`);
               } else if (created && !created.email) {
                 setNotice('Sócio adicionado. Cadastre o e-mail quando quiser enviar o convite.');
               }

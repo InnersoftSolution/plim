@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryCompanyRepository } from '../repositories/in-memory/company.repository.memory';
 import { CompanyService } from './company.service';
-import { InMemoryInviteSender } from '../lib/invite-sender';
+import { InMemoryInviteSender, type InviteSender } from '../lib/invite-sender';
 import { DomainError } from '../lib/errors';
 
 describe('CompanyService', () => {
@@ -247,6 +247,44 @@ describe('CompanyService: convites de sócio', () => {
     );
     expect(member.invitationStatus).toBe('invited');
     expect(invites.sent).toHaveLength(0); // nenhum e-mail novo, mas o vínculo vem no login
+  });
+
+  it('cadastrar com e-mail novo devolve inviteOutcome "sent"', async () => {
+    const member = await service.addMember(
+      companyId,
+      { fullName: 'Vanessa Lima', email: 'vanessa@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    expect(member.inviteOutcome).toBe('sent');
+  });
+
+  it('cadastrar quem já tem conta devolve inviteOutcome "already_registered" (front avisa que é só entrar)', async () => {
+    invites.registered.add('ja-tem-conta@plim.work');
+    const member = await service.addMember(
+      companyId,
+      { fullName: 'Quem Já Tem Conta', email: 'ja-tem-conta@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    expect(member.inviteOutcome).toBe('already_registered');
+  });
+
+  it('envio que falha não derruba o cadastro: outcome "failed" e o erro é logado', async () => {
+    const boom = new Error('SMTP fora do ar');
+    const failing: InviteSender = {
+      sendInvite: () => Promise.reject(boom),
+    };
+    const errors: unknown[] = [];
+    const logger = { error: (obj: unknown) => errors.push(obj) };
+    const svc = new CompanyService(repo, undefined, failing, logger);
+    const member = await svc.addMember(
+      companyId,
+      { fullName: 'Falhou', email: 'falhou@plim.work', equityPercent: null },
+      'u-owner',
+    );
+    expect(member.id).toBeTruthy(); // sócio criado mesmo com o envio falhando
+    expect(member.invitationStatus).toBe('not_invited');
+    expect(member.inviteOutcome).toBe('failed');
+    expect(errors).toHaveLength(1); // não é mais silencioso: falha vai pro log
   });
 
   it('o dono da conta exclui um sócio definitivamente', async () => {

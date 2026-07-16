@@ -112,3 +112,15 @@ export interface CompanyMember {
   status: 'invited' | 'active';
   invitationStatus: InvitationStatus;
 }
+
+/**
+ * Desfecho do envio de convite, informado ao front para dar a mensagem certa:
+ * - 'sent': e-mail saiu, a pessoa recebe o link para entrar.
+ * - 'already_registered': a pessoa já tem conta; NÃO sai e-mail, é só ela entrar.
+ * - 'failed': o envio falhou (SMTP, rate limit); nada saiu, dá para reenviar.
+ * É transitório (não persiste): só acompanha a resposta da ação de convidar.
+ */
+export type MemberInviteOutcome = 'sent' | 'already_registered' | 'failed';
+
+/** Sócio retornado por uma ação de convite, com o desfecho do envio anexado. */
+export type CompanyMemberWithInvite = CompanyMember & { inviteOutcome?: MemberInviteOutcome };

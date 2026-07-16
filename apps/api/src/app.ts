@@ -81,7 +81,7 @@ export function buildApp(): FastifyInstance {
   const inviteSender = isSupabaseConfigured
     ? new SupabaseInviteSender(getSupabaseAdmin())
     : new InMemoryInviteSender();
-  const companyService = new CompanyService(repository, logoStorage, inviteSender);
+  const companyService = new CompanyService(repository, logoStorage, inviteSender, app.log);
 
   const journeyRepository: JourneyRepository = isSupabaseConfigured
     ? new SupabaseJourneyRepository(getSupabaseAdmin())
