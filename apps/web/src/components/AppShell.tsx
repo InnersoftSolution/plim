@@ -130,10 +130,15 @@ export function AppShell() {
   );
 }
 
+/** No desktop (barra sempre visível) há espaço de sobra: já abre os grupos
+ *  para o acesso ser de um clique. No mobile (drawer) mantém fechado. */
+const isDesktop = (): boolean =>
+  typeof window !== 'undefined' && window.matchMedia('(min-width: 721px)').matches;
+
 function NavGroupItem({ group, onNavigate }: { group: NavGroup; onNavigate: () => void }) {
   const location = useLocation();
   const hasActiveChild = group.children.some((c) => location.pathname.startsWith(c.to));
-  const [open, setOpen] = useState(hasActiveChild);
+  const [open, setOpen] = useState(hasActiveChild || isDesktop());
 
   return (
     <div className="shell-nav__group">
