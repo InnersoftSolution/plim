@@ -1,0 +1,30 @@
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.confirm__msg {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text, #1a1a1a);
+}
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm__btn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: var(--color-primary, #2563eb);
+}
+.confirm__btn--danger { background: var(--color-danger, #dc2626); }
+.confirm__btn:hover { filter: brightness(0.95); }
+.confirm__btn:disabled { opacity: 0.6; cursor: default; }

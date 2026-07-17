@@ -14,6 +14,8 @@ import { activityRoutes } from './http/routes/activity.routes';
 import { checklistRoutes } from './http/routes/checklist.routes';
 import { categoryRoutes } from './http/routes/category.routes';
 import { contactRoutes } from './http/routes/contact.routes';
+import { eventRoutes } from './http/routes/event.routes';
+import { calendarRoutes } from './http/routes/calendar.routes';
 import { adminRoutes } from './http/routes/admin.routes';
 import { CompanyService } from './services/company.service';
 import { AdvisorService } from './services/advisor.service';
@@ -25,6 +27,9 @@ import { ActivityService } from './services/activity.service';
 import { ChecklistService } from './services/checklist.service';
 import { CategoryService } from './services/category.service';
 import { ContactService } from './services/contact.service';
+import { EventService } from './services/event.service';
+import { CalendarService } from './services/calendar.service';
+import { CalendarSyncService } from './services/calendar-sync.service';
 import { AdminService } from './services/admin.service';
 import type { CompanyRepository } from './repositories/company.repository';
 import type { JourneyRepository } from './repositories/journey.repository';
@@ -58,9 +63,16 @@ import { SupabaseCategoryRepository } from './repositories/supabase/category.rep
 import type { ContactRepository } from './repositories/contact.repository';
 import { InMemoryContactRepository } from './repositories/in-memory/contact.repository.memory';
 import { SupabaseContactRepository } from './repositories/supabase/contact.repository.supabase';
+import type { EventRepository } from './repositories/event.repository';
+import { InMemoryEventRepository } from './repositories/in-memory/event.repository.memory';
+import { SupabaseEventRepository } from './repositories/supabase/event.repository.supabase';
+import type { CalendarRepository } from './repositories/calendar.repository';
+import { InMemoryCalendarRepository } from './repositories/in-memory/calendar.repository.memory';
+import { SupabaseCalendarRepository } from './repositories/supabase/calendar.repository.supabase';
 import { SupabaseAdminRepository } from './repositories/supabase/admin.repository.supabase';
-import { env, isSupabaseConfigured, isLlmConfigured } from './config/env';
+import { env, isSupabaseConfigured, isLlmConfigured, isGoogleCalendarConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
+import { parseKey } from './lib/crypto';
 import { InMemoryLogoStorage, SupabaseLogoStorage } from './lib/logo-storage';
 import { InMemoryInviteSender, SupabaseInviteSender } from './lib/invite-sender';
 import type { LlmProvider } from './ai/llm.provider';
@@ -129,6 +141,37 @@ export function buildApp(): FastifyInstance {
     : new InMemoryContactRepository();
   const contactService = new ContactService(companyService, contactRepository);
 
+  const eventRepository: EventRepository = isSupabaseConfigured
+    ? new SupabaseEventRepository(getSupabaseAdmin())
+    : new InMemoryEventRepository();
+
+  // Integração Google Calendar (Plim -> Google, unidirecional). Só liga quando
+  // as credenciais OAuth + chave de cifra estão configuradas. Sem isso, a
+  // agenda funciona igual, só não espelha para fora.
+  const calendarRepository: CalendarRepository = isSupabaseConfigured
+    ? new SupabaseCalendarRepository(getSupabaseAdmin())
+    : new InMemoryCalendarRepository();
+  let calendarService: CalendarService | undefined;
+  let calendarSyncService: CalendarSyncService | undefined;
+  if (isGoogleCalendarConfigured) {
+    calendarService = new CalendarService(calendarRepository, {
+      oauth: {
+        clientId: env.GOOGLE_OAUTH_CLIENT_ID!,
+        clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET!,
+        redirectUri: env.GOOGLE_OAUTH_REDIRECT_URI!,
+      },
+      tokenKey: parseKey(env.CALENDAR_TOKEN_KEY!),
+      webOrigin: env.PLIM_WEB_ORIGIN!,
+    });
+    calendarSyncService = new CalendarSyncService(calendarRepository, calendarService);
+  }
+  const eventService = new EventService(
+    companyService,
+    eventRepository,
+    calendarSyncService,
+    app.log,
+  );
+
   // Painel Administrativo interno (equipe do Plim): permissão validada no service.
   const adminRepository: AdminRepository = isSupabaseConfigured
     ? new SupabaseAdminRepository(getSupabaseAdmin())
@@ -151,6 +194,11 @@ export function buildApp(): FastifyInstance {
       ? `plim-api: copiloto com IA (${env.PLIM_ADVISOR_MODEL ?? 'claude-haiku-4-5'})`
       : 'plim-api: copiloto sem IA — apenas insights determinísticos',
   );
+  app.log.info(
+    isGoogleCalendarConfigured
+      ? 'plim-api: Google Calendar ligado (sync Plim -> Google, unidirecional)'
+      : 'plim-api: Google Calendar desligado — configure as env vars para ativar',
+  );
 
   app.register(healthRoutes);
   app.register(companyRoutes, { service: companyService });
@@ -165,6 +213,10 @@ export function buildApp(): FastifyInstance {
   app.register(checklistRoutes, { service: checklistService });
   app.register(categoryRoutes, { service: categoryService });
   app.register(contactRoutes, { service: contactService });
+  app.register(eventRoutes, { service: eventService });
+  if (calendarService) {
+    app.register(calendarRoutes, { service: calendarService });
+  }
   app.register(adminRoutes, { service: adminService });
 
   app.setErrorHandler((error, _request, reply) => {

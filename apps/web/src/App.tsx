@@ -18,6 +18,7 @@ import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ChecklistPage } from './pages/ChecklistPage';
 import { CategoriasPage } from './pages/CategoriasPage';
 import { ContatosPage } from './pages/ContatosPage';
+import { AgendaPage } from './pages/AgendaPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AppShell } from './components/AppShell';
 import { ActiveCompanyProvider } from './company/ActiveCompanyContext';
@@ -80,6 +81,7 @@ export function App() {
             <Route path="/financeiro/:ano" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />
             <Route path="/acertos/:ano" element={<AcertosPage />} />
+            <Route path="/agenda" element={<AgendaPage />} />
             <Route path="/empresa/dados" element={<ConfiguracoesPage />} />
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
             <Route path="/socios" element={<SociedadePage />} />

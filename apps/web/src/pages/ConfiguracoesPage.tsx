@@ -17,6 +17,7 @@ import {
 } from '@plim/shared';
 import { apiFetch } from '../lib/api';
 import { Button } from '../components/ui/Button';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Drawer } from '../components/ui/Drawer';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -728,6 +729,7 @@ function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Compan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -758,6 +760,7 @@ function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Compan
     try {
       const updated = await logoApi.remove(company.id);
       onSaved(updated);
+      setConfirmRemove(false);
     } catch (err) {
       setError(messageForError(err));
     } finally {
@@ -824,10 +827,20 @@ function LogoPanel({ company, onSaved }: { company: Company; onSaved: (c: Compan
       </label>
 
       {company.logoUrl && !busy && (
-        <button type="button" className="logo-drop__remove" onClick={() => void handleRemove()}>
+        <button type="button" className="logo-drop__remove" onClick={() => setConfirmRemove(true)}>
           Remover logo
         </button>
       )}
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remover logo?"
+        message="A logo da empresa será removida. Você pode subir outra depois."
+        confirmLabel="Remover"
+        busy={busy}
+        onConfirm={() => void handleRemove()}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </section>
   );
 }
