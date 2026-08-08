@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { signState, verifyState } from './crypto';
 
 /**
@@ -32,14 +33,31 @@ export interface GoogleTokens {
   scope: string;
 }
 
-/** Monta a URL de consentimento e um `state` assinado com o user_id. */
+/** Resultado da validação do `state`: quem iniciou e o nonce de uso único. */
+export interface ParsedState {
+  userId: string;
+  nonce: string;
+}
+
+/** Gera um nonce aleatório para o `state` (e o cookie de vínculo do navegador). */
+export function generateNonce(): string {
+  return randomBytes(16).toString('hex');
+}
+
+/**
+ * Monta a URL de consentimento e um `state` assinado com o user_id + nonce.
+ * O `nonce` vem de fora porque ele também é gravado num cookie no navegador de
+ * quem inicia: no callback exigimos que o cookie bata com o nonce do state, o
+ * que amarra o fluxo ao mesmo navegador (anti-CSRF do OAuth).
+ */
 export function buildAuthUrl(
   cfg: GoogleOAuthConfig,
   userId: string,
+  nonce: string,
   keyForState: Buffer,
   nowMs: number,
 ): string {
-  const state = signState(JSON.stringify({ u: userId, t: nowMs }), keyForState);
+  const state = signState(JSON.stringify({ u: userId, t: nowMs, n: nonce }), keyForState);
   const params = new URLSearchParams({
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
@@ -53,15 +71,15 @@ export function buildAuthUrl(
   return `${AUTH_URL}?${params.toString()}`;
 }
 
-/** Valida o `state` do callback e devolve o user_id, ou null se inválido/expirado. */
-export function readState(signed: string, keyForState: Buffer, nowMs: number): string | null {
+/** Valida o `state` do callback e devolve {userId, nonce}, ou null se inválido/expirado. */
+export function readState(signed: string, keyForState: Buffer, nowMs: number): ParsedState | null {
   const payload = verifyState(signed, keyForState);
   if (!payload) return null;
   try {
-    const parsed = JSON.parse(payload) as { u?: string; t?: number };
-    if (!parsed.u || typeof parsed.t !== 'number') return null;
+    const parsed = JSON.parse(payload) as { u?: string; t?: number; n?: string };
+    if (!parsed.u || typeof parsed.t !== 'number' || !parsed.n) return null;
     if (nowMs - parsed.t > STATE_TTL_MS || parsed.t > nowMs + 60_000) return null;
-    return parsed.u;
+    return { userId: parsed.u, nonce: parsed.n };
   } catch {
     return null;
   }

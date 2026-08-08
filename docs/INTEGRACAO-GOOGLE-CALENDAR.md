@@ -42,7 +42,7 @@ status por participante no detalhe do compromisso, com "Tentar novamente".
 |---|---|
 | `GOOGLE_OAUTH_CLIENT_ID` | Client ID do OAuth (tipo **Web application**) |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Client Secret do mesmo cliente |
-| `GOOGLE_OAUTH_REDIRECT_URI` | URL pública da API + `/calendar/google/callback` |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Callback **pela origem do app**: `https://app.plim.work/api/calendar/google/callback` |
 | `PLIM_WEB_ORIGIN` | Origem do app web (ex.: `https://app.plim.work`) |
 | `CALENDAR_TOKEN_KEY` | Chave de 32 bytes que cifra os tokens (ver abaixo) |
 
@@ -69,8 +69,13 @@ Reaproveitando o cliente **Web application** já criado para o login com Google:
 3. **Tela de permissão OAuth → Usuários de teste:** cadastrar os e-mails que vão
    testar (Rafaelle e sócias).
 4. **Credenciais → cliente Web → URIs de redirecionamento autorizados:**
-   adicionar exatamente o valor de `GOOGLE_OAUTH_REDIRECT_URI`
-   (ex.: `https://SUA-API.up.railway.app/calendar/google/callback`).
+   adicionar exatamente o valor de `GOOGLE_OAUTH_REDIRECT_URI`, que agora passa
+   **pela origem do app** (e não direto na Railway):
+   `https://app.plim.work/api/calendar/google/callback`. Por que pela origem do
+   app: o callback precisa cair no mesmo domínio de quem iniciou para o cookie
+   de segurança (`SameSite=Lax`) voltar junto e amarrar o fluxo ao navegador,
+   fechando o OAuth CSRF. O Vercel reescreve `/api/*` para a Railway, então o
+   mesmo handler recebe a chamada.
 
 Rodar a migração `0029` no **SQL Editor** do Supabase (é aditiva e idempotente).
 

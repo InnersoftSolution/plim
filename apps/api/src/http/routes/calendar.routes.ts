@@ -3,12 +3,17 @@ import { z } from 'zod';
 import type { CalendarService } from '../../services/calendar.service';
 import { authenticate } from '../auth';
 import { DomainError } from '../../lib/errors';
+import { env } from '../../config/env';
 
 const callbackQuerySchema = z.object({
   code: z.string().optional(),
   state: z.string().optional(),
   error: z.string().optional(),
 });
+
+/** Cookie de curta duração que amarra o fluxo OAuth ao navegador de origem. */
+const OAUTH_COOKIE = 'plim_gcal_oauth';
+const OAUTH_COOKIE_MAX_AGE = 10 * 60; // 10 min, igual ao TTL do state
 
 /**
  * Integração Google Calendar (unidirecional). O `service` só é passado quando a
@@ -32,17 +37,30 @@ export async function calendarRoutes(
     return service.getConnection(userId);
   });
 
-  // Passo 1: devolve a URL de consentimento (o front navega para ela).
-  app.get('/calendar/google/connect', { preHandler: authenticate }, async (request) => {
+  // Passo 1: devolve a URL de consentimento (o front navega para ela) e grava o
+  // cookie de vínculo. SameSite=Lax para o cookie voltar no redirect do Google;
+  // httpOnly para o JS não ler; Secure só em produção (o fluxo real é HTTPS).
+  app.get('/calendar/google/connect', { preHandler: authenticate }, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) throw new DomainError('UNAUTHENTICATED', 'Autenticação obrigatória.', 401);
-    return { url: service.startConnect(userId) };
+    const { url, nonce } = service.startConnect(userId);
+    reply.setCookie(OAUTH_COOKIE, nonce, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.NODE_ENV === 'production',
+      maxAge: OAUTH_COOKIE_MAX_AGE,
+    });
+    return { url };
   });
 
-  // Passo 2: o Google chama de volta aqui. Sem Bearer; confia no state assinado.
+  // Passo 2: o Google chama de volta aqui. Sem Bearer; confia no state assinado
+  // E no cookie de vínculo (precisa bater com o nonce do state). Limpa o cookie.
   app.get('/calendar/google/callback', async (request, reply) => {
     const query = callbackQuerySchema.parse(request.query);
-    const redirectTo = await service.handleCallback(query);
+    const cookieNonce = request.cookies[OAUTH_COOKIE] ?? null;
+    const redirectTo = await service.handleCallback(query, cookieNonce);
+    reply.clearCookie(OAUTH_COOKIE, { path: '/' });
     return reply.redirect(redirectTo);
   });
 

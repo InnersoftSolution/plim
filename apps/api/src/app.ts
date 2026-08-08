@@ -1,4 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import helmet from '@fastify/helmet';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import cookie from '@fastify/cookie';
 import { ZodError } from 'zod';
 import { DomainError } from './lib/errors';
 import { healthRoutes } from './http/routes/health.routes';
@@ -80,7 +84,42 @@ import { NoopLlmProvider } from './ai/llm.provider';
 import { AnthropicLlmProvider } from './ai/anthropic.provider';
 
 export function buildApp(): FastifyInstance {
-  const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
+  // trustProxy: atrás do Vercel/Railway, o IP real vem no X-Forwarded-For.
+  // Sem isso o rate limit contaria todo mundo como o mesmo IP (o do proxy).
+  const app = Fastify({ logger: process.env.NODE_ENV !== 'test', trustProxy: true });
+
+  // ── Camada de segurança HTTP ────────────────────────────────────────────
+  // helmet: cabeçalhos de resposta seguros (nosniff, frameguard, HSTS em prod...).
+  // A API só devolve JSON, então desligamos a CSP daqui (a CSP que importa é a do
+  // front, servido pela Vercel).
+  app.register(helmet, { contentSecurityPolicy: false });
+
+  // Cookies: usados só para o vínculo do fluxo OAuth do Google com o navegador
+  // (cookie httpOnly de curta duração no /connect, conferido no /callback).
+  app.register(cookie);
+
+  // CORS: o app é same-origin (Vercel reescreve /api -> Railway), então o
+  // navegador nem manda Origin nas chamadas do próprio Plim. Este allowlist só
+  // barra OUTRAS origens de baterem direto na URL da Railway pelo navegador.
+  // Requisições sem Origin (mesma origem / server-to-server) passam sempre.
+  const allowedOrigins = new Set(
+    [env.PLIM_WEB_ORIGIN, 'http://localhost:5180', 'http://localhost:5173'].filter(Boolean),
+  );
+  app.register(cors, {
+    origin(origin, cb) {
+      if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+      cb(null, false);
+    },
+    credentials: true,
+  });
+
+  // Rate limit global: teto por IP para conter força bruta, enumeração e abuso.
+  // O health check fica de fora para não atrapalhar o monitor da Railway.
+  app.register(rateLimit, {
+    max: 300,
+    timeWindow: '1 minute',
+    allowList: (req) => req.url === '/health' || req.url === '/',
+  });
 
   // Composição: Supabase configurado → Postgres; senão → in-memory (dev/testes).
   // Serviços e rotas não mudam ao trocar a implementação.

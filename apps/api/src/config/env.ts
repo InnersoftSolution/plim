@@ -41,9 +41,25 @@ export const env = envSchema.parse(process.env);
 
 // Em testes, nunca usar infra real (Postgres/IA): isolamento e custo zero.
 const isTest = env.NODE_ENV === 'test';
+const isProduction = env.NODE_ENV === 'production';
 
 /** Supabase está configurado? Define qual repositório/auth a API usa. */
 export const isSupabaseConfigured = !isTest && Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+
+/**
+ * FAIL-SAFE DE SEGURANÇA: sem Supabase, a API roda em "modo dev" (sem
+ * autenticação, sem checagem de membro, admin liberado). Isso é ótimo para
+ * desenvolver, mas catastrófico se acontecer em produção por um typo ou uma env
+ * faltando. Então, em produção, recusamos subir sem Supabase configurado. Falha
+ * barulhenta na hora do deploy é muito melhor do que uma API aberta no ar.
+ */
+if (isProduction && !isSupabaseConfigured) {
+  throw new Error(
+    'ABORTANDO: NODE_ENV=production sem Supabase configurado. Defina SUPABASE_URL e ' +
+      'SUPABASE_SERVICE_ROLE_KEY. A API não sobe em produção sem autenticação para não ' +
+      'expor os dados das empresas.',
+  );
+}
 
 /** IA está configurada? Define se o copiloto adiciona a "leitura" do LLM. */
 export const isLlmConfigured = !isTest && Boolean(env.ANTHROPIC_API_KEY);

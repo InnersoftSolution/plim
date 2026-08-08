@@ -19,7 +19,17 @@ describe('crypto (tokens do Google)', () => {
   it('detecta adulteração (a tag GCM falha)', () => {
     const enc = encryptSecret('segredo', KEY);
     const [iv, tag, data] = enc.split('.');
-    const tampered = [iv, tag, (data ?? '').replace(/.$/, 'A')].join('.');
+    // Adultera um byte REAL do texto cifrado: decodifica, inverte o 1º byte e
+    // recodifica. Trocar o último caractere do base64url não servia (às vezes só
+    // mexe em bits de padding e vira no-op, deixando o teste instável).
+    const raw = Buffer.from((data ?? '').replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    raw[0] = raw[0]! ^ 0xff;
+    const tamperedData = raw
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const tampered = [iv, tag, tamperedData].join('.');
     expect(() => decryptSecret(tampered, KEY)).toThrow();
   });
 

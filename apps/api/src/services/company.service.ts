@@ -24,6 +24,28 @@ export interface ServiceLogger {
 /** Limite da logo: 5MB ja decodificados. */
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 
+/**
+ * Detecta o tipo real da imagem pelos primeiros bytes (magic number). Devolve o
+ * mesmo formato do enum do contrato, ou null se nao reconhecer. Evita confiar
+ * apenas no contentType informado pelo cliente.
+ */
+function detectImageType(buf: Buffer): 'image/png' | 'image/jpeg' | 'image/webp' | null {
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png';
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    buf.length >= 12 &&
+    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buf.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
 /** Quem está criando/agindo. `id` nulo no modo dev (sem autenticação real). */
 export interface ActingOwner {
   id?: string | null;
@@ -63,6 +85,18 @@ export class CompanyService {
     }
     if (data.byteLength > LOGO_MAX_BYTES) {
       throw new DomainError('LOGO_TOO_LARGE', 'A imagem passa de 5MB. Escolha uma versao menor.');
+    }
+    // Defesa em profundidade: o contentType ja e um enum de imagem no contrato,
+    // mas o cliente ainda poderia mandar bytes que nao sao imagem com um rotulo
+    // de imagem. Conferimos a "assinatura" (magic bytes) do arquivo e exigimos
+    // que ela bata com o tipo declarado. O bucket e publico, entao nao queremos
+    // hospedar nada alem de imagem de verdade.
+    const detected = detectImageType(data);
+    if (detected !== contentType) {
+      throw new DomainError(
+        'LOGO_INVALID',
+        'O arquivo nao parece ser uma imagem valida (PNG, JPG ou WebP). Escolha outro.',
+      );
     }
     const logoUrl = await this.logoStorage.upload(companyId, data, contentType);
     return this.repo.updateCompany(companyId, { logoUrl });

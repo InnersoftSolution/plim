@@ -6,6 +6,7 @@ import {
   buildAuthUrl,
   exchangeCode,
   fetchAccountEmail,
+  generateNonce,
   readState,
   refreshAccessToken,
   revokeToken,
@@ -24,16 +25,36 @@ export interface CalendarServiceConfig {
 /** Buffer de segurança: renova o access_token 60s antes de expirar. */
 const EXPIRY_SKEW_MS = 60_000;
 
+/** Janela em que um nonce de state fica "gasto" (>= TTL do state, 10 min). */
+const NONCE_TTL_MS = 15 * 60 * 1000;
+
 /**
  * Conexão do usuário com o Google Calendar (OAuth dedicado). Guarda os tokens
  * cifrados, entrega o access_token válido ao motor de sync e cuida de conectar
  * e desconectar. Nunca lê a agenda pessoal: o escopo é só `calendar.events`.
  */
 export class CalendarService {
+  /**
+   * Nonces de state já consumidos (uso único). Guarda o instante em que cada um
+   * foi usado; entradas velhas são varridas na próxima checagem. Em memória: um
+   * callback só é aceito uma vez por processo, fechando o replay da URL de volta.
+   */
+  private readonly usedNonces = new Map<string, number>();
+
   constructor(
     private readonly repo: CalendarRepository,
     private readonly config: CalendarServiceConfig,
   ) {}
+
+  /** Marca o nonce como usado; devolve false se já tinha sido usado antes. */
+  private consumeNonce(nonce: string, nowMs: number): boolean {
+    for (const [n, at] of this.usedNonces) {
+      if (nowMs - at > NONCE_TTL_MS) this.usedNonces.delete(n);
+    }
+    if (this.usedNonces.has(nonce)) return false;
+    this.usedNonces.set(nonce, nowMs);
+    return true;
+  }
 
   /** Estado da conexão do usuário atual (o card do frontend). */
   async getConnection(userId: string): Promise<CalendarConnectionDto> {
@@ -41,33 +62,50 @@ export class CalendarService {
     return toDto(conn);
   }
 
-  /** Passo 1: URL de consentimento do Google, com `state` assinado. */
-  startConnect(userId: string): string {
-    return buildAuthUrl(this.config.oauth, userId, this.config.tokenKey, Date.now());
+  /**
+   * Passo 1: URL de consentimento do Google, com `state` assinado, mais o
+   * `nonce` que a rota grava num cookie no navegador de quem iniciou. O callback
+   * exige que o cookie bata com o nonce do state (vínculo com o navegador).
+   */
+  startConnect(userId: string): { url: string; nonce: string } {
+    const nonce = generateNonce();
+    const url = buildAuthUrl(this.config.oauth, userId, nonce, this.config.tokenKey, Date.now());
+    return { url, nonce };
   }
 
   /**
    * Passo 2 (callback): valida o `state`, troca o código por tokens, guarda a
    * conexão cifrada e devolve para onde redirecionar o usuário no app web.
    */
-  async handleCallback(params: {
-    code?: string;
-    state?: string;
-    error?: string;
-  }): Promise<string> {
+  async handleCallback(
+    params: {
+      code?: string;
+      state?: string;
+      error?: string;
+    },
+    cookieNonce?: string | null,
+  ): Promise<string> {
     const backTo = (status: string) =>
       `${this.config.webOrigin}/agenda?google=${status}`;
 
     if (params.error) return backTo('error');
     if (!params.code || !params.state) return backTo('error');
 
-    const userId = readState(params.state, this.config.tokenKey, Date.now());
-    if (!userId) return backTo('error');
+    const now = Date.now();
+    const parsed = readState(params.state, this.config.tokenKey, now);
+    if (!parsed) return backTo('error');
+    // Vínculo com o navegador: o cookie gravado no /connect precisa bater com o
+    // nonce do state. Sem isso (ou diferente), quem completa não é quem iniciou
+    // -> recusa. Fecha o cenário de linkar a agenda de outra pessoa (OAuth CSRF).
+    if (!cookieNonce || cookieNonce !== parsed.nonce) return backTo('error');
+    // Uso único: um mesmo state (mesma URL de callback) não vale duas vezes.
+    if (!this.consumeNonce(parsed.nonce, now)) return backTo('error');
+    const userId = parsed.userId;
 
     try {
       const tokens = await exchangeCode(this.config.oauth, params.code);
       const email = await fetchAccountEmail(tokens.accessToken);
-      const now = new Date();
+      const connectedAt = new Date();
       await this.repo.upsertConnection({
         userId,
         provider: 'google',
@@ -79,7 +117,7 @@ export class CalendarService {
         tokenExpiresAt: tokens.expiresAt,
         scope: tokens.scope,
         status: 'connected',
-        connectedAt: now,
+        connectedAt,
         disconnectedAt: null,
       });
       return backTo('connected');
