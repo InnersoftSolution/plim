@@ -5,12 +5,14 @@ interface ModalProps {
   open: boolean;
   title: string;
   subtitle?: string;
+  /** Jornadas com formulário longo ganham mais largura no desktop. */
+  wide?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
 
 /** Popup centralizado com overlay. Fecha no ESC, no X ou clicando fora. */
-export function Modal({ open, title, subtitle, onClose, children }: ModalProps) {
+export function Modal({ open, title, subtitle, wide = false, onClose, children }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -29,7 +31,7 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
       <div
-        className="modal-dialog"
+        className={'modal-dialog' + (wide ? ' modal-dialog--wide' : '')}
         role="dialog"
         aria-modal="true"
         aria-label={title}

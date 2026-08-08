@@ -148,7 +148,7 @@ export function buildPendencias(
         'Adicione um gasto ou custo inicial para o Plim começar a mostrar quanto já foi investido no negócio.',
       reason: 'É a partir das movimentações que o Plim calcula investimentos e acertos.',
       priority: 'alta',
-      action: { label: 'Adicionar movimentação', kind: 'modal' },
+      action: { label: 'Registrar movimentação', kind: 'modal' },
     });
   }
 

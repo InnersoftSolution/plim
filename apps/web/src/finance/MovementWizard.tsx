@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
-import type { Category, Company, CompanyMember, Contact, ContactType, ExpenseSplitMode } from '@plim/shared';
+import { useEffect, useState, type ReactNode } from 'react';
+import type {
+  Category,
+  Company,
+  CompanyMember,
+  Contact,
+  ContactType,
+  ExpenseSplitMode,
+  RecurringCategory,
+  RecurringFrequency,
+} from '@plim/shared';
+import { recurringCategoryCatalog, recurringFrequencyCatalog } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -10,7 +20,7 @@ import { categoryApi } from './categoryApi';
 import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
 import { ContatoSelect } from './ContactFields';
-import { RecurringCostForm } from './RecurringCostForm';
+import { recurringApi } from './recurringApi';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
 
@@ -46,78 +56,137 @@ function previewSplit(
 
 type MovementType = 'expense' | 'revenue' | 'recurring' | 'contribution' | 'loan' | 'reimbursement';
 
+/* ── ícones das opções (herdam currentColor) ── */
+function IconIn() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5" />
+      <path d="m5 12 7-7 7 7" />
+    </svg>
+  );
+}
+function IconOut() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </svg>
+  );
+}
+function IconPartner() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 19a6.5 6.5 0 0 1 13 0" />
+      <path d="M19 8v6M16 11h6" />
+    </svg>
+  );
+}
+function IconOnce() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+function IconRepeat() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 2.5 21 6l-4 3.5" />
+      <path d="M3 12V11a5 5 0 0 1 5-5h13" />
+      <path d="M7 21.5 3 18l4-3.5" />
+      <path d="M21 12v1a5 5 0 0 1-5 5H3" />
+    </svg>
+  );
+}
+
+/**
+ * Etapa 1 em linguagem de gente: a pergunta é o que ACONTECEU com o dinheiro,
+ * não qual registro técnico criar. Só 3 caminhos, cada um com exemplo concreto.
+ * Recorrente não aparece aqui: é uma despesa que se repete (pergunta seguinte).
+ */
 const TYPE_CARDS: {
   id: MovementType;
   label: string;
   description: string;
-  impact: string;
-  soon?: boolean;
+  example: string;
+  icon: ReactNode;
 }[] = [
   {
     id: 'revenue',
-    label: 'Entrada de dinheiro',
-    description: 'Dinheiro que a empresa recebeu (venda, cliente, assinatura...).',
-    impact: 'Entra como receita e melhora o resultado, recebido menos gasto.',
+    label: 'Entrou dinheiro',
+    description: 'Venda, cliente, assinatura ou outro recebimento.',
+    example: 'Ex.: mensalidade de um cliente, venda de um serviço.',
+    icon: <IconIn />,
   },
   {
     id: 'expense',
-    label: 'Despesa',
-    description: 'Algo que foi pago para criar ou manter o negócio.',
-    impact: 'Entra no total gasto e é dividida entre os sócios pelas participações.',
+    label: 'Saiu dinheiro',
+    description: 'Pagamento, compra, ferramenta, fornecedor ou conta.',
+    example: 'Ex.: Adobe, domínio, contador, aluguel.',
+    icon: <IconOut />,
   },
   {
     id: 'contribution',
-    label: 'Aporte',
-    description: 'Dinheiro colocado por um sócio no negócio.',
-    impact: 'Registra o investimento de cada sócio, não vira gasto nem dívida entre sócios.',
-  },
-  {
-    id: 'recurring',
-    label: 'Custo recorrente',
-    description: 'Uma assinatura, ferramenta ou pagamento que se repete.',
-    impact: 'Mostra quanto custa manter a empresa por mês.',
-  },
-  {
-    id: 'loan',
-    label: 'Empréstimo',
-    description: 'Valor emprestado para a empresa devolver depois.',
-    impact: 'Vai controlar o que a empresa deve devolver.',
-    soon: true,
-  },
-  {
-    id: 'reimbursement',
-    label: 'Reembolso',
-    description: 'Algo que a empresa precisa devolver para alguém.',
-    impact: 'Vai acertar devoluções sem bagunçar os cálculos.',
-    soon: true,
+    label: 'Sócio colocou dinheiro',
+    description: 'Aporte feito por um sócio para ajudar a empresa.',
+    example: 'Ex.: aporte inicial, dinheiro para o caixa.',
+    icon: <IconPartner />,
   },
 ];
+
+/** Equivalente mensal de um custo recorrente (espelho da regra do backend). */
+function monthlyEquivalent(amountCents: number, frequency: RecurringFrequency): number {
+  switch (frequency) {
+    case 'annual':
+      return Math.round(amountCents / 12);
+    case 'weekly':
+      return Math.round((amountCents * 52) / 12);
+    case 'quarterly':
+      return Math.round(amountCents / 3);
+    case 'once':
+      return 0;
+    default:
+      return amountCents;
+  }
+}
 
 /** Origens comuns de receita (chips de um toque; "+" abre origem própria). */
 const REVENUE_SOURCES = ['Asaas', 'Mercado Livre', 'Stripe', 'Pix', 'Cliente direto', 'Boleto'];
 
-// Jornada enxuta: tipo → dados (com pessoas/divisão juntas) → revisão.
-type WizStep = 'type' | 'details' | 'review';
-const STEPS: WizStep[] = ['type', 'details', 'review'];
+/**
+ * Jornada: tipo → detalhes → impacto → revisão. A pergunta "se repete?" mora
+ * dentro da etapa Tipo (tela 'repeat'), então não ganha bolinha própria.
+ */
+type WizStep = 'type' | 'details' | 'impact' | 'review';
+const STEPS: { id: WizStep; label: string }[] = [
+  { id: 'type', label: 'Tipo' },
+  { id: 'details', label: 'Detalhes' },
+  { id: 'impact', label: 'Impacto' },
+  { id: 'review', label: 'Revisão' },
+];
 
 export function MovementWizard({
   company,
   members,
   onCreated,
-  onRefresh,
-  onClose,
 }: {
   company: Company;
   members: CompanyMember[];
-  /** Salvou despesa/aporte: recarrega e fecha. */
+  /** Salvou o registro (qualquer tipo): recarrega os números e fecha o modal. */
   onCreated: () => void;
-  /** Recarrega os números sem fechar (custo recorrente: "adicionar outro"). */
-  onRefresh: () => void;
-  /** Fecha o modal ("Ver dashboard" do custo recorrente). */
-  onClose: () => void;
 }) {
-  const [step, setStep] = useState<WizStep | 'recurring'>('type');
+  /** 'repeat' é uma tela dentro da etapa Tipo (pergunta se a despesa se repete). */
+  const [step, setStep] = useState<WizStep | 'repeat'>('type');
   const [type, setType] = useState<MovementType | ''>('');
+  /** Despesa única (lançamento avulso) ou recorrente (assinatura que se repete).
+   *  Recorrente também é despesa, então é uma pergunta dentro de "Saiu dinheiro"
+   *  em vez de um tipo à parte na primeira etapa. */
+  const [expenseKind, setExpenseKind] = useState<'once' | 'recurring'>('once');
+  /** Campos exclusivos da despesa recorrente (o resto é compartilhado). */
+  const [recCategory, setRecCategory] = useState<RecurringCategory | ''>('');
+  const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -165,8 +234,11 @@ export function MovementWizard({
     return created;
   }
 
-  const stepIdx = step === 'recurring' ? -1 : STEPS.indexOf(step);
+  // 'repeat' ainda é a etapa Tipo (não ganha bolinha própria).
+  const stepIdx = step === 'repeat' ? 0 : STEPS.findIndex((s) => s.id === step);
   const isExpense = type === 'expense';
+  /** Despesa que se repete: salva como custo recorrente (regra do backend). */
+  const isRecurringExpense = type === 'expense' && expenseKind === 'recurring';
   const isRevenue = type === 'revenue';
   const isUnpaid = isExpense && paymentStatus === 'unpaid';
   const amountCents = maskedMoneyToCents(amount);
@@ -174,6 +246,65 @@ export function MovementWizard({
   const soloMember = members.length <= 1;
   // Divisão entre sócios: sempre na despesa; no aporte só quando reembolsável.
   const splitsAmongPartners = isExpense || (type === 'contribution' && reimbursable);
+
+  /** Nome humano do que está sendo registrado (etapas de impacto e revisão). */
+  const kindLabel = isRecurringExpense
+    ? 'Despesa recorrente'
+    : isExpense
+      ? isUnpaid
+        ? 'Conta a pagar'
+        : 'Despesa única'
+      : isRevenue
+        ? 'Entrada'
+        : reimbursable
+          ? 'Aporte reembolsável'
+          : 'Aporte';
+
+  /**
+   * Como este registro afeta os cálculos. Mostrado ANTES de salvar para a pessoa
+   * decidir com consciência (o cálculo em si é sempre do backend).
+   */
+  const impactBullets: string[] = isRecurringExpense
+    ? [
+        `Entra no custo mensal da empresa${
+          amountCents != null
+            ? ` (${formatMoney(monthlyEquivalent(amountCents, frequency), company.currencyCode)} por mês)`
+            : ''
+        } enquanto estiver ativa.`,
+        'Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.',
+        'Ajuda a prever quanto custa manter a empresa.',
+      ]
+    : isUnpaid
+      ? [
+          'Fica registrada como conta a pagar, com lembrete de vencimento.',
+          'Só entra no total gasto quando você marcar como paga.',
+          'Aparece em Contas a pagar até ser quitada.',
+        ]
+      : isExpense
+        ? [
+            'Entra no total gasto da empresa.',
+            members.length > 1
+              ? 'Pode gerar acerto entre os sócios, conforme a divisão escolhida.'
+              : 'Fica registrada no seu histórico de gastos.',
+            'Aparece nas movimentações do período.',
+          ]
+        : isRevenue
+          ? [
+              'Aumenta o dinheiro recebido e melhora o resultado (recebido menos gasto).',
+              'Não entra como despesa.',
+              'Não é dividida entre os sócios.',
+            ]
+          : reimbursable
+            ? [
+                'Registra o capital do sócio, fora do total gasto.',
+                'Cada sócio passa a dever a parte dele para quem aportou.',
+                'Entra nos acertos entre os sócios.',
+              ]
+            : [
+                'Registra o investimento do sócio na empresa.',
+                'Não entra como despesa.',
+                'Não gera acerto automático entre os sócios.',
+              ];
   // Soma das participações. Quando "por participação" e a soma não fecha 100%,
   // o Plim divide proporcional ao que está definido — precisa avisar (senão a
   // divisão sai diferente das porcentagens cadastradas, em silêncio).
@@ -255,7 +386,7 @@ export function MovementWizard({
     setAddingAccount(false);
   }
 
-  function next(to: WizStep | 'recurring') {
+  function next(to: WizStep | 'repeat') {
     setError('');
     setStep(to);
   }
@@ -263,17 +394,30 @@ export function MovementWizard({
   function validateDetails(): boolean {
     if (description.trim().length < 1) {
       setError(
-        isExpense
-          ? 'Conte de onde veio o gasto, ex.: "Domínio do site".'
-          : isRevenue
-            ? 'Diga de onde veio a entrada, ex.: "Mensalidade de cliente".'
-            : 'Dê um nome ao aporte, ex.: "Aporte inicial".',
+        isRecurringExpense
+          ? 'Dê um nome à despesa, ex.: "Google Workspace".'
+          : isExpense
+            ? 'Conte de onde veio o gasto, ex.: "Domínio do site".'
+            : isRevenue
+              ? 'Diga de onde veio a entrada, ex.: "Mensalidade de cliente".'
+              : 'Dê um nome ao aporte, ex.: "Aporte inicial".',
       );
       return false;
     }
     if (amountCents == null) {
       setError('Informe um valor válido, ex.: 150,00.');
       return false;
+    }
+    if (isRecurringExpense) {
+      if (!recCategory) {
+        setError('Escolha uma categoria para essa despesa recorrente.');
+        return false;
+      }
+      if (!memberId) {
+        setError('Escolha quem paga essa despesa.');
+        return false;
+      }
+      return true;
     }
     if (isUnpaid && !dueDate) {
       setError('Informe a data de vencimento dessa conta a pagar.');
@@ -286,7 +430,20 @@ export function MovementWizard({
     setError('');
     setSaving(true);
     try {
-      if (type === 'expense') {
+      if (isRecurringExpense) {
+        // Despesa que se repete: o backend guarda como custo recorrente e cuida
+        // de gerar a conta a pagar dividida na data da cobrança.
+        await recurringApi.create(company.id, {
+          name: description.trim(),
+          category: recCategory as RecurringCategory,
+          amountCents: amountCents!,
+          frequency,
+          paidByMemberId: memberId,
+          splitMode: splitMode === 'equal' ? 'equal' : 'equity',
+          nextChargeOn: date || null,
+          note: note.trim() || null,
+        });
+      } else if (type === 'expense') {
         await financeApi.createExpense(company.id, {
           description: description.trim(),
           amountCents: amountCents!,
@@ -342,13 +499,22 @@ export function MovementWizard({
   return (
     <div className="mw">
       {/* progresso */}
-      <div className="mw-steps" aria-hidden="true">
-        {STEPS.map((s, i) => (
-          <span
-            key={s}
-            className={'mw-steps__dot' + (i < stepIdx ? ' is-done' : i === stepIdx ? ' is-active' : '')}
-          />
-        ))}
+      {/* Progresso: barras iguais + o nome da etapa atual. Dizer "Etapa 2 de 4 ·
+          Detalhes" é mais claro (e cabe no mobile) do que 4 rótulos espremidos. */}
+      <div className="mw-steps">
+        <div className="mw-steps__bars" aria-hidden="true">
+          {STEPS.map((s, i) => (
+            <span
+              key={s.id}
+              className={
+                'mw-steps__bar' + (i < stepIdx ? ' is-done' : i === stepIdx ? ' is-active' : '')
+              }
+            />
+          ))}
+        </div>
+        <span className="mw-steps__now">
+          Etapa {stepIdx + 1} de {STEPS.length} · {STEPS[stepIdx]?.label ?? STEPS[0]!.label}
+        </span>
       </div>
 
       {error && <div className="form-error">{error}</div>}
@@ -356,39 +522,74 @@ export function MovementWizard({
       {/* ── 1: tipo ── */}
       {step === 'type' && (
         <>
-          <p className="mw-lead">O que você quer registrar?</p>
+          <p className="mw-lead">O que aconteceu com o dinheiro?</p>
           <div className="mw-cards">
             {TYPE_CARDS.map((t) => (
               <button
                 type="button"
                 key={t.id}
-                className={'mw-card' + (type === t.id ? ' is-active' : '') + (t.soon ? ' is-soon' : '')}
-                disabled={t.soon}
+                className={'mw-card' + (type === t.id ? ' is-active' : '')}
                 onClick={() => {
-                  // Escolher o tipo já avança: um toque a menos na jornada.
+                  // Escolher já avança: um toque a menos na jornada.
                   setType(t.id);
-                  next(t.id === 'recurring' ? 'recurring' : 'details');
+                  setExpenseKind('once');
+                  // Saiu dinheiro ainda precisa saber se a despesa se repete.
+                  next(t.id === 'expense' ? 'repeat' : 'details');
                 }}
               >
-                <span className="mw-card__label">
-                  {t.label}
-                  {t.soon && <span className="mw-card__soon">em breve</span>}
+                <span className="mw-card__icon" aria-hidden="true">{t.icon}</span>
+                <span className="mw-card__text">
+                  <span className="mw-card__label">{t.label}</span>
+                  <span className="mw-card__desc">{t.description}</span>
+                  <span className="mw-card__example">{t.example}</span>
                 </span>
-                <span className="mw-card__desc">{t.description}</span>
-                <span className="mw-card__impact">{t.impact}</span>
               </button>
             ))}
           </div>
         </>
       )}
 
-      {/* ── custo recorrente (formulário próprio, jornada 3) ── */}
-      {step === 'recurring' && (
+      {/* ── 1b: a despesa se repete? (ainda dentro da etapa Tipo) ── */}
+      {step === 'repeat' && (
         <>
-          <button type="button" className="mw-back" style={{ alignSelf: 'flex-start' }} onClick={() => next('type')}>
-            ← Voltar
-          </button>
-          <RecurringCostForm company={company} members={members} onSaved={onRefresh} onClose={onClose} />
+          <p className="mw-lead">Essa despesa se repete?</p>
+          <div className="mw-cards">
+            <button
+              type="button"
+              className={'mw-card' + (expenseKind === 'once' ? ' is-active' : '')}
+              onClick={() => {
+                setExpenseKind('once');
+                next('details');
+              }}
+            >
+              <span className="mw-card__icon" aria-hidden="true"><IconOnce /></span>
+              <span className="mw-card__text">
+                <span className="mw-card__label">Não, foi uma vez</span>
+                <span className="mw-card__desc">Uma compra ou pagamento pontual.</span>
+                <span className="mw-card__example">Ex.: material, taxa avulsa, compra única.</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={'mw-card' + (expenseKind === 'recurring' ? ' is-active' : '')}
+              onClick={() => {
+                setExpenseKind('recurring');
+                next('details');
+              }}
+            >
+              <span className="mw-card__icon" aria-hidden="true"><IconRepeat /></span>
+              <span className="mw-card__text">
+                <span className="mw-card__label">Sim, se repete</span>
+                <span className="mw-card__desc">Assinatura, mensalidade, ferramenta ou custo fixo.</span>
+                <span className="mw-card__example">Ex.: Adobe, Google Workspace, contador, aluguel.</span>
+              </span>
+            </button>
+          </div>
+          <div className="mw-actions">
+            <Button variant="secondary" onClick={() => next('type')}>
+              Voltar
+            </Button>
+          </div>
         </>
       )}
 
@@ -396,8 +597,107 @@ export function MovementWizard({
       {step === 'details' && (
         <>
           <p className="mw-lead">
-            {isExpense ? 'Sobre esse gasto' : isRevenue ? 'Sobre essa entrada' : 'Sobre esse aporte'}
+            {isRecurringExpense
+              ? 'Sobre essa despesa recorrente'
+              : isExpense
+                ? 'Sobre esse gasto'
+                : isRevenue
+                  ? 'Sobre essa entrada'
+                  : 'Sobre esse aporte'}
           </p>
+          {isRecurringExpense ? (
+            /* Despesa recorrente: mesmos passos dos outros tipos (impacto e
+               revisão vêm depois). Salva como custo recorrente no backend. */
+            <>
+              <div className="mw-form">
+                <Input
+                  label="Nome da despesa"
+                  placeholder="Ex.: Adobe, Google Workspace, contador, aluguel…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  autoFocus
+                />
+                <div className="mw-grid">
+                  <Select
+                    label="Categoria"
+                    value={recCategory}
+                    onChange={(v) => setRecCategory(v as RecurringCategory)}
+                    placeholder="Selecione"
+                    options={recurringCategoryCatalog.map((c) => ({ value: c.id, label: c.label }))}
+                  />
+                  <Input
+                    label={`Valor (${company.currencyCode ?? 'BRL'})`}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={amount}
+                    onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
+                  />
+                </div>
+                <div className="mw-grid">
+                  <Select
+                    label="De quanto em quanto tempo"
+                    value={frequency}
+                    onChange={(v) => setFrequency(v as RecurringFrequency)}
+                    options={recurringFrequencyCatalog
+                      .filter((f) => f.id !== 'once')
+                      .map((f) => ({ value: f.id, label: f.label }))}
+                  />
+                  <Select
+                    label="Quem paga"
+                    value={memberId}
+                    onChange={setMemberId}
+                    options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field__label">A partir de quando cobrar</label>
+                  <DateField value={date} onChange={setDate} placeholder="Escolha a data" />
+                </div>
+                {members.length > 1 && (
+                  <div className="field">
+                    <label className="field__label">Como dividir entre os sócios</label>
+                    <div className="fin-split">
+                      <button
+                        type="button"
+                        className={'fin-split__opt' + (splitMode === 'equity' ? ' fin-split__opt--active' : '')}
+                        onClick={() => setSplitMode('equity')}
+                      >
+                        Por participação
+                      </button>
+                      <button
+                        type="button"
+                        className={'fin-split__opt' + (splitMode === 'equal' ? ' fin-split__opt--active' : '')}
+                        onClick={() => setSplitMode('equal')}
+                      >
+                        Igualmente
+                      </button>
+                    </div>
+                    {equityWarn}
+                  </div>
+                )}
+                <div className="field">
+                  <label className="field__label">Observação (opcional)</label>
+                  <textarea
+                    className="field__input rc-textarea"
+                    placeholder="Ex.: plano mensal usado para criação de artes."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    maxLength={300}
+                    rows={2}
+                  />
+                </div>
+              </div>
+              <div className="mw-actions">
+                <Button block onClick={() => validateDetails() && next('impact')}>
+                  Continuar
+                </Button>
+                <Button variant="secondary" onClick={() => next('repeat')}>
+                  Voltar
+                </Button>
+              </div>
+            </>
+          ) : (
+          <>
           <div className="mw-form">
             <Input
               label={isExpense ? 'De onde veio o gasto' : isRevenue ? 'De onde veio a entrada' : 'Como quer chamar esse aporte'}
@@ -715,36 +1015,78 @@ export function MovementWizard({
             </div>
           </div>
           <div className="mw-actions">
-            <Button block onClick={() => validateDetails() && next('review')}>
-              Revisar e salvar
+            <Button block onClick={() => validateDetails() && next('impact')}>
+              Continuar
             </Button>
-            <button type="button" className="mw-back" onClick={() => next('type')}>
-              ← Voltar
-            </button>
+            <Button variant="secondary" onClick={() => next(isExpense ? 'repeat' : 'type')}>
+              Voltar
+            </Button>
+          </div>
+          </>
+          )}
+        </>
+      )}
+
+      {/* ── 3: impacto ── */}
+      {step === 'impact' && (
+        <>
+          <p className="mw-lead">O que isso muda no Plim</p>
+          <div className="mw-impact">
+            <span className="mw-impact__kind">{kindLabel}</span>
+            <ul className="mw-impact__list">
+              {impactBullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="mw-actions">
+            <Button block onClick={() => next('review')}>
+              Continuar
+            </Button>
+            <Button variant="secondary" onClick={() => next('details')}>
+              Voltar
+            </Button>
           </div>
         </>
       )}
 
-      {/* ── 3: revisão ── */}
+      {/* ── 4: revisão ── */}
       {step === 'review' && (
         <>
           <p className="mw-lead">Confere pra mim?</p>
           <div className="mw-review">
             <div className="mw-review__row">
-              <span>Tipo</span>
-              <strong>
-                {isExpense ? 'Despesa' : isRevenue ? 'Entrada' : reimbursable ? 'Aporte reembolsável' : 'Aporte'}
-              </strong>
+              <span>Você está registrando</span>
+              <strong>{kindLabel}</strong>
             </div>
             <div className="mw-review__row">
-              <span>{isExpense ? 'Gasto' : isRevenue ? 'Entrada' : 'Aporte'}</span>
+              <span>{isRecurringExpense ? 'Nome' : isExpense ? 'Gasto' : isRevenue ? 'Entrada' : 'Aporte'}</span>
               <strong>{description.trim() || '—'}</strong>
             </div>
             <div className="mw-review__row">
               <span>Valor</span>
               <strong data-financial>{amountCents != null ? formatMoney(amountCents, company.currencyCode) : '—'}</strong>
             </div>
-            {isUnpaid ? (
+            {isRecurringExpense ? (
+              <>
+                <div className="mw-review__row">
+                  <span>Se repete</span>
+                  <strong>
+                    {recurringFrequencyCatalog.find((f) => f.id === frequency)?.label ?? '—'}
+                  </strong>
+                </div>
+                <div className="mw-review__row">
+                  <span>Categoria</span>
+                  <strong>
+                    {recurringCategoryCatalog.find((c) => c.id === recCategory)?.label ?? '—'}
+                  </strong>
+                </div>
+                <div className="mw-review__row">
+                  <span>A partir de</span>
+                  <strong>{formatDateBr(date)}</strong>
+                </div>
+              </>
+            ) : isUnpaid ? (
               <>
                 <div className="mw-review__row">
                   <span>Situação</span>
@@ -768,7 +1110,15 @@ export function MovementWizard({
               </div>
             )}
             <div className="mw-review__row">
-              <span>{isExpense ? 'Pago por' : isRevenue ? 'Entrou na conta de' : 'Aportado por'}</span>
+              <span>
+                {isRecurringExpense
+                  ? 'Quem paga'
+                  : isExpense
+                    ? 'Pago por'
+                    : isRevenue
+                      ? 'Entrou na conta de'
+                      : 'Aportado por'}
+              </span>
               <strong>{isRevenue ? accountLabel.trim() || 'Não informado' : memberName}</strong>
             </div>
             {splitsAmongPartners && (
@@ -784,12 +1134,15 @@ export function MovementWizard({
                 const m = members.find((x) => x.id === s.memberId);
                 const isPayer = s.memberId === memberId;
                 const status = isPayer
-                  ? isExpense
-                    ? isUnpaid
-                      ? 'vai pagar'
-                      : 'pagou'
-                    : 'aportou'
-                  : isUnpaid || s.cents === 0
+                  ? isRecurringExpense
+                    ? 'paga'
+                    : isExpense
+                      ? isUnpaid
+                        ? 'vai pagar'
+                        : 'pagou'
+                      : 'aportou'
+                  : // Recorrente ainda não cobrou: ninguém deve nada agora.
+                    isRecurringExpense || isUnpaid || s.cents === 0
                     ? null
                     : settledIds.includes(s.memberId)
                       ? 'já acertou'
@@ -816,37 +1169,25 @@ export function MovementWizard({
               </div>
             )}
           </div>
-          <p className="mw-hint">
-            {isUnpaid
-              ? 'Ao salvar, o Plim registra a conta a pagar e te lembra do vencimento. Ela entra nos cálculos quando você marcar como paga.'
-              : isExpense
-                ? 'Ao salvar, o Plim atualiza o total gasto e recalcula os acertos entre os sócios.'
-                : isRevenue
-                  ? 'Ao salvar, o Plim registra a entrada e melhora o resultado (recebido menos gasto). Não divide entre os sócios.'
-                  : reimbursable
-                    ? 'Ao salvar, o Plim registra o capital e cria o acerto: cada sócio te deve a parte dele. Não afeta o total gasto.'
-                    : 'Ao salvar, o Plim registra o investimento, sem afetar o total gasto nem os acertos.'}
-          </p>
+          {/* Uma linha só: a explicação completa já foi na etapa de impacto. */}
+          <p className="mw-hint">{impactBullets[0]}</p>
           <div className="mw-actions">
             <Button block onClick={save} disabled={saving}>
               {saving
                 ? 'Salvando…'
-                : isUnpaid
-                  ? 'Salvar conta a pagar'
-                  : isExpense
-                    ? 'Salvar despesa'
-                    : isRevenue
-                      ? 'Salvar entrada'
-                      : 'Salvar aporte'}
+                : isRecurringExpense
+                  ? 'Salvar despesa recorrente'
+                  : isUnpaid
+                    ? 'Salvar conta a pagar'
+                    : isExpense
+                      ? 'Salvar despesa'
+                      : isRevenue
+                        ? 'Salvar entrada'
+                        : 'Salvar aporte'}
             </Button>
-            <button
-              type="button"
-              className="mw-back"
-              onClick={() => next('details')}
-              disabled={saving}
-            >
-              ← Voltar
-            </button>
+            <Button variant="secondary" onClick={() => next('impact')} disabled={saving}>
+              Voltar
+            </Button>
           </div>
         </>
       )}

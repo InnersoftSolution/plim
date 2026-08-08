@@ -59,23 +59,40 @@
   padding: 18px 24px 24px;
 }
 
-/* Mobile: modal ocupa a base da tela, sem apertar nas laterais. */
+/* Jornadas longas (ex.: registrar movimentação) pedem mais respiro no desktop:
+   formulário estreito demais vira uma coluna de campos espremida. */
+.modal-dialog--wide {
+  max-width: 620px;
+}
+
+/* Mobile: folha que sobe da base, quase tela cheia. O cabeçalho fica fixo e só
+   o conteúdo rola, então a pessoa nunca perde o título nem o botão de fechar. */
 @media (max-width: 560px) {
   .modal-overlay {
     align-items: flex-end;
     padding: 0;
+    overflow: hidden;
   }
   .modal-dialog {
     max-width: 100%;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -20px 60px -20px rgba(13, 17, 36, 0.45);
     animation: modal-sheet 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+  /* Linha fina separando o cabeçalho fixo do conteúdo que rola: sem ela o texto
+     sobe até encostar no subtítulo e parece que há duas telas sobrepostas. */
   .modal-head {
-    padding: 20px 18px 0;
+    padding: 20px 18px 14px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--color-border-default);
   }
   .modal-body {
-    padding: 16px 18px 24px;
+    padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

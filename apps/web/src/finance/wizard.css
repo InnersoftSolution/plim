@@ -4,48 +4,70 @@
   flex-direction: column;
   gap: 14px;
 }
+/* Progresso: uma barra por etapa + o nome da etapa atual embaixo. */
 .mw-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mw-steps__bars {
   display: flex;
   gap: 6px;
 }
-.mw-steps__dot {
-  width: 26px;
+.mw-steps__bar {
+  flex: 1 1 0;
   height: 4px;
   border-radius: 999px;
   background: var(--color-bg-elevated);
   transition: background-color 160ms ease;
 }
-.mw-steps__dot.is-active {
+.mw-steps__bar.is-active {
   background: var(--color-brand-primary);
 }
-.mw-steps__dot.is-done {
+.mw-steps__bar.is-done {
   background: var(--indigo-300);
+}
+.mw-steps__now {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 .mw-lead {
   font-size: 15px;
   font-weight: 700;
   color: var(--color-text-default);
 }
+/* Poucas opções e grandes: cabem na tela sem rolagem, boas para o toque. */
 .mw-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 46vh;
-  overflow-y: auto;
-  padding-right: 2px;
+  gap: 10px;
+}
+/* Duas colunas em campos que combinam (categoria+valor, frequência+quem paga). */
+.mw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .mw-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .mw-card {
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 16px;
+  border-radius: 14px;
   border: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 14px;
   transition: border-color 120ms ease, background-color 120ms ease;
   font-family: var(--font-sans);
+  /* Alvo de toque confortável no mobile. */
+  min-height: 76px;
 }
 .mw-card:hover:not(:disabled) {
   border-color: var(--color-brand-primary);
@@ -55,36 +77,74 @@
   background: var(--color-bg-brand-soft);
   box-shadow: 0 0 0 1px var(--color-brand-primary);
 }
-.mw-card.is-soon {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.mw-card__label {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text-default);
+.mw-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
 }
-.mw-card__soon {
-  font-size: 9px;
+.mw-card.is-active .mw-card__icon {
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+}
+.mw-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.mw-card__label {
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--color-bg-elevated);
-  color: var(--color-text-subtle);
+  color: var(--color-text-default);
 }
 .mw-card__desc {
   font-size: 13px;
   color: var(--color-text-muted);
+  line-height: 1.4;
 }
-.mw-card__impact {
+.mw-card__example {
   font-size: 12px;
   color: var(--color-text-subtle);
-  font-style: italic;
+}
+
+/* ── card de impacto (etapa 3) ── */
+.mw-impact {
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--color-bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mw-impact__kind {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
+}
+.mw-impact__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mw-impact__list li {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text-default);
 }
 .mw-form {
   display: flex;
@@ -100,23 +160,42 @@
   padding: 9px 12px;
   margin-top: 8px;
 }
+/* Rodapé de ação: "Voltar" (secundário, com borda) à esquerda e a ação
+   principal à direita ocupando o espaço restante. Uma linha só economiza
+   altura e deixa clara a hierarquia entre as duas ações. */
 .mw-actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row-reverse;
+  align-items: stretch;
+  gap: 10px;
   margin-top: 2px;
 }
-.mw-back {
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 6px;
+/* A ação principal manda: ocupa a sobra. (Anula o width:100% do btn--block.) */
+.mw-actions .btn--primary {
+  flex: 1 1 auto;
+  width: auto;
 }
-.mw-back:hover {
-  color: var(--color-text-default);
+/* O secundário fica só com a largura do texto, sem competir com o principal. */
+.mw-actions .btn--secondary {
+  flex: 0 0 auto;
+}
+/* Mobile: o botão principal fica colado no rodapé enquanto o conteúdo rola,
+   então nunca é preciso rolar até o fim para achar "Continuar"/"Salvar". */
+@media (max-width: 560px) {
+  .mw-actions {
+    position: sticky;
+    /* -16px = o padding-bottom do corpo do modal. Sem isso o rodapé para 16px
+       acima da borda e sobra uma faixa transparente por onde o conteúdo passa
+       por baixo, dando a impressão de duas telas sobrepostas. */
+    bottom: -16px;
+    z-index: 2;
+    margin: 0 -18px;
+    /* 16px devolvidos (o deslocamento acima) + respiro real embaixo do botão. */
+    padding: 14px 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--color-border-default);
+    background: var(--color-bg-surface);
+    box-shadow: 0 -10px 22px -14px rgba(13, 17, 36, 0.45);
+  }
 }
 .mw-review {
   display: flex;

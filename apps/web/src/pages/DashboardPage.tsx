@@ -463,7 +463,7 @@ function DashboardReady({
                 ? 'Você ainda não registrou nenhum gasto. Comece adicionando a primeira movimentação para o Plim calcular quanto já foi investido no negócio.'
                 : `Nenhuma movimentação em ${monthName.toLowerCase()}. Registre os gastos do mês para acompanhar o quanto a empresa consome.`
             }
-            cta={{ label: 'Adicionar movimentação', onClick: () => setModalOpen(true) }}
+            cta={{ label: 'Registrar movimentação', onClick: () => setModalOpen(true) }}
           />
         ) : (
           <div className="dash-table">
@@ -587,8 +587,9 @@ function DashboardReady({
 
       <Modal
         open={modalOpen}
-        title="Adicionar movimentação"
+        title="Registrar movimentação"
         subtitle="O Plim te guia passo a passo, e explica como cada registro afeta os cálculos."
+        wide
         onClose={() => setModalOpen(false)}
       >
         {/* key força o wizard a reiniciar do passo 1 a cada abertura */}
@@ -601,8 +602,6 @@ function DashboardReady({
               onFinanceChange(company.id);
               setModalOpen(false);
             }}
-            onRefresh={() => onFinanceChange(company.id)}
-            onClose={() => setModalOpen(false)}
           />
         )}
       </Modal>

@@ -398,7 +398,7 @@ export function FinancePage() {
         </div>
         {!archiveYear && (
           <Button onClick={() => setWizardOpen(true)}>
-            <IconPlus /> Adicionar movimentação
+            <IconPlus /> Registrar movimentação
           </Button>
         )}
       </div>
@@ -628,7 +628,7 @@ export function FinancePage() {
             financeira do negócio.
           </p>
           <Button onClick={() => setWizardOpen(true)}>
-            <IconPlus /> Adicionar movimentação
+            <IconPlus /> Registrar movimentação
           </Button>
         </div>
       ) : items.length === 0 ? (
@@ -746,8 +746,9 @@ export function FinancePage() {
       {/* ── wizard (mesmo da Home) ── */}
       <Modal
         open={wizardOpen}
-        title="Adicionar movimentação"
+        title="Registrar movimentação"
         subtitle="O Plim te guia passo a passo, e explica como cada registro afeta os cálculos."
+        wide
         onClose={() => setWizardOpen(false)}
       >
         {wizardOpen && (
@@ -758,8 +759,6 @@ export function FinancePage() {
               setWizardOpen(false);
               void load();
             }}
-            onRefresh={() => void load()}
-            onClose={() => setWizardOpen(false)}
           />
         )}
       </Modal>

@@ -130,9 +130,9 @@ export function RecurringCostForm({
             Ver dashboard
           </Button>
           {!isEditing && (
-            <button type="button" className="mw-back rc-again" onClick={reset}>
-              Adicionar outro custo
-            </button>
+            <Button variant="secondary" onClick={reset}>
+              Adicionar outro
+            </Button>
           )}
         </div>
       </div>
