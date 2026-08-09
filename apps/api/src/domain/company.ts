@@ -46,6 +46,14 @@ export interface Company {
   onboardingStep: OnboardingStep | null;
   /** Usuário (auth) dono da conta. Nulo no modo dev sem autenticação. */
   ownerId: string | null;
+  /**
+   * Exclusão agendada (LGPD). Nulos = nenhum pedido em aberto. Enquanto houver
+   * data marcada a empresa continua acessível de propósito: os outros sócios
+   * precisam ver o aviso e ter chance de reagir antes do expurgo.
+   */
+  deletionRequestedAt: Date | null;
+  deletionScheduledFor: Date | null;
+  deletionRequestedBy: string | null;
   createdAt: Date;
 }
 
@@ -80,6 +88,10 @@ export type CompanyUpdate = Partial<
     | 'neighborhood'
     | 'onboardingStatus'
     | 'onboardingStep'
+    | 'ownerId'
+    | 'deletionRequestedAt'
+    | 'deletionScheduledFor'
+    | 'deletionRequestedBy'
   >
 >;
 

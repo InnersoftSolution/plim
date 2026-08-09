@@ -1,0 +1,266 @@
+/* ── Privacidade e exclusão (LGPD) ──────────────────────────
+   Tom sóbrio de propósito: é uma área perigosa, não uma promoção. O vermelho
+   aparece só na ação destrutiva e no aviso de exclusão agendada, nunca no
+   painel inteiro. */
+
+.priv-panel {
+  border-color: var(--color-border-default);
+}
+
+.priv-intro {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-subtle);
+  max-width: 640px;
+}
+
+/* Lista de direitos: cada linha é uma ação possível, com o que ela faz. */
+.priv-rights {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.priv-right {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-elevated);
+}
+.priv-right__text {
+  min-width: 0;
+}
+.priv-right__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.priv-right__desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+  max-width: 460px;
+}
+.priv-right__action {
+  flex-shrink: 0;
+}
+
+/* Botão destrutivo: contorno vermelho, preenchimento só no hover. Fica claro
+   que é diferente dos demais sem gritar na tela parada. */
+.priv-danger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 9px 16px;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-status-negative);
+  background: transparent;
+  color: var(--color-status-negative);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+.priv-danger-btn:hover:not(:disabled) {
+  background: var(--color-status-negative);
+  color: #fff;
+}
+.priv-danger-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── aviso de exclusão agendada ────────────────────────── */
+.priv-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(225, 29, 72, 0.32);
+  border-radius: var(--radius-card);
+  background: var(--color-status-negative-bg);
+}
+.priv-alert__icon {
+  flex-shrink: 0;
+  color: var(--color-status-negative);
+  margin-top: 1px;
+}
+.priv-alert__body {
+  min-width: 0;
+  flex: 1;
+}
+.priv-alert__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-status-negative);
+  letter-spacing: -0.01em;
+}
+.priv-alert__msg {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-default);
+  margin-top: 4px;
+}
+.priv-alert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ── faixa no topo do app ──────────────────────────────── */
+.priv-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 11px 16px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(225, 29, 72, 0.28);
+  border-radius: var(--radius-card);
+  background: var(--color-status-negative-bg);
+  color: var(--color-status-negative);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.priv-banner svg {
+  flex-shrink: 0;
+}
+.priv-banner span {
+  flex: 1 1 240px;
+  min-width: 0;
+  color: var(--color-text-default);
+}
+.priv-banner__link {
+  font-weight: 700;
+  color: var(--color-status-negative);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+/* ── jornada de exclusão (dentro do modal) ─────────────── */
+.priv-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.priv-flow__lead {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-subtle);
+}
+
+/* O que será apagado: números reais do banco, para medir o estrago. */
+.priv-counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.priv-count {
+  padding: 12px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-elevated);
+  text-align: center;
+}
+.priv-count__value {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-default);
+  font-variant-numeric: tabular-nums;
+}
+.priv-count__label {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* Blocos "some" / "fica": a pessoa precisa ver os dois lados antes de decidir. */
+.priv-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.priv-fact {
+  padding: 13px 15px;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-elevated);
+}
+.priv-fact--warn {
+  border-color: rgba(225, 29, 72, 0.28);
+  background: var(--color-status-negative-bg);
+}
+.priv-fact__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.priv-fact__desc {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* Pendências que travam a exclusão da conta, cada uma com a saída. */
+.priv-blocker {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(225, 29, 72, 0.28);
+  border-radius: var(--radius-card);
+  background: var(--color-status-negative-bg);
+}
+.priv-blocker + .priv-blocker {
+  margin-top: 10px;
+}
+
+.priv-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+
+/* Rodapé de ações: mesma gramática do wizard de movimentação (voltar à
+   esquerda com contorno, ação principal à direita). */
+.priv-actions {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+.priv-actions .btn--primary,
+.priv-actions .priv-danger-btn {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 560px) {
+  .priv-right,
+  .priv-blocker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .priv-right__action .priv-danger-btn,
+  .priv-right__action .btn {
+    width: 100%;
+  }
+  .priv-counts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

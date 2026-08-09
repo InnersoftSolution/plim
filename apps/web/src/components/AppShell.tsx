@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useAdminMe } from '../admin/useAdminMe';
 import { CompanySwitcher } from '../company/CompanySwitcher';
+import { DeletionBanner } from '../company/DeletionBanner';
 import { LogoWhite } from './LogoWhite';
 import { Button } from './ui/Button';
 import './appshell.css';
@@ -124,6 +125,7 @@ export function AppShell() {
         </div>
       </aside>
       <main className="shell-content">
+        <DeletionBanner />
         <Outlet />
       </main>
     </div>

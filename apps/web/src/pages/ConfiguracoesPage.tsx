@@ -23,6 +23,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { companyApi, logoApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
+import { CompanyPrivacyPanel } from '../company/CompanyPrivacyPanel';
 import { IconArrowRight, IconUsers } from './dashIcons';
 import './dashboard.css';
 
@@ -154,6 +155,10 @@ export function ConfiguracoesPage() {
           ))}
         </div>
       </section>
+
+      {/* Área de risco fica por último de propósito: é a última coisa que se
+          encontra rolando a página, nunca algo que se esbarra por engano. */}
+      <CompanyPrivacyPanel company={company} />
     </div>
   );
 }

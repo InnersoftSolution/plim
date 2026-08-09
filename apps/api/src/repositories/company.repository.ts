@@ -1,3 +1,4 @@
+import type { MemberRole } from '@plim/shared';
 import type { Company, CompanyMember, CompanyUpdate, MemberUpdate } from '../domain/company';
 
 /**
@@ -28,6 +29,12 @@ export interface CompanyRepository {
   listUnclaimedMembersByEmail(email: string): Promise<CompanyMember[]>;
   /** Remoção definitiva de um sócio (ação irreversível, só do dono da conta). */
   deleteMember(memberId: string): Promise<void>;
+  /**
+   * Troca o papel no SISTEMA de um sócio. Fora do MemberUpdate de propósito:
+   * não é edição de cadastro, é mudança de permissão. Hoje só a transferência
+   * de titularidade usa isto.
+   */
+  setMemberRole(memberId: string, role: MemberRole): Promise<CompanyMember>;
   /** Preferência: última empresa que o usuário escolheu acessar. Nulo se nunca escolheu. */
   getLastActiveCompanyId(userId: string): Promise<string | null>;
   /** Guarda a última empresa acessada (ou limpa, com null). */

@@ -14,5 +14,6 @@ export * from './contracts/insight';
 export * from './contracts/journey';
 export * from './contracts/me';
 export * from './contracts/partners';
+export * from './contracts/privacidade';
 export * from './contracts/recurring';
 export * from './validators';

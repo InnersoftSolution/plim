@@ -3,6 +3,7 @@ import { passwordSchema } from '@plim/shared';
 import { useAuth } from '../auth/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { AccountPrivacyPanel } from '../company/AccountPrivacyPanel';
 import './dashboard.css';
 
 /**
@@ -23,6 +24,9 @@ export function ProfilePage() {
 
       <PersonalDataPanel />
       <PasswordPanel />
+      {/* Encerrar a conta fica por último: é o fim da página, não algo que se
+          esbarra ao trocar a senha. */}
+      <AccountPrivacyPanel />
     </div>
   );
 }

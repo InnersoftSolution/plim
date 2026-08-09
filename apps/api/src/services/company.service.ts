@@ -162,6 +162,9 @@ export class CompanyService {
       onboardingStatus: 'in_progress',
       onboardingStep: 'basic',
       ownerId,
+      deletionRequestedAt: null,
+      deletionScheduledFor: null,
+      deletionRequestedBy: null,
     });
 
     // Quem cria a empresa entra automaticamente como account_owner ativo.
@@ -447,6 +450,51 @@ export class CompanyService {
       }
     }
     return this.repo.updateMember(memberId, input);
+  }
+
+  /**
+   * Passa a titularidade da conta da empresa para outro sócio.
+   * Existe para que o dono possa sair do Plim sem destruir a empresa dos
+   * outros (LGPD: ninguém apaga dado de terceiro por decisão própria).
+   * Regras:
+   *  - só o dono atual transfere;
+   *  - o destino precisa ser sócio DESTA empresa, ativo e com conta vinculada
+   *    (sem conta ninguém consegue administrar);
+   *  - o dono anterior vira sócio comum, não é removido.
+   */
+  async transferOwnership(
+    companyId: string,
+    memberId: string,
+    actingUserId?: string | null,
+  ): Promise<CompanyMember[]> {
+    await this.assertMembership(companyId, actingUserId);
+    const members = await this.repo.listMembers(companyId);
+
+    const currentOwner = members.find((m) => m.role === 'account_owner') ?? null;
+    if (actingUserId != null && currentOwner?.userId !== actingUserId) {
+      throw new DomainError(
+        'NOT_ACCOUNT_OWNER',
+        'Só o dono da conta pode transferir a titularidade.',
+        403,
+      );
+    }
+
+    const target = members.find((m) => m.id === memberId);
+    if (!target) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
+    if (target.id === currentOwner?.id) {
+      throw new DomainError('ALREADY_OWNER', 'Esse sócio já é o dono da conta.');
+    }
+    if (!target.userId) {
+      throw new DomainError(
+        'MEMBER_WITHOUT_ACCOUNT',
+        'Esse sócio ainda não entrou no Plim. Ele precisa aceitar o convite antes de assumir a titularidade.',
+      );
+    }
+
+    await this.repo.setMemberRole(target.id, 'account_owner');
+    if (currentOwner) await this.repo.setMemberRole(currentOwner.id, 'partner');
+    await this.repo.updateCompany(companyId, { ownerId: target.userId });
+    return this.repo.listMembers(companyId);
   }
 
   /**

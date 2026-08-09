@@ -21,6 +21,7 @@ import { contactRoutes } from './http/routes/contact.routes';
 import { eventRoutes } from './http/routes/event.routes';
 import { calendarRoutes } from './http/routes/calendar.routes';
 import { adminRoutes } from './http/routes/admin.routes';
+import { privacyRoutes } from './http/routes/privacy.routes';
 import { CompanyService } from './services/company.service';
 import { AdvisorService } from './services/advisor.service';
 import { JourneyService } from './services/journey.service';
@@ -35,6 +36,7 @@ import { EventService } from './services/event.service';
 import { CalendarService } from './services/calendar.service';
 import { CalendarSyncService } from './services/calendar-sync.service';
 import { AdminService } from './services/admin.service';
+import { PrivacyService } from './services/privacy.service';
 import type { CompanyRepository } from './repositories/company.repository';
 import type { JourneyRepository } from './repositories/journey.repository';
 import type { FinanceRepository } from './repositories/finance.repository';
@@ -74,6 +76,9 @@ import type { CalendarRepository } from './repositories/calendar.repository';
 import { InMemoryCalendarRepository } from './repositories/in-memory/calendar.repository.memory';
 import { SupabaseCalendarRepository } from './repositories/supabase/calendar.repository.supabase';
 import { SupabaseAdminRepository } from './repositories/supabase/admin.repository.supabase';
+import type { PrivacyRepository } from './repositories/privacy.repository';
+import { InMemoryPrivacyRepository } from './repositories/in-memory/privacy.repository.memory';
+import { SupabasePrivacyRepository } from './repositories/supabase/privacy.repository.supabase';
 import { env, isSupabaseConfigured, isLlmConfigured, isGoogleCalendarConfigured } from './config/env';
 import { getSupabaseAdmin } from './lib/supabase';
 import { parseKey } from './lib/crypto';
@@ -133,6 +138,12 @@ export function buildApp(): FastifyInstance {
     ? new SupabaseInviteSender(getSupabaseAdmin())
     : new InMemoryInviteSender();
   const companyService = new CompanyService(repository, logoStorage, inviteSender, app.log);
+
+  // Privacidade (LGPD): exportação e exclusão com carência.
+  const privacyRepository: PrivacyRepository = isSupabaseConfigured
+    ? new SupabasePrivacyRepository(getSupabaseAdmin())
+    : new InMemoryPrivacyRepository();
+  const privacyService = new PrivacyService(repository, privacyRepository);
 
   const journeyRepository: JourneyRepository = isSupabaseConfigured
     ? new SupabaseJourneyRepository(getSupabaseAdmin())
@@ -257,6 +268,7 @@ export function buildApp(): FastifyInstance {
     app.register(calendarRoutes, { service: calendarService });
   }
   app.register(adminRoutes, { service: adminService });
+  app.register(privacyRoutes, { service: privacyService, companyService });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {

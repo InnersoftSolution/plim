@@ -6,6 +6,7 @@ import type {
   InvitationStatus,
   LegalStructure,
   LegalStructureStatus,
+  MemberRole,
   OnboardingStatus,
   OnboardingStep,
 } from '@plim/shared';
@@ -43,6 +44,9 @@ interface CompanyRow {
   onboarding_status: OnboardingStatus;
   onboarding_step: OnboardingStep | null;
   owner_id: string | null;
+  deletion_requested_at: string | null;
+  deletion_scheduled_for: string | null;
+  deletion_requested_by: string | null;
   created_at: string;
 }
 interface MemberRow {
@@ -90,6 +94,9 @@ function toCompany(row: CompanyRow): Company {
     onboardingStatus: row.onboarding_status,
     onboardingStep: row.onboarding_step,
     ownerId: row.owner_id,
+    deletionRequestedAt: row.deletion_requested_at ? new Date(row.deletion_requested_at) : null,
+    deletionScheduledFor: row.deletion_scheduled_for ? new Date(row.deletion_scheduled_for) : null,
+    deletionRequestedBy: row.deletion_requested_by,
     createdAt: new Date(row.created_at),
   };
 }
@@ -140,11 +147,16 @@ function companyPatchToRow(patch: CompanyUpdate): Record<string, unknown> {
     neighborhood: 'neighborhood',
     onboardingStatus: 'onboarding_status',
     onboardingStep: 'onboarding_step',
+    ownerId: 'owner_id',
+    deletionRequestedAt: 'deletion_requested_at',
+    deletionScheduledFor: 'deletion_scheduled_for',
+    deletionRequestedBy: 'deletion_requested_by',
   };
   const row: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     const column = map[key as keyof CompanyUpdate];
-    if (column) row[column] = value;
+    // Datas viram ISO; null passa direto (é assim que o pedido é cancelado).
+    if (column) row[column] = value instanceof Date ? value.toISOString() : value;
   }
   return row;
 }
@@ -338,6 +350,17 @@ export class SupabaseCompanyRepository implements CompanyRepository {
   async deleteMember(memberId: string): Promise<void> {
     const { error } = await this.db.from('company_members').delete().eq('id', memberId);
     if (error) throw new Error(`Falha ao excluir sócio: ${error.message}`);
+  }
+
+  async setMemberRole(memberId: string, role: MemberRole): Promise<CompanyMember> {
+    const { data: row, error } = await this.db
+      .from('company_members')
+      .update({ role })
+      .eq('id', memberId)
+      .select()
+      .single<MemberRow>();
+    if (error || !row) throw new Error(`Falha ao trocar o papel do sócio: ${error?.message}`);
+    return toMember(row);
   }
 
   async getLastActiveCompanyId(userId: string): Promise<string | null> {

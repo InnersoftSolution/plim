@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build:vercel": "npm run build --workspace web && node scripts/bundle-api.mjs",
     "build:api": "node scripts/bundle-api.mjs",
-    "start:api": "node .api-bundle/server.mjs"
+    "start:api": "node .api-bundle/server.mjs",
+    "purge:deletions": "node scripts/purge-deletions.mjs",
+    "delete:company": "node scripts/delete-company.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"

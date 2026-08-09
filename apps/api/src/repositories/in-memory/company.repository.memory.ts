@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { MemberRole } from '@plim/shared';
 import type { Company, CompanyMember, CompanyUpdate, MemberUpdate } from '../../domain/company';
 import type { CompanyRepository } from '../company.repository';
 
@@ -89,6 +90,14 @@ export class InMemoryCompanyRepository implements CompanyRepository {
 
   async deleteMember(memberId: string): Promise<void> {
     this.members.delete(memberId);
+  }
+
+  async setMemberRole(memberId: string, role: MemberRole): Promise<CompanyMember> {
+    const current = this.members.get(memberId);
+    if (!current) throw new Error(`Sócio ${memberId} não encontrado`);
+    const updated: CompanyMember = { ...current, role };
+    this.members.set(memberId, updated);
+    return updated;
   }
 
   async getLastActiveCompanyId(userId: string): Promise<string | null> {

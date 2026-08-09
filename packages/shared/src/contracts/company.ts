@@ -179,6 +179,12 @@ export const companySchema = z.object({
   logoUrl: z.string().nullable().default(null),
   onboardingStatus: onboardingStatusSchema,
   onboardingStep: onboardingStepSchema.nullable(),
+  /**
+   * Data marcada para o expurgo definitivo (LGPD). Vem em toda resposta de
+   * empresa de propósito: qualquer tela que já tem a empresa consegue mostrar
+   * o aviso de exclusão agendada sem pedir nada a mais para a API.
+   */
+  deletionScheduledFor: z.string().datetime().nullable().default(null),
   createdAt: z.string().datetime(),
 });
 export type Company = z.infer<typeof companySchema>;
