@@ -10,13 +10,14 @@ export default defineConfig({
     },
   },
   server: {
-    // Porta fixa e dedicada do Plim (CityFurnace usa a 3000, api usa a 3333).
+    // Porta fixa e dedicada do Plim (CityFurnace usa a 3000, api usa a 3334
+    // em dev local para não colidir com a API do Nexlar na 3333).
     // strictPort: falha em vez de escorregar pra outra porta — evita confusão.
     port: 5180,
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3333',
+        target: 'http://localhost:3334',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

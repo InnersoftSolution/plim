@@ -11,9 +11,12 @@ const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.enum(['development', 'test', 'production']).default('development'),
   ),
+  // 3334 e nao 3333: a 3333 e a porta padrao de outro projeto na maquina de
+  // desenvolvimento e as duas APIs colidiam. Em producao a Railway injeta PORT,
+  // entao este default so vale localmente.
   PORT: z.preprocess(
     (v) => (v === '' ? undefined : v),
-    z.coerce.number().int().positive().default(3333),
+    z.coerce.number().int().positive().default(3334),
   ),
   // Supabase (opcionais): quando presentes, a API usa Postgres + valida JWT.
   // Ausentes → modo dev com repositório in-memory e owner vindo do corpo.
