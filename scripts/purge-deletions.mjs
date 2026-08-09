@@ -35,6 +35,17 @@ if (!url || !key) {
 const db = createClient(url, key, { auth: { persistSession: false } });
 const agora = new Date().toISOString();
 
+/**
+ * Erros que não interrompem a rodada (um titular com problema não pode travar
+ * os outros), mas precisam derrubar o processo no fim: rodando como cron, uma
+ * execução vermelha é o único aviso de que a exclusão não aconteceu no prazo.
+ */
+let falhas = 0;
+function falhou(msg) {
+  falhas += 1;
+  console.error(msg);
+}
+
 /** Fecha o registro de auditoria do que foi efetivamente apagado. */
 async function concluiRegistro(subjectType, subjectId) {
   const { error } = await db
@@ -43,7 +54,7 @@ async function concluiRegistro(subjectType, subjectId) {
     .eq('subject_type', subjectType)
     .eq('subject_id', subjectId)
     .eq('status', 'scheduled');
-  if (error) console.error(`  aviso: falha ao fechar o registro: ${error.message}`);
+  if (error) falhou(`  aviso: falha ao fechar o registro: ${error.message}`);
 }
 
 async function purgaEmpresas() {
@@ -64,7 +75,7 @@ async function purgaEmpresas() {
     if (DRY_RUN) continue;
     const { error: delError } = await db.from('companies').delete().eq('id', empresa.id);
     if (delError) {
-      console.error(`    ERRO ao apagar: ${delError.message}`);
+      falhou(`    ERRO ao apagar: ${delError.message}`);
       continue;
     }
     await concluiRegistro('company', empresa.id);
@@ -101,20 +112,18 @@ async function purgaContas() {
       .eq('role', 'account_owner')
       .is('companies.deletion_scheduled_for', null);
     if (donasError) {
-      console.error(`    ERRO ao conferir empresas: ${donasError.message}`);
+      falhou(`    ERRO ao conferir empresas: ${donasError.message}`);
       continue;
     }
     if (donas?.length) {
-      console.error(
-        `    PULADA: ainda é dona de ${donas.length} empresa(s) ativa(s). Confira antes.`,
-      );
+      falhou(`    PULADA: ainda é dona de ${donas.length} empresa(s) ativa(s). Confira antes.`);
       continue;
     }
 
     // Apagar o usuário do Auth derruba o profile em cascata.
     const { error: authError } = await db.auth.admin.deleteUser(perfil.id);
     if (authError) {
-      console.error(`    ERRO ao apagar a conta: ${authError.message}`);
+      falhou(`    ERRO ao apagar a conta: ${authError.message}`);
       continue;
     }
     await concluiRegistro('account', perfil.id);
@@ -130,5 +139,10 @@ const contas = await purgaContas();
 console.log(
   DRY_RUN
     ? `Simulação concluída: ${empresas} empresa(s) e ${contas} conta(s) venceriam agora.`
-    : 'Expurgo concluído.',
+    : `Expurgo concluído: ${empresas} empresa(s) e ${contas} conta(s) com prazo vencido.`,
 );
+
+if (falhas > 0) {
+  console.error(`\n${falhas} falha(s) nesta rodada. Confira o log acima.`);
+  process.exit(1);
+}

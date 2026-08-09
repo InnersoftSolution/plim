@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "//": "Configuracao do servico de CRON (expurgo das exclusoes vencidas, LGPD). NAO e a API: sem healthcheck, porque nao sobe servidor, e sem restart, porque e uma tarefa que roda, imprime o resultado e termina. O servico da API continua usando o railway.json da raiz. Na Railway: Settings > Config as code > railway.cron.json, e Settings > Cron Schedule.",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install"
+  },
+  "deploy": {
+    "startCommand": "npm run purge:deletions",
+    "restartPolicyType": "NEVER"
+  }
+}

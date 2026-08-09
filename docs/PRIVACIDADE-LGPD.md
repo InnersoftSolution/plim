@@ -47,10 +47,29 @@ node scripts/purge-deletions.mjs --dry-run
 npm run purge:deletions
 ```
 
-Precisa de `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente. O ideal é
-agendá-lo (cron diário na Railway). **Enquanto ninguém rodar o script, nada é
-apagado**: os pedidos ficam acumulados esperando, o que é seguro mas não cumpre
-o prazo prometido ao titular.
+Precisa de `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente.
+**Enquanto ninguém rodar o script, nada é apagado**: os pedidos ficam
+acumulados esperando, o que é seguro mas não cumpre o prazo prometido ao
+titular. Por isso ele roda como cron.
+
+### O cron na Railway
+
+Serviço separado da API, no mesmo projeto e no mesmo repositório:
+
+| Campo (Settings do serviço) | Valor |
+| --- | --- |
+| Config as code | `railway.cron.json` |
+| Cron Schedule | `0 6 * * *` (3h da manhã em Brasília, UTC−3) |
+| Variables | `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` |
+
+O `railway.cron.json` existe justamente para o serviço de cron não herdar o
+`railway.json` da API: sem healthcheck, porque não sobe servidor, e
+`restartPolicyType: NEVER`, porque é tarefa que roda e termina. Sem isso a
+Railway ficaria reiniciando o expurgo em laço.
+
+O script termina com código 1 quando alguma exclusão falha, então a execução
+aparece vermelha no painel. Uma rodada normal sem nada vencido termina em 0 e
+imprime "0 empresa(s) e 0 conta(s)".
 
 O script apaga a linha em `companies` e deixa o `on delete cascade` levar o
 resto (movimentações, rateios, custos recorrentes, contatos, atividades,
@@ -75,8 +94,6 @@ sensível não vai para um arquivo que se baixa.
 
 ## Pendências conhecidas
 
-- **Agendar o expurgo.** Hoje o script é manual. Sem um cron, a carência vence
-  e nada acontece.
 - **Aviso por e-mail.** Os outros sócios só veem a faixa dentro do app. O ideal
   é notificar por e-mail quando a exclusão é pedida e quando falta pouco.
 - **Retenção legal.** A tela já informa que dados exigidos por lei podem ser
@@ -95,4 +112,5 @@ apps/web/src/company/CompanyPrivacyPanel.tsx jornada da empresa
 apps/web/src/company/AccountPrivacyPanel.tsx jornada da conta + transferência
 apps/web/src/company/DeletionBanner.tsx      faixa no topo do app
 scripts/purge-deletions.mjs                  expurgo definitivo
+railway.cron.json                            config do servico de cron
 ```
