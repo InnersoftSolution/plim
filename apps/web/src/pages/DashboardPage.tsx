@@ -25,6 +25,7 @@ import { activityApi, currentWeekStart } from '../activities/activityApi';
 import { checklistApi } from '../company/checklistApi';
 import type { ChecklistView } from '@plim/shared';
 import {
+  IconArrowOut,
   IconArrowRight,
   IconBuilding,
   IconChevronDown,
@@ -326,9 +327,12 @@ function DashboardReady({
 
       {/* ── cards principais ── */}
       <div className="dash-cards">
+        {/* Mesma linguagem da tela de Movimentações: saída de dinheiro é rosa,
+            com a seta saindo da bandeja. Ver o mesmo número com a mesma cara
+            nas duas telas evita a pessoa achar que são coisas diferentes. */}
         <StatCard
-          icon={<IconWallet />}
-          tone="ink"
+          icon={<IconArrowOut />}
+          tone="rose"
           label={allTime ? 'Total gasto' : `Gasto em ${monthName}`}
           value={formatMoney(gastoCents, company.currencyCode)}
           hint={
@@ -360,9 +364,11 @@ function DashboardReady({
             }
           />
         )}
+        {/* Âmbar, não rosa: acerto em aberto é pendência, não erro. O rosa fica
+            reservado para saída de dinheiro e para o que venceu. */}
         <StatCard
           icon={<IconArrowRight />}
-          tone={acertosCents > 0 ? 'rose' : 'green'}
+          tone={acertosCents > 0 ? 'amber' : 'green'}
           label="Acertos"
           value={formatMoney(acertosCents, company.currencyCode)}
           hint={
@@ -371,9 +377,11 @@ function DashboardReady({
               : 'Tudo quite entre os sócios.'
           }
         />
+        {/* Cinza quando a participação já fecha 100%: não há nada a fazer aqui,
+            e o card não deve competir por atenção. Âmbar enquanto falta. */}
         <StatCard
           icon={<IconUsers />}
-          tone="indigo"
+          tone={pendingEquity === 0 ? 'muted' : 'amber'}
           label="Sociedade"
           value={`${members.length} ${members.length === 1 ? 'sócio' : 'sócios'}`}
           hint={
@@ -654,7 +662,9 @@ function StatCard({
   onClick,
 }: {
   icon: ReactNode;
-  tone: 'ink' | 'indigo' | 'rose' | 'green';
+  /** Uma cor por significado: rosa sai dinheiro, indigo é recorrência da marca,
+   *  verde está resolvido, âmbar pede atenção, cinza não pede nada. */
+  tone: 'indigo' | 'rose' | 'green' | 'amber' | 'muted';
   label: string;
   value?: string;
   hint: string;
