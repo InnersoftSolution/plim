@@ -64,6 +64,50 @@ export function IconArrowRight() {
   );
 }
 
+/* Cards de resumo do financeiro: cada um com desenho próprio, para a pessoa
+   distinguir os quatro números de relance, sem depender só da cor. */
+
+/** Entrada de dinheiro: seta descendo para dentro da bandeja. */
+export function IconArrowIn() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+    </svg>
+  );
+}
+
+/** Saída de dinheiro: seta subindo para fora da bandeja. */
+export function IconArrowOut() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M12 15V3" />
+      <path d="m7 8 5-5 5 5" />
+    </svg>
+  );
+}
+
+/** Resultado: a linha de desempenho do negócio. */
+export function IconPulse() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="M22 12h-4l-3 8L9 4l-3 8H2" />
+    </svg>
+  );
+}
+
+/** A vencer: é sobre prazo, não sobre carteira. */
+export function IconClock() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  );
+}
+
 export function IconUsers() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" {...base}>

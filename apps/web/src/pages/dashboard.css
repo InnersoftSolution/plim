@@ -663,9 +663,16 @@
   justify-content: center;
   margin-bottom: 4px;
 }
-.dash-stat__icon--ink {
-  background: var(--ink-900);
-  color: #fff;
+/* Uma cor por significado, nunca duas iguais lado a lado: verde entra, rosa
+   sai, índigo é o resultado (o número já carrega o sinal), âmbar é prazo e
+   cinza é "não há nada aqui". Sem bloco preto sólido. */
+.dash-stat__icon--amber {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+.dash-stat__icon--muted {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-subtle);
 }
 .dash-stat__icon--indigo {
   background: var(--color-bg-brand-soft);

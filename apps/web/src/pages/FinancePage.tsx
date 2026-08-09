@@ -26,12 +26,16 @@ import { contactApi } from '../finance/contactApi';
 import { recurringApi } from '../finance/recurringApi';
 import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
 import {
+  IconArrowIn,
+  IconArrowOut,
   IconArrowRight,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
+  IconClock,
   IconPlus,
+  IconPulse,
   IconRepeat,
   IconWallet,
 } from './dashIcons';
@@ -406,22 +410,23 @@ export function FinancePage() {
       {/* ── cards de resumo: saúde do negócio (recebido − gasto) ── */}
       <div className="dash-cards">
         <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--green"><IconArrowRight /></div>
+          <div className="dash-stat__icon dash-stat__icon--green"><IconArrowIn /></div>
           <span className="dash-stat__label">Recebido</span>
           <span className="dash-stat__value" data-financial>{formatMoney(receitaCents, currency)}</span>
           <span className="dash-stat__hint">Dinheiro que entrou na empresa (receitas).</span>
         </div>
         <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--ink"><IconWallet /></div>
+          <div className="dash-stat__icon dash-stat__icon--rose"><IconArrowOut /></div>
           <span className="dash-stat__label">Total gasto</span>
           <span className="dash-stat__value" data-financial>{formatMoney(gastoCents, currency)}</span>
           <span className="dash-stat__hint">Só despesas, aportes não entram aqui.</span>
         </div>
-        {/* Resultado negativo é estado comum no início: número em vermelho basta,
-            sem borda de alerta (vermelho forte fica para conta vencida). */}
+        {/* Resultado negativo é estado comum no início: o número em vermelho já
+            diz isso. O ícone fica no índigo da marca de propósito — repetir o
+            rosa do "Total gasto" ao lado apagaria a diferença entre os dois. */}
         <div className="dash-stat">
-          <div className={'dash-stat__icon ' + (resultadoCents < 0 ? 'dash-stat__icon--ink' : 'dash-stat__icon--green')}>
-            <IconRepeat />
+          <div className="dash-stat__icon dash-stat__icon--indigo">
+            <IconPulse />
           </div>
           <span className="dash-stat__label">Resultado</span>
           <span
@@ -446,8 +451,19 @@ export function FinancePage() {
           className={'dash-stat dash-stat--btn' + (overduePayable.length > 0 ? ' dash-stat--warn' : '')}
           onClick={() => setFilter('a-pagar')}
         >
-          <div className={'dash-stat__icon ' + (overduePayable.length > 0 ? 'dash-stat__icon--warn' : 'dash-stat__icon--indigo')}>
-            <IconWallet />
+          {/* Três estados, três cores: vencida grita em rosa, aberta avisa em
+              âmbar, e sem nada em aberto o card fica quieto em cinza. */}
+          <div
+            className={
+              'dash-stat__icon ' +
+              (overduePayable.length > 0
+                ? 'dash-stat__icon--warn'
+                : payable.length > 0
+                  ? 'dash-stat__icon--amber'
+                  : 'dash-stat__icon--muted')
+            }
+          >
+            <IconClock />
           </div>
           <span className="dash-stat__label">A vencer</span>
           <span className="dash-stat__value" data-financial>{formatMoney(payableCents, currency)}</span>
