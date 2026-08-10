@@ -56,6 +56,12 @@ export const createRecurringCostSchema = z.object({
   /** Como a cobrança gerada se divide entre os sócios. */
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().date().nullable().optional(), // opcional, mas recomendada
+  /**
+   * Ate quando cobrar (YYYY-MM-DD). Nula = sem previsao de fim. Depois dessa
+   * data o Plim para de gerar cobranca sozinho, sem depender de alguem lembrar
+   * de desativar o custo na mao.
+   */
+  endsOn: z.string().date().nullable().optional(),
   note: z.string().trim().max(300).nullable().optional(),
 });
 export type CreateRecurringCostInput = z.infer<typeof createRecurringCostSchema>;
@@ -77,6 +83,7 @@ export const recurringCostSchema = z.object({
   paidByMemberId: z.string().uuid(),
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().nullable(),
+  endsOn: z.string().nullable().default(null),
   note: z.string().nullable(),
   active: z.boolean(),
   /** Equivalente mensal calculado pelo BACKEND (anual/12, semanal×52/12…). */

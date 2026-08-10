@@ -1,6 +1,7 @@
 import type {
   CreateContributionInput,
   CreateExpenseInput,
+  CreateRepeatedExpenseInput,
   CreateRevenueInput,
   CreateSettlementPaymentInput,
   Expense,
@@ -32,6 +33,20 @@ export const financeApi = {
 
   createExpense(companyId: string, input: CreateExpenseInput): Promise<Expense> {
     return apiFetch<Expense>(`/companies/${companyId}/expenses`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
+   * Despesa que se repetiu num período encerrado: o backend cria uma
+   * movimentação por competência e devolve todas.
+   */
+  createRepeatedExpense(
+    companyId: string,
+    input: CreateRepeatedExpenseInput,
+  ): Promise<Expense[]> {
+    return apiFetch<Expense[]>(`/companies/${companyId}/expenses/repeated`, {
       method: 'POST',
       body: JSON.stringify(input),
     });

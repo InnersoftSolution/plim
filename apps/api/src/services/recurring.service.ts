@@ -8,7 +8,7 @@ import type {
 import type { RecurringCost } from '../domain/recurring';
 import type { RecurringRepository } from '../repositories/recurring.repository';
 import type { CompanyService } from './company.service';
-import { NotFoundError } from '../lib/errors';
+import { DomainError, NotFoundError } from '../lib/errors';
 
 /**
  * Custos recorrentes: quanto custa MANTER a empresa por mês.
@@ -46,11 +46,27 @@ function toDto(cost: RecurringCost): RecurringCostDto {
     paidByMemberId: cost.paidByMemberId,
     splitMode: cost.splitMode,
     nextChargeOn: cost.nextChargeOn,
+    endsOn: cost.endsOn,
     note: cost.note,
     active: cost.active,
     monthlyEquivalentCents: monthlyEquivalentCents(cost.amountCents, cost.frequency),
     createdAt: cost.createdAt.toISOString(),
   };
+}
+
+/**
+ * O fim não pode vir antes do início: um custo que acaba antes de começar nunca
+ * geraria cobrança, e a pessoa só descobriria isso semanas depois, ao notar que
+ * nada foi cobrado.
+ */
+function assertEndsAfterStart(nextChargeOn: string | null, endsOn: string | null): void {
+  if (!endsOn || !nextChargeOn) return;
+  if (endsOn < nextChargeOn) {
+    throw new DomainError(
+      'ENDS_BEFORE_START',
+      'A data final vem antes do início da cobrança. Ajuste o período.',
+    );
+  }
 }
 
 export class RecurringService {
@@ -68,6 +84,9 @@ export class RecurringService {
     if (!members.some((m) => m.id === input.paidByMemberId)) {
       throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
     }
+    const inicio =
+      input.nextChargeOn ?? (input.frequency !== 'once' ? new Date().toISOString().slice(0, 10) : null);
+    assertEndsAfterStart(inicio, input.endsOn ?? null);
     const cost = await this.repo.create({
       companyId,
       name: input.name,
@@ -81,18 +100,27 @@ export class RecurringService {
       // hora). 'once' fica sem data até o usuário informar o pagamento.
       nextChargeOn:
         input.nextChargeOn ?? (input.frequency !== 'once' ? new Date().toISOString().slice(0, 10) : null),
+      endsOn: input.endsOn ?? null,
       note: input.note ?? null,
       active: true,
     });
     return toDto(cost);
   }
 
-  /** Lista + total mensal dos ATIVOS (inativos aparecem, mas não somam). */
-  async list(companyId: string, actingUserId?: string | null): Promise<RecurringCostList> {
+  /**
+   * Lista + total mensal do que ainda custa. Fora da soma: os inativos e os que
+   * JÁ PASSARAM da data final. Um contrato encerrado continua na lista como
+   * histórico, mas somá-lo faria o "custo mensal" cobrar de algo que acabou.
+   */
+  async list(
+    companyId: string,
+    actingUserId?: string | null,
+    today = new Date().toISOString().slice(0, 10),
+  ): Promise<RecurringCostList> {
     await this.companyService.getOverview(companyId, actingUserId);
     const costs = (await this.repo.list(companyId)).map(toDto);
     const monthlyTotalCents = costs
-      .filter((c) => c.active)
+      .filter((c) => c.active && (c.endsOn == null || c.endsOn >= today))
       .reduce((sum, c) => sum + c.monthlyEquivalentCents, 0);
     return { costs, monthlyTotalCents };
   }
@@ -111,6 +139,12 @@ export class RecurringService {
     if (input.paidByMemberId && !members.some((m) => m.id === input.paidByMemberId)) {
       throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
     }
+    // Compara contra o valor que VAI ficar salvo, não só contra o que veio no
+    // corpo: mudar só o fim precisa bater com o início que já estava lá.
+    assertEndsAfterStart(
+      input.nextChargeOn !== undefined ? input.nextChargeOn : existing.nextChargeOn,
+      input.endsOn !== undefined ? input.endsOn : existing.endsOn,
+    );
     const updated = await this.repo.update(costId, input);
     return toDto(updated);
   }

@@ -152,6 +152,22 @@ function monthlyEquivalent(amountCents: number, frequency: RecurringFrequency): 
   }
 }
 
+/** Meses por extenso, para o período da despesa repetida em ano fechado. */
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+/**
+ * Competências (YYYY-MM) de `from` até `to`, inclusive. Período invertido
+ * devolve vazio em vez de estourar: a validação avisa a pessoa com texto.
+ */
+function monthsBetween(year: string, from: number, to: number): string[] {
+  const meses: string[] = [];
+  for (let m = from; m <= to; m++) meses.push(`${year}-${String(m).padStart(2, '0')}`);
+  return meses;
+}
+
 /** Origens comuns de receita (chips de um toque; "+" abre origem própria). */
 const REVENUE_SOURCES = ['Asaas', 'Mercado Livre', 'Stripe', 'Pix', 'Cliente direto', 'Boleto'];
 
@@ -198,6 +214,16 @@ export function MovementWizard({
   /** Campos exclusivos da despesa recorrente (o resto é compartilhado). */
   const [recCategory, setRecCategory] = useState<RecurringCategory | ''>('');
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
+  /**
+   * Período da despesa repetida em ano fechado (1 = janeiro … 12 = dezembro) e
+   * quem pagou em cada mês. O mapa guarda só as EXCEÇÕES; mês sem entrada usa o
+   * pagador padrão, então trocar o padrão continua valendo para o resto.
+   */
+  /** "Até quando" do custo recorrente. Vazio = sem previsão de fim. */
+  const [endsOn, setEndsOn] = useState('');
+  const [fromMonth, setFromMonth] = useState(1);
+  const [toMonth, setToMonth] = useState(12);
+  const [payerByMonth, setPayerByMonth] = useState<Record<string, string>>({});
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   // Num ano fechado, "hoje" não existe: começa em 1º de janeiro daquele ano e a
@@ -252,16 +278,33 @@ export function MovementWizard({
   const isExpense = type === 'expense';
   /** Despesa que se repete: salva como custo recorrente (regra do backend). */
   const isRecurringExpense = type === 'expense' && expenseKind === 'recurring';
+  /**
+   * Num ano fechado, "se repetiu" é história, não promessa: o período acabou.
+   * Vira uma movimentação por mês, cada uma com o seu pagador, em vez de um
+   * custo recorrente (que só faz sentido para cobrança futura).
+   */
+  const isRetroRepeated = isRecurringExpense && year != null;
   const isRevenue = type === 'revenue';
   const isUnpaid = isExpense && paymentStatus === 'unpaid';
   const amountCents = maskedMoneyToCents(amount);
+  /** Meses do período escolhido, como competências YYYY-MM-01. */
+  const occurrences = isRetroRepeated
+    ? monthsBetween(year, fromMonth, toMonth).map((mes) => ({
+        key: mes,
+        spentOn: `${mes}-01`,
+        paidByMemberId: payerByMonth[mes] ?? memberId,
+      }))
+    : [];
+  const retroTotalCents = amountCents != null ? amountCents * occurrences.length : null;
   const memberName = members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
   const soloMember = members.length <= 1;
   // Divisão entre sócios: sempre na despesa; no aporte só quando reembolsável.
   const splitsAmongPartners = isExpense || (type === 'contribution' && reimbursable);
 
   /** Nome humano do que está sendo registrado (etapas de impacto e revisão). */
-  const kindLabel = isRecurringExpense
+  const kindLabel = isRetroRepeated
+    ? 'Despesa que se repetiu'
+    : isRecurringExpense
     ? 'Despesa recorrente'
     : isExpense
       ? isUnpaid
@@ -277,7 +320,18 @@ export function MovementWizard({
    * Como este registro afeta os cálculos. Mostrado ANTES de salvar para a pessoa
    * decidir com consciência (o cálculo em si é sempre do backend).
    */
-  const impactBullets: string[] = isRecurringExpense
+  const impactBullets: string[] = isRetroRepeated
+    ? [
+        `Cria ${occurrences.length} ${occurrences.length === 1 ? 'movimentação' : 'movimentações'}, uma por mês, todas já pagas.`,
+        retroTotalCents != null
+          ? `Soma ${formatMoney(retroTotalCents, company.currencyCode)} ao total gasto de ${year}.`
+          : `Entra no total gasto de ${year}.`,
+        members.length > 1
+          ? 'Cada mês entra nos acertos com o pagador daquele mês, conforme a divisão escolhida.'
+          : 'Fica registrada no histórico do ano.',
+        'Não entra no custo mensal de hoje: o período já acabou, não há cobrança futura.',
+      ]
+    : isRecurringExpense
     ? [
         `Entra no custo mensal da empresa${
           amountCents != null
@@ -421,6 +475,17 @@ export function MovementWizard({
       setError('Informe um valor válido, ex.: 150,00.');
       return false;
     }
+    if (isRetroRepeated) {
+      if (toMonth < fromMonth) {
+        setError('O mês final vem antes do inicial. Ajuste o período.');
+        return false;
+      }
+      if (!memberId) {
+        setError('Escolha quem pagou (o padrão dos meses).');
+        return false;
+      }
+      return true;
+    }
     if (isRecurringExpense) {
       if (!recCategory) {
         setError('Escolha uma categoria para essa despesa recorrente.');
@@ -443,7 +508,23 @@ export function MovementWizard({
     setError('');
     setSaving(true);
     try {
-      if (isRecurringExpense) {
+      if (isRetroRepeated) {
+        // Período encerrado: uma movimentação por mês, cada uma com o pagador
+        // daquele mês. Quem monta o rateio de cada uma é o backend.
+        await financeApi.createRepeatedExpense(company.id, {
+          description: description.trim(),
+          amountCents: amountCents!,
+          splitMode: splitMode === 'custom' ? 'equity' : splitMode,
+          note: note.trim() || null,
+          categoryId,
+          tags,
+          contactId,
+          occurrences: occurrences.map((o) => ({
+            spentOn: o.spentOn,
+            paidByMemberId: o.paidByMemberId,
+          })),
+        });
+      } else if (isRecurringExpense) {
         // Despesa que se repete: o backend guarda como custo recorrente e cuida
         // de gerar a conta a pagar dividida na data da cobrança.
         await recurringApi.create(company.id, {
@@ -454,6 +535,7 @@ export function MovementWizard({
           paidByMemberId: memberId,
           splitMode: splitMode === 'equal' ? 'equal' : 'equity',
           nextChargeOn: date || null,
+          endsOn: endsOn || null,
           note: note.trim() || null,
         });
       } else if (type === 'expense') {
@@ -565,7 +647,9 @@ export function MovementWizard({
       {/* ── 1b: a despesa se repete? (ainda dentro da etapa Tipo) ── */}
       {step === 'repeat' && (
         <>
-          <p className="mw-lead">Essa despesa se repete?</p>
+          {/* Passado no ano fechado: lá o período já acabou, e a pergunta no
+              presente ("se repete?") faria a pessoa esperar cobrança futura. */}
+          <p className="mw-lead">{year ? 'Essa despesa se repetiu?' : 'Essa despesa se repete?'}</p>
           <div className="mw-cards">
             <button
               type="button"
@@ -592,9 +676,13 @@ export function MovementWizard({
             >
               <span className="mw-card__icon" aria-hidden="true"><IconRepeat /></span>
               <span className="mw-card__text">
-                <span className="mw-card__label">Sim, se repete</span>
+                <span className="mw-card__label">{year ? 'Sim, se repetiu' : 'Sim, se repete'}</span>
                 <span className="mw-card__desc">Assinatura, mensalidade, ferramenta ou custo fixo.</span>
-                <span className="mw-card__example">Ex.: Adobe, Google Workspace, contador, aluguel.</span>
+                <span className="mw-card__example">
+                  {year
+                    ? `Você diz de quando até quando, e quem pagou cada mês.`
+                    : 'Ex.: Adobe, Google Workspace, contador, aluguel.'}
+                </span>
               </span>
             </button>
           </div>
@@ -610,7 +698,9 @@ export function MovementWizard({
       {step === 'details' && (
         <>
           <p className="mw-lead">
-            {isRecurringExpense
+            {isRetroRepeated
+              ? `Sobre essa despesa que se repetiu em ${year}`
+              : isRecurringExpense
               ? 'Sobre essa despesa recorrente'
               : isExpense
                 ? 'Sobre esse gasto'
@@ -618,7 +708,150 @@ export function MovementWizard({
                   ? 'Sobre essa entrada'
                   : 'Sobre esse aporte'}
           </p>
-          {isRecurringExpense ? (
+          {isRetroRepeated ? (
+            /* Ano fechado: o período já acabou, então a pessoa informa DE quando
+               ATÉ quando e quem pagou em cada mês. Vira uma movimentação por
+               mês, não um custo recorrente. */
+            <>
+              <div className="mw-form">
+                <Input
+                  label="Nome da despesa"
+                  placeholder="Ex.: Adobe, Google Workspace, contador, aluguel…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  autoFocus
+                />
+                <CategoriaSelect
+                  categories={categories}
+                  value={categoryId}
+                  onChange={setCategoryId}
+                  onCreate={createCategoryInline}
+                  movementType="despesa"
+                />
+                <Input
+                  label={`Valor de cada mês (${company.currencyCode ?? 'BRL'})`}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={amount}
+                  onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
+                />
+                <div className="mw-grid">
+                  <Select
+                    label={`De qual mês de ${year}`}
+                    value={String(fromMonth)}
+                    onChange={(v) => setFromMonth(Number(v))}
+                    options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))}
+                  />
+                  <Select
+                    label="Até qual mês"
+                    value={String(toMonth)}
+                    onChange={(v) => setToMonth(Number(v))}
+                    options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))}
+                  />
+                </div>
+
+                <Select
+                  label="Quem pagou (vale para todos os meses)"
+                  value={memberId}
+                  onChange={setMemberId}
+                  options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+                />
+
+                {/* Caso comum resolvido pelo padrão acima; a lista existe para o
+                    caso misto ("em agosto foi a Gabi"), sem obrigar a preencher
+                    doze vezes quando foi sempre a mesma pessoa. */}
+                {occurrences.length > 0 && members.length > 1 && (
+                  <div className="field">
+                    <label className="field__label">
+                      Algum mês foi outra pessoa? ({occurrences.length}{' '}
+                      {occurrences.length === 1 ? 'mês' : 'meses'})
+                    </label>
+                    <div className="mw-months">
+                      {occurrences.map((oc) => {
+                        const mesIdx = Number(oc.key.slice(5, 7)) - 1;
+                        const trocado = payerByMonth[oc.key] != null;
+                        return (
+                          <div className={'mw-month' + (trocado ? ' is-custom' : '')} key={oc.key}>
+                            <span className="mw-month__name">{MONTH_NAMES[mesIdx]}</span>
+                            <select
+                              className="mw-month__select"
+                              value={oc.paidByMemberId}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setPayerByMonth((prev) => {
+                                  const next = { ...prev };
+                                  // Voltar ao padrão remove a exceção, então
+                                  // trocar o padrão depois volta a valer aqui.
+                                  if (v === memberId) delete next[oc.key];
+                                  else next[oc.key] = v;
+                                  return next;
+                                });
+                              }}
+                            >
+                              {members.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.fullName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {members.length > 1 && (
+                  <div className="field">
+                    <label className="field__label">Como dividir entre os sócios</label>
+                    <div className="fin-split">
+                      <button
+                        type="button"
+                        className={'fin-split__opt' + (splitMode === 'equity' ? ' fin-split__opt--active' : '')}
+                        onClick={() => setSplitMode('equity')}
+                      >
+                        Por participação
+                      </button>
+                      <button
+                        type="button"
+                        className={'fin-split__opt' + (splitMode === 'equal' ? ' fin-split__opt--active' : '')}
+                        onClick={() => setSplitMode('equal')}
+                      >
+                        Igualmente
+                      </button>
+                    </div>
+                    {equityWarn}
+                  </div>
+                )}
+                <div className="field">
+                  <label className="field__label">Observação (opcional)</label>
+                  <textarea
+                    className="field__input rc-textarea"
+                    placeholder="Ex.: plano mensal usado para criação de artes."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    maxLength={300}
+                    rows={2}
+                  />
+                </div>
+              </div>
+              {retroTotalCents != null && occurrences.length > 0 && (
+                <p className="mw-hint">
+                  {occurrences.length} {occurrences.length === 1 ? 'movimentação' : 'movimentações'} de{' '}
+                  {formatMoney(amountCents!, company.currencyCode)}, somando{' '}
+                  <strong>{formatMoney(retroTotalCents, company.currencyCode)}</strong> em {year}.
+                </p>
+              )}
+              <div className="mw-actions">
+                <Button block onClick={() => validateDetails() && next('impact')}>
+                  Continuar
+                </Button>
+                <Button variant="secondary" onClick={() => next('repeat')}>
+                  Voltar
+                </Button>
+              </div>
+            </>
+          ) : isRecurringExpense ? (
             /* Despesa recorrente: mesmos passos dos outros tipos (impacto e
                revisão vêm depois). Salva como custo recorrente no backend. */
             <>
@@ -662,9 +895,21 @@ export function MovementWizard({
                     options={members.map((m) => ({ value: m.id, label: m.fullName }))}
                   />
                 </div>
-                <div className="field">
-                  <label className="field__label">A partir de quando cobrar</label>
-                  <DateField value={date} onChange={setDate} placeholder="Escolha a data" />
+                <div className="mw-grid">
+                  <div className="field">
+                    <label className="field__label">A partir de quando cobrar</label>
+                    <DateField value={date} onChange={setDate} placeholder="Escolha a data" />
+                  </div>
+                  <div className="field">
+                    <label className="field__label">Até quando (opcional)</label>
+                    <DateField
+                      value={endsOn}
+                      onChange={setEndsOn}
+                      min={date || undefined}
+                      clearable
+                      placeholder="Sem data para acabar"
+                    />
+                  </div>
                 </div>
                 {members.length > 1 && (
                   <div className="field">
@@ -1076,10 +1321,40 @@ export function MovementWizard({
               <strong>{description.trim() || '—'}</strong>
             </div>
             <div className="mw-review__row">
-              <span>Valor</span>
+              <span>{isRetroRepeated ? 'Valor de cada mês' : 'Valor'}</span>
               <strong data-financial>{amountCents != null ? formatMoney(amountCents, company.currencyCode) : '—'}</strong>
             </div>
-            {isRecurringExpense ? (
+            {isRetroRepeated ? (
+              <>
+                <div className="mw-review__row">
+                  <span>Período</span>
+                  <strong>
+                    {MONTH_NAMES[fromMonth - 1]} a {MONTH_NAMES[toMonth - 1]} de {year}
+                  </strong>
+                </div>
+                <div className="mw-review__row">
+                  <span>Total do período</span>
+                  <strong data-financial>
+                    {retroTotalCents != null ? formatMoney(retroTotalCents, company.currencyCode) : '—'}
+                  </strong>
+                </div>
+                {/* A lista fecha o ciclo: a pessoa vê mês a mês quem pagou
+                    antes de gravar seis lançamentos de uma vez. */}
+                <div className="mw-review__row mw-review__row--stack">
+                  <span>Quem pagou cada mês</span>
+                  <div className="mw-review__months">
+                    {occurrences.map((oc) => (
+                      <span className="mw-review__month" key={oc.key}>
+                        {MONTH_NAMES[Number(oc.key.slice(5, 7)) - 1]}
+                        <strong>
+                          {members.find((m) => m.id === oc.paidByMemberId)?.fullName ?? '—'}
+                        </strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : isRecurringExpense ? (
               <>
                 <div className="mw-review__row">
                   <span>Se repete</span>
@@ -1121,21 +1396,26 @@ export function MovementWizard({
                 <strong>{source.trim()}</strong>
               </div>
             )}
-            <div className="mw-review__row">
-              <span>
-                {isRecurringExpense
-                  ? 'Quem paga'
-                  : isExpense
-                    ? 'Pago por'
-                    : isRevenue
-                      ? 'Entrou na conta de'
-                      : 'Aportado por'}
-              </span>
-              <strong>{isRevenue ? accountLabel.trim() || 'Não informado' : memberName}</strong>
-            </div>
+            {/* No retroativo o pagador já foi listado mês a mês logo acima;
+                repetir um "quem paga" único aqui contradiria a lista quando
+                algum mês foi de outra pessoa. */}
+            {!isRetroRepeated && (
+              <div className="mw-review__row">
+                <span>
+                  {isRecurringExpense
+                    ? 'Quem paga'
+                    : isExpense
+                      ? 'Pago por'
+                      : isRevenue
+                        ? 'Entrou na conta de'
+                        : 'Aportado por'}
+                </span>
+                <strong>{isRevenue ? accountLabel.trim() || 'Não informado' : memberName}</strong>
+              </div>
+            )}
             {splitsAmongPartners && (
               <div className="mw-review__row">
-                <span>Divisão</span>
+                <span>{isRetroRepeated ? 'Divisão de cada mês' : 'Divisão'}</span>
                 <strong>{splitMode === 'equity' ? 'Por participação' : 'Igualmente'}</strong>
               </div>
             )}
@@ -1144,7 +1424,9 @@ export function MovementWizard({
               members.length > 1 &&
               previewSplit(amountCents, members, splitMode).map((s) => {
                 const m = members.find((x) => x.id === s.memberId);
-                const isPayer = s.memberId === memberId;
+                // Retroativo: o pagador muda de mês para mês, então marcar um
+                // sócio como "pagou" aqui seria falso nos meses dos outros.
+                const isPayer = !isRetroRepeated && s.memberId === memberId;
                 const status = isPayer
                   ? isRecurringExpense
                     ? 'paga'

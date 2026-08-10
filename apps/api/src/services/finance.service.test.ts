@@ -674,4 +674,146 @@ describe('FinanceService', () => {
       finance.updateExpense(companyId, '00000000-0000-0000-0000-000000000000', { description: 'x' }, 'u1'),
     ).rejects.toMatchObject({ code: 'MOVEMENT_NOT_FOUND' });
   });
+
+  describe('despesa que se repetiu (lançamento retroativo)', () => {
+    /** Julho a dezembro de 2025, pagadores alternados entre os dois sócios. */
+    const seisMeses = (a: string, b: string) => [
+      { spentOn: '2025-07-01', paidByMemberId: a },
+      { spentOn: '2025-08-01', paidByMemberId: b },
+      { spentOn: '2025-09-01', paidByMemberId: a },
+      { spentOn: '2025-10-01', paidByMemberId: b },
+      { spentOn: '2025-11-01', paidByMemberId: a },
+      { spentOn: '2025-12-01', paidByMemberId: b },
+    ];
+
+    it('cria uma movimentação por competência, com o pagador de cada mês', async () => {
+      const criadas = await finance.createRepeatedExpense(
+        companyId,
+        {
+          description: 'Hospedagem',
+          amountCents: 10000,
+          splitMode: 'equity',
+          occurrences: seisMeses(ownerId, partnerId),
+        },
+        'u1',
+      );
+
+      expect(criadas).toHaveLength(6);
+      expect(criadas.map((e) => e.spentOn)).toEqual([
+        '2025-07-01',
+        '2025-08-01',
+        '2025-09-01',
+        '2025-10-01',
+        '2025-11-01',
+        '2025-12-01',
+      ]);
+      expect(criadas.map((e) => e.paidByMemberId)).toEqual([
+        ownerId,
+        partnerId,
+        ownerId,
+        partnerId,
+        ownerId,
+        partnerId,
+      ]);
+      // Valor é de CADA ocorrência, não do período inteiro.
+      expect(criadas.every((e) => e.amountCents === 10000)).toBe(true);
+      // Retroativo é história: entra como já paga, nunca como conta a pagar.
+      expect(criadas.every((e) => e.paymentStatus === 'paid')).toBe(true);
+    });
+
+    it('cada mês sai com o rateio da participação (60/40)', async () => {
+      const [primeira] = await finance.createRepeatedExpense(
+        companyId,
+        {
+          description: 'Hospedagem',
+          amountCents: 10000,
+          splitMode: 'equity',
+          occurrences: [{ spentOn: '2025-07-01', paidByMemberId: ownerId }],
+        },
+        'u1',
+      );
+      expect(primeira!.shares.find((s) => s.memberId === ownerId)?.shareCents).toBe(6000);
+      expect(primeira!.shares.find((s) => s.memberId === partnerId)?.shareCents).toBe(4000);
+    });
+
+    it('não vira custo recorrente: o custo mensal de hoje não muda', async () => {
+      await finance.createRepeatedExpense(
+        companyId,
+        {
+          description: 'Hospedagem',
+          amountCents: 10000,
+          splitMode: 'equity',
+          occurrences: seisMeses(ownerId, partnerId),
+        },
+        'u1',
+      );
+      // Nenhuma delas aponta para um custo recorrente.
+      const todas = await finance.listExpenses(companyId, 'u1');
+      const retro = todas.filter((e) => e.description === 'Hospedagem');
+      expect(retro).toHaveLength(6);
+      expect(retro.every((e) => e.recurringCostId == null)).toBe(true);
+    });
+
+    it('recusa pagador que não é sócio da empresa, sem gravar nada', async () => {
+      await expect(
+        finance.createRepeatedExpense(
+          companyId,
+          {
+            description: 'Hospedagem',
+            amountCents: 10000,
+            splitMode: 'equity',
+            occurrences: [
+              { spentOn: '2025-07-01', paidByMemberId: ownerId },
+              { spentOn: '2025-08-01', paidByMemberId: '00000000-0000-0000-0000-000000000000' },
+            ],
+          },
+          'u1',
+        ),
+      ).rejects.toMatchObject({ code: 'MEMBER_NOT_FOUND' });
+
+      // A validação acontece ANTES de gravar: nem o mês válido entrou.
+      const todas = await finance.listExpenses(companyId, 'u1');
+      expect(todas.filter((e) => e.description === 'Hospedagem')).toHaveLength(0);
+    });
+
+    it('recusa a mesma competência duas vezes', async () => {
+      await expect(
+        finance.createRepeatedExpense(
+          companyId,
+          {
+            description: 'Hospedagem',
+            amountCents: 10000,
+            splitMode: 'equity',
+            occurrences: [
+              { spentOn: '2025-07-01', paidByMemberId: ownerId },
+              { spentOn: '2025-07-01', paidByMemberId: partnerId },
+            ],
+          },
+          'u1',
+        ),
+      ).rejects.toMatchObject({ code: 'DUPLICATE_OCCURRENCE' });
+    });
+
+    it('divisão igual reparte meio a meio em todos os meses', async () => {
+      const criadas = await finance.createRepeatedExpense(
+        companyId,
+        {
+          description: 'Contador',
+          amountCents: 30000,
+          splitMode: 'equal',
+          occurrences: [
+            { spentOn: '2025-07-01', paidByMemberId: ownerId },
+            { spentOn: '2025-08-01', paidByMemberId: partnerId },
+          ],
+        },
+        'u1',
+      );
+      for (const e of criadas) {
+        const soma = e.shares.reduce((s, x) => s + x.shareCents, 0);
+        expect(soma).toBe(30000);
+        // 3 sócios (dona, sócio e Diego) dividindo igualmente.
+        expect(new Set(e.shares.map((s) => s.shareCents)).size).toBeLessThanOrEqual(2);
+      }
+    });
+  });
 });

@@ -14,6 +14,7 @@ interface Row {
   paid_by_member_id: string;
   split_mode: RecurringSplitMode | null;
   next_charge_on: string | null;
+  ends_on: string | null;
   note: string | null;
   active: boolean;
   created_at: string;
@@ -31,6 +32,7 @@ function toCost(row: Row): RecurringCost {
     paidByMemberId: row.paid_by_member_id,
     splitMode: row.split_mode ?? 'equity',
     nextChargeOn: row.next_charge_on,
+    endsOn: row.ends_on,
     note: row.note,
     active: row.active,
     createdAt: new Date(row.created_at),
@@ -46,6 +48,7 @@ function patchToRow(patch: RecurringCostUpdate): Record<string, unknown> {
     paidByMemberId: 'paid_by_member_id',
     splitMode: 'split_mode',
     nextChargeOn: 'next_charge_on',
+    endsOn: 'ends_on',
     note: 'note',
     active: 'active',
   };
@@ -73,6 +76,7 @@ export class SupabaseRecurringRepository implements RecurringRepository {
         paid_by_member_id: data.paidByMemberId,
         split_mode: data.splitMode,
         next_charge_on: data.nextChargeOn,
+        ends_on: data.endsOn,
         note: data.note,
         active: data.active,
       })

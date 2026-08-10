@@ -14,6 +14,8 @@ export interface RecurringCost {
   splitMode: RecurringSplitMode;
   /** Próxima cobrança (YYYY-MM-DD). Opcional, mas recomendada. */
   nextChargeOn: string | null;
+  /** Ate quando cobrar (YYYY-MM-DD). Nula = sem previsao de fim. */
+  endsOn: string | null;
   note: string | null;
   /** Só custos ATIVOS entram no custo mensal estimado. */
   active: boolean;
@@ -30,6 +32,7 @@ export type RecurringCostUpdate = Partial<
     | 'paidByMemberId'
     | 'splitMode'
     | 'nextChargeOn'
+    | 'endsOn'
     | 'note'
     | 'active'
   >

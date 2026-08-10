@@ -85,4 +85,73 @@ describe('RecurringService', () => {
       ),
     ).rejects.toMatchObject({ code: 'MEMBER_NOT_FOUND' });
   });
+
+  describe('data final ("até quando")', () => {
+    const base = (extra: Record<string, unknown> = {}) => ({
+      name: 'Contrato semestral',
+      category: 'tools' as const,
+      amountCents: 10000,
+      frequency: 'monthly' as const,
+      splitMode: 'equity' as const,
+      paidByMemberId: ownerId,
+      ...extra,
+    });
+
+    it('guarda a data final e devolve na listagem', async () => {
+      const cost = await recurring.create(
+        companyId,
+        base({ nextChargeOn: '2026-01-10', endsOn: '2026-06-10' }),
+        'u1',
+      );
+      expect(cost.endsOn).toBe('2026-06-10');
+      const { costs } = await recurring.list(companyId, 'u1');
+      expect(costs[0]!.endsOn).toBe('2026-06-10');
+    });
+
+    it('sem data final continua como antes (nula)', async () => {
+      const cost = await recurring.create(companyId, base(), 'u1');
+      expect(cost.endsOn).toBeNull();
+    });
+
+    it('recusa fim antes do início', async () => {
+      await expect(
+        recurring.create(companyId, base({ nextChargeOn: '2026-06-10', endsOn: '2026-01-10' }), 'u1'),
+      ).rejects.toMatchObject({ code: 'ENDS_BEFORE_START' });
+    });
+
+    it('recusa fim antes do início também ao editar só a data final', async () => {
+      const cost = await recurring.create(companyId, base({ nextChargeOn: '2026-06-10' }), 'u1');
+      await expect(
+        recurring.update(companyId, cost.id, { endsOn: '2026-01-10' }, 'u1'),
+      ).rejects.toMatchObject({ code: 'ENDS_BEFORE_START' });
+    });
+
+    it('custo já encerrado sai do custo mensal, mas continua na lista', async () => {
+      await recurring.create(
+        companyId,
+        base({ name: 'Acabou', nextChargeOn: '2026-01-10', endsOn: '2026-06-10' }),
+        'u1',
+      );
+      await recurring.create(companyId, base({ name: 'Segue', amountCents: 5000 }), 'u1');
+
+      // "Hoje" depois do fim do primeiro: só o segundo continua custando.
+      const depois = await recurring.list(companyId, 'u1', '2026-08-10');
+      expect(depois.costs).toHaveLength(2);
+      expect(depois.monthlyTotalCents).toBe(5000);
+
+      // Antes do fim, os dois somam.
+      const antes = await recurring.list(companyId, 'u1', '2026-03-10');
+      expect(antes.monthlyTotalCents).toBe(15000);
+    });
+
+    it('no último dia ainda conta (o fim é inclusivo)', async () => {
+      await recurring.create(
+        companyId,
+        base({ nextChargeOn: '2026-01-10', endsOn: '2026-06-10' }),
+        'u1',
+      );
+      const noDia = await recurring.list(companyId, 'u1', '2026-06-10');
+      expect(noDia.monthlyTotalCents).toBe(10000);
+    });
+  });
 });

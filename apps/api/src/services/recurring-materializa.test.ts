@@ -191,4 +191,47 @@ describe('Materialização de custos recorrentes', () => {
     const partner = balances.find((b) => b.memberId === partnerId)!;
     expect(partner.owedCents).toBe(4000); // sócio deve a parte dele ao pagador
   });
+
+  describe('data final do custo ("até quando")', () => {
+    it('custo encerrado não gera cobrança nova', async () => {
+      // Começou e terminou no passado: não deve nascer conta a pagar nenhuma.
+      const cost = await createCost({
+        name: 'Contrato encerrado',
+        nextChargeOn: daysAgo(60),
+        endsOn: daysAgo(30),
+      });
+      const expenses = await finance.listExpenses(companyId, 'u1');
+      const geradas = expenses.filter((e) => e.recurringCostId === cost.id);
+      // Só as competências até a data final; nenhuma depois dela.
+      expect(geradas.length).toBeGreaterThan(0);
+      expect(geradas.every((e) => e.recurringChargeOn! <= daysAgo(30))).toBe(true);
+    });
+
+    it('sem data final segue cobrando (comportamento de hoje)', async () => {
+      const cost = await createCost({ name: 'Sem fim' });
+      const expenses = await finance.listExpenses(companyId, 'u1');
+      expect(expenses.some((e) => e.recurringCostId === cost.id)).toBe(true);
+    });
+
+    it('data final antes da primeira cobrança não gera nada', async () => {
+      const cost = await recurring.create(
+        companyId,
+        {
+          name: 'Nunca cobrou',
+          category: 'tools',
+          amountCents: 10000,
+          frequency: 'monthly',
+          paidByMemberId: ownerId,
+          splitMode: 'equity',
+          // Começa daqui a muito tempo; a data final é do mesmo dia, então não
+          // há competência dentro do horizonte atual.
+          nextChargeOn: '2030-01-10',
+          endsOn: '2030-01-10',
+        },
+        'u1',
+      );
+      const expenses = await finance.listExpenses(companyId, 'u1');
+      expect(expenses.filter((e) => e.recurringCostId === cost.id)).toHaveLength(0);
+    });
+  });
 });

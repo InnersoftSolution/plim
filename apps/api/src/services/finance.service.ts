@@ -1,6 +1,7 @@
 import type {
   CreateContributionInput,
   CreateExpenseInput,
+  CreateRepeatedExpenseInput,
   CreateRevenueInput,
   CreateSettlementPaymentInput,
   ExpenseShare,
@@ -122,10 +123,15 @@ export class FinanceService {
       const start =
         cost.nextChargeOn ?? (cost.frequency !== 'once' ? today : null);
       if (!start || start > horizon) continue;
+      // Data final ("até quando"): o custo para de cobrar sozinho no dia certo,
+      // sem depender de alguém lembrar de desativar. Um contrato encerrado não
+      // pode continuar virando conta a pagar.
+      const limite = cost.endsOn != null && cost.endsOn < horizon ? cost.endsOn : horizon;
+      if (start > limite) continue;
 
       let charge: string | null = start;
       // Trava de segurança: no máximo 24 competências por vez (2 anos mensais).
-      for (let guard = 0; charge != null && charge <= horizon && guard < 24; guard++) {
+      for (let guard = 0; charge != null && charge <= limite && guard < 24; guard++) {
         const already = await this.repo.findExpenseByRecurringCharge(cost.id, charge);
         if (!already) {
           const weights = members.map((m) =>
@@ -234,6 +240,81 @@ export class FinanceService {
     }
 
     return expense;
+  }
+
+  /**
+   * Despesa que se REPETIU num período já encerrado (lançamento retroativo).
+   *
+   * Cria UMA movimentação por competência, cada uma com o seu pagador. Não cria
+   * custo recorrente: recorrente é promessa de cobrança futura, e aqui o
+   * período já acabou. Assim os meses entram no total do ano e nos acertos sem
+   * inflar a estimativa de custo mensal de hoje.
+   *
+   * Valida tudo ANTES de gravar qualquer coisa: sem transação no repositório,
+   * uma falha no meio deixaria metade dos meses lançados. Depois da validação
+   * só restam erros de infraestrutura.
+   */
+  async createRepeatedExpense(
+    companyId: string,
+    input: CreateRepeatedExpenseInput,
+    actingUserId?: string | null,
+  ): Promise<Expense[]> {
+    const { company, members } = await this.companyService.getOverview(companyId, actingUserId);
+
+    // Validação prévia: todo pagador existe e nenhuma competência se repete.
+    const vistos = new Set<string>();
+    for (const oc of input.occurrences) {
+      if (!members.some((m) => m.id === oc.paidByMemberId)) {
+        throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
+      }
+      if (vistos.has(oc.spentOn)) {
+        throw new DomainError(
+          'DUPLICATE_OCCURRENCE',
+          `Há mais de um lançamento para ${oc.spentOn}. Cada competência entra uma vez só.`,
+        );
+      }
+      vistos.add(oc.spentOn);
+    }
+
+    // O rateio é o mesmo em todas (mesmo valor e mesma regra de divisão), então
+    // calcula uma vez só em vez de repetir por mês.
+    const shares = this.computeShares(
+      { ...input, paidByMemberId: input.occurrences[0]!.paidByMemberId } as CreateExpenseInput,
+      members,
+    );
+
+    const criadas: Expense[] = [];
+    for (const oc of input.occurrences) {
+      const payer = members.find((m) => m.id === oc.paidByMemberId)!;
+      const conf = resolveConfirmation(members, payer, actingUserId);
+      criadas.push(
+        await this.repo.createExpense({
+          companyId,
+          kind: 'expense',
+          description: input.description,
+          amountCents: input.amountCents,
+          currencyCode: company.currencyCode,
+          paidByMemberId: oc.paidByMemberId,
+          spentOn: oc.spentOn,
+          splitMode: input.splitMode,
+          shares,
+          note: input.note ?? null,
+          source: null,
+          account: null,
+          // Retroativo é história: já foi pago, não vira conta a pagar.
+          paymentStatus: 'paid',
+          dueDate: null,
+          confirmationStatus: conf.status,
+          createdByMemberId: conf.createdByMemberId,
+          recurringCostId: null,
+          recurringChargeOn: null,
+          categoryId: input.categoryId ?? null,
+          tags: input.tags ?? [],
+          contactId: input.contactId ?? null,
+        }),
+      );
+    }
+    return criadas;
   }
 
   /**

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   createContributionSchema,
   createExpenseSchema,
+  createRepeatedExpenseSchema,
   createRevenueSchema,
   createSettlementPaymentSchema,
   payExpenseSchema,
@@ -27,6 +28,17 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     const input = createExpenseSchema.parse(request.body);
     const expense = await service.createExpense(companyId, input, request.user?.id ?? null);
     return reply.status(201).send(expense);
+  });
+
+  /**
+   * Despesa que se repetiu num período encerrado: cria uma movimentação por
+   * competência. Devolve a lista criada, para o front dizer quantas entraram.
+   */
+  app.post('/companies/:companyId/expenses/repeated', async (request, reply) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    const input = createRepeatedExpenseSchema.parse(request.body);
+    const created = await service.createRepeatedExpense(companyId, input, request.user?.id ?? null);
+    return reply.status(201).send(created);
   });
 
   app.post('/companies/:companyId/contributions', async (request, reply) => {

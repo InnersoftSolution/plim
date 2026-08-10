@@ -135,6 +135,43 @@ export const createExpenseSchema = z.object({
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
+/**
+ * Despesa que se REPETIU num período já encerrado (lançamento retroativo).
+ *
+ * Não vira custo recorrente: custo recorrente é promessa de cobrança futura, e
+ * aqui não há futuro nenhum, o período acabou. Vira uma movimentação por
+ * competência, exatamente como aconteceu na vida real, cada uma com o seu
+ * pagador. Assim os seis meses entram no total do ano, aparecem no gráfico mês
+ * a mês e contam nos acertos entre os sócios, sem sujar a estimativa de custo
+ * mensal de hoje.
+ *
+ * Descrição, valor, divisão e categoria são iguais em todas; o que muda de uma
+ * para outra é a data e quem pagou.
+ */
+export const repeatedOccurrenceSchema = z.object({
+  /** Data da despesa daquela competência (YYYY-MM-DD). */
+  spentOn: z.string().date(),
+  paidByMemberId: z.string().uuid(),
+});
+export type RepeatedOccurrence = z.infer<typeof repeatedOccurrenceSchema>;
+
+export const createRepeatedExpenseSchema = z.object({
+  description: z.string().trim().min(1, 'Descreva a despesa').max(120),
+  /** Valor de CADA ocorrência, não do período inteiro. */
+  amountCents: z.number().int().positive('Valor deve ser maior que zero'),
+  splitMode: expenseSplitModeSchema.default('equity'),
+  note: z.string().trim().max(300).nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  /**
+   * Uma entrada por competência. Teto de 60 para conter engano de digitação
+   * (5 anos de mensalidade); acima disso é erro, não uso legítimo.
+   */
+  occurrences: z.array(repeatedOccurrenceSchema).min(1, 'Informe ao menos um mês').max(60),
+});
+export type CreateRepeatedExpenseInput = z.infer<typeof createRepeatedExpenseSchema>;
+
 /** Marcar uma conta a pagar como paga (jornada "contas a pagar"). */
 export const payExpenseSchema = z.object({
   paidOn: z.string().date().optional(), // data do pagamento; back usa hoje se ausente

@@ -414,3 +414,77 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+/* ── despesa que se repetiu num ano fechado ─────────────────
+   Lista de meses com o pagador de cada um. O padrão resolve o caso comum;
+   esta lista existe só para o caso misto ("em agosto foi outra pessoa"), então
+   ela é compacta e o mês trocado fica marcado. */
+.mw-months {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.mw-month {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-elevated);
+}
+/* Mês fora do padrão: contorno da marca, para a exceção saltar na leitura. */
+.mw-month.is-custom {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+.mw-month__name {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 62px;
+}
+.mw-month__select {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-default);
+  cursor: pointer;
+}
+.mw-month__select:focus {
+  outline: none;
+}
+
+/* Revisão: mês e pagador empilhados, um por linha, para conferir de relance. */
+.mw-review__row--stack {
+  display: block;
+}
+.mw-review__months {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+.mw-review__month {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.mw-review__month strong {
+  color: var(--color-text-default);
+  font-weight: 600;
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .mw-months,
+  .mw-review__months {
+    grid-template-columns: 1fr;
+  }
+}

@@ -52,6 +52,9 @@ export function RecurringCostForm({
   const [nextCharge, setNextCharge] = useState(
     () => cost?.nextChargeOn ?? new Date().toISOString().slice(0, 10),
   );
+  // "Até quando": vazio = sem previsão de fim. Contrato com prazo definido para
+  // de cobrar sozinho no dia certo, sem depender de alguém lembrar de desativar.
+  const [endsOn, setEndsOn] = useState(() => cost?.endsOn ?? '');
   const [note, setNote] = useState(cost?.note ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -77,6 +80,9 @@ export function RecurringCostForm({
     if (amountCents == null) return setError('Informe um valor válido, maior que zero.');
     if (!frequency) return setError('Escolha a frequência.');
     if (!paidBy) return setError('Escolha quem paga.');
+    if (endsOn && nextCharge && endsOn < nextCharge) {
+      return setError('A data final vem antes do início da cobrança. Ajuste o período.');
+    }
     setSaving(true);
     try {
       const payload = {
@@ -87,6 +93,7 @@ export function RecurringCostForm({
         paidByMemberId: paidBy,
         splitMode,
         nextChargeOn: nextCharge || null,
+        endsOn: endsOn || null,
         note: note.trim() || null,
       };
       if (isEditing) await recurringApi.update(company.id, cost!.id, payload);
@@ -195,16 +202,30 @@ export function RecurringCostForm({
             ]}
           />
         )}
-        <div className="field">
-          <label className="field__label">
-            {frequency === 'once' ? 'Data do pagamento (opcional)' : 'A partir de quando cobrar'}
-          </label>
-          <DateField
-            value={nextCharge}
-            onChange={setNextCharge}
-            clearable={frequency === 'once'}
-            placeholder={frequency === 'once' ? 'Sem data definida' : 'Escolha a data'}
-          />
+        <div className="rc-grid">
+          <div className="field">
+            <label className="field__label">
+              {frequency === 'once' ? 'Data do pagamento (opcional)' : 'A partir de quando cobrar'}
+            </label>
+            <DateField
+              value={nextCharge}
+              onChange={setNextCharge}
+              clearable={frequency === 'once'}
+              placeholder={frequency === 'once' ? 'Sem data definida' : 'Escolha a data'}
+            />
+          </div>
+          {frequency !== 'once' && (
+            <div className="field">
+              <label className="field__label">Até quando (opcional)</label>
+              <DateField
+                value={endsOn}
+                onChange={setEndsOn}
+                min={nextCharge || undefined}
+                clearable
+                placeholder="Sem data para acabar"
+              />
+            </div>
+          )}
         </div>
         <div className="field">
           <label className="field__label">Observação (opcional)</label>
