@@ -313,8 +313,44 @@ export class FinanceService {
           contactId: input.contactId ?? null,
         }),
       );
+
+      // "Fulano já me acertou": vale para todos os meses, mas o pagador do mês
+      // é sempre ignorado, porque ninguém deve a si mesmo. É isso que faz a
+      // mesma lista funcionar mesmo quando o pagador muda de mês para mês.
+      const criada = criadas[criadas.length - 1]!;
+      await this.registerSettledShares(companyId, criada, input.settledMemberIds);
     }
     return criadas;
+  }
+
+  /**
+   * Registra o acerto dos sócios que já pagaram a parte deles ao pagador, junto
+   * com a movimentação. Só faz sentido em despesa JÁ PAGA e confirmada: em
+   * cobrança pendente de confirmação ainda não há dívida acordada.
+   */
+  private async registerSettledShares(
+    companyId: string,
+    expense: Expense,
+    settledMemberIds: string[] | undefined,
+  ): Promise<void> {
+    if (!settledMemberIds?.length) return;
+    if (expense.paymentStatus !== 'paid' || expense.confirmationStatus !== 'confirmed') return;
+    for (const memberId of new Set(settledMemberIds)) {
+      if (memberId === expense.paidByMemberId) continue;
+      const share = expense.shares.find((s) => s.memberId === memberId);
+      if (!share || share.shareCents <= 0) continue;
+      await this.repo.createPayment({
+        companyId,
+        fromMemberId: memberId,
+        toMemberId: expense.paidByMemberId,
+        amountCents: share.shareCents,
+        paidOn: expense.spentOn,
+        method: null,
+        note: `Acerto registrado junto com a despesa "${expense.description}".`,
+        status: 'confirmed',
+        expenseId: expense.id,
+      });
+    }
   }
 
   /**

@@ -169,6 +169,13 @@ export const createRepeatedExpenseSchema = z.object({
    * (5 anos de mensalidade); acima disso é erro, não uso legítimo.
    */
   occurrences: z.array(repeatedOccurrenceSchema).min(1, 'Informe ao menos um mês').max(60),
+  /**
+   * Sócios que JÁ acertaram a parte deles, valendo para TODOS os meses. Em cada
+   * mês o pagador daquele mês é ignorado (ninguém deve a si mesmo), então a
+   * mesma lista funciona mesmo quando o pagador muda de um mês para o outro.
+   * Quem acertou só alguns meses ajusta depois, na tela de Acertos.
+   */
+  settledMemberIds: z.array(z.string().uuid()).optional(),
 });
 export type CreateRepeatedExpenseInput = z.infer<typeof createRepeatedExpenseSchema>;
 

@@ -523,6 +523,7 @@ export function MovementWizard({
             spentOn: o.spentOn,
             paidByMemberId: o.paidByMemberId,
           })),
+          settledMemberIds: settledIds.length > 0 ? settledIds : undefined,
         });
       } else if (isRecurringExpense) {
         // Despesa que se repete: o backend guarda como custo recorrente e cuida
@@ -821,6 +822,24 @@ export function MovementWizard({
                       </button>
                     </div>
                     {equityWarn}
+                  </div>
+                )}
+                {/* Quem já acertou: vale para todos os meses de uma vez. Marcar
+                    mês a mês seriam doze decisões para o caso mais comum, que é
+                    "acertou tudo" ou "não acertou nada". Quem acertou só parte
+                    ajusta depois em Acertos. */}
+                {members.length > 1 && amountCents != null && (
+                  <div className="field">
+                    <label className="field__label">
+                      Os outros sócios já acertaram a parte deles?
+                    </label>
+                    <div className="mw-review">
+                      {splitRows(memberId, true, 'pagou')}
+                    </div>
+                    <p className="mw-hint" style={{ marginTop: 8 }}>
+                      Vale para os {occurrences.length} meses. No mês em que outra pessoa pagou, ela
+                      é ignorada aqui, porque ninguém deve a si mesmo.
+                    </p>
                   </div>
                 )}
                 <div className="field">
@@ -1435,8 +1454,10 @@ export function MovementWizard({
                         ? 'vai pagar'
                         : 'pagou'
                       : 'aportou'
-                  : // Recorrente ainda não cobrou: ninguém deve nada agora.
-                    isRecurringExpense || isUnpaid || s.cents === 0
+                  : // Recorrente ainda não cobrou: ninguém deve nada agora. O
+                    // retroativo é o oposto: já aconteceu, então a dívida existe
+                    // e precisa aparecer aqui.
+                    (isRecurringExpense && !isRetroRepeated) || isUnpaid || s.cents === 0
                     ? null
                     : settledIds.includes(s.memberId)
                       ? 'já acertou'
