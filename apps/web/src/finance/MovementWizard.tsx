@@ -224,6 +224,13 @@ export function MovementWizard({
   const [fromMonth, setFromMonth] = useState(1);
   const [toMonth, setToMonth] = useState(12);
   const [payerByMonth, setPayerByMonth] = useState<Record<string, string>>({});
+  /**
+   * Quem já acertou, POR MÊS (chave = competência). Não dá para ser uma lista só
+   * para o lançamento inteiro: quem deve a quem muda junto com o pagador do mês.
+   */
+  const [settledByMonth, setSettledByMonth] = useState<Record<string, string[]>>({});
+  /** Mês com o acerto aberto. Um por vez, para a tela não virar um paredão. */
+  const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   // Num ano fechado, "hoje" não existe: começa em 1º de janeiro daquele ano e a
@@ -296,6 +303,9 @@ export function MovementWizard({
       }))
     : [];
   const retroTotalCents = amountCents != null ? amountCents * occurrences.length : null;
+  /** Acertos de um mês, já sem o pagador dele (ninguém deve a si mesmo). */
+  const settledOf = (key: string, payerId: string) =>
+    (settledByMonth[key] ?? []).filter((id) => id !== payerId);
   const memberName = members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
   const soloMember = members.length <= 1;
   // Divisão entre sócios: sempre na despesa; no aporte só quando reembolsável.
@@ -402,13 +412,22 @@ export function MovementWizard({
     </div>
   ) : null;
 
-  /** Linhas "Parte de fulano" com o toggle "está devendo / já me pagou". */
-  function splitRows(payerId: string, allowSettle: boolean, payerLabel: string) {
+  /**
+   * Linhas "Parte de fulano" com o toggle "está devendo / já me pagou".
+   * `settledFor` permite uma lista de acerto própria (usada no retroativo, que
+   * tem uma lista por pagador em vez de uma só para tudo).
+   */
+  function splitRows(
+    payerId: string,
+    allowSettle: boolean,
+    payerLabel: string,
+    settledFor?: { ids: string[]; toggle: (memberId: string) => void },
+  ) {
     if (amountCents == null) return null;
     return previewSplit(amountCents, members, splitMode).map((s) => {
       const m = members.find((x) => x.id === s.memberId);
       const isPayer = s.memberId === payerId;
-      const settled = settledIds.includes(s.memberId);
+      const settled = (settledFor?.ids ?? settledIds).includes(s.memberId);
       const canSettle = allowSettle && !isPayer && s.cents > 0;
       return (
         <div className="mw-review__row" key={s.memberId}>
@@ -423,9 +442,11 @@ export function MovementWizard({
                 className={'mw-settle' + (settled ? ' mw-settle--on' : '')}
                 aria-pressed={settled}
                 onClick={() =>
-                  setSettledIds((ids) =>
-                    settled ? ids.filter((id) => id !== s.memberId) : [...ids, s.memberId],
-                  )
+                  settledFor
+                    ? settledFor.toggle(s.memberId)
+                    : setSettledIds((ids) =>
+                        settled ? ids.filter((id) => id !== s.memberId) : [...ids, s.memberId],
+                      )
                 }
               >
                 {settled ? 'já me pagou ✓' : 'está devendo'}
@@ -519,11 +540,16 @@ export function MovementWizard({
           categoryId,
           tags,
           contactId,
-          occurrences: occurrences.map((o) => ({
-            spentOn: o.spentOn,
-            paidByMemberId: o.paidByMemberId,
-          })),
-          settledMemberIds: settledIds.length > 0 ? settledIds : undefined,
+          occurrences: occurrences.map((o) => {
+            // O acerto é do mês; o pagador dele nunca entra (ninguém deve a si
+            // mesmo), mesmo que tenha sido marcado antes de trocar o pagador.
+            const acertaram = settledOf(o.key, o.paidByMemberId);
+            return {
+              spentOn: o.spentOn,
+              paidByMemberId: o.paidByMemberId,
+              settledMemberIds: acertaram.length > 0 ? acertaram : undefined,
+            };
+          }),
         });
       } else if (isRecurringExpense) {
         // Despesa que se repete: o backend guarda como custo recorrente e cuida
@@ -751,54 +777,109 @@ export function MovementWizard({
                   />
                 </div>
 
+                {/* Padrão, não regra: a lista abaixo mostra mês a mês e deixa
+                    trocar. Chamar de "vale para todos os meses" mentia assim que
+                    um mês fosse de outra pessoa. */}
                 <Select
-                  label="Quem pagou (vale para todos os meses)"
+                  label="Quem pagou na maioria dos meses"
                   value={memberId}
                   onChange={setMemberId}
                   options={members.map((m) => ({ value: m.id, label: m.fullName }))}
                 />
 
-                {/* Caso comum resolvido pelo padrão acima; a lista existe para o
-                    caso misto ("em agosto foi a Gabi"), sem obrigar a preencher
-                    doze vezes quando foi sempre a mesma pessoa. */}
+                {/* Um mês por linha, fechado. O acerto daquele mês só aparece
+                    quando a pessoa abre: mostrar os seis de uma vez era um
+                    paredão, e quase sempre só um ou dois precisam de ajuste. */}
                 {occurrences.length > 0 && members.length > 1 && (
                   <div className="field">
                     <label className="field__label">
-                      Algum mês foi outra pessoa? ({occurrences.length}{' '}
+                      Mês a mês ({occurrences.length}{' '}
                       {occurrences.length === 1 ? 'mês' : 'meses'})
                     </label>
-                    <div className="mw-months">
+                    <div className="mw-monthlist">
                       {occurrences.map((oc) => {
                         const mesIdx = Number(oc.key.slice(5, 7)) - 1;
                         const trocado = payerByMonth[oc.key] != null;
+                        const aberto = openMonth === oc.key;
+                        const acertaram = settledOf(oc.key, oc.paidByMemberId);
                         return (
-                          <div className={'mw-month' + (trocado ? ' is-custom' : '')} key={oc.key}>
-                            <span className="mw-month__name">{MONTH_NAMES[mesIdx]}</span>
-                            <select
-                              className="mw-month__select"
-                              value={oc.paidByMemberId}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setPayerByMonth((prev) => {
-                                  const next = { ...prev };
-                                  // Voltar ao padrão remove a exceção, então
-                                  // trocar o padrão depois volta a valer aqui.
-                                  if (v === memberId) delete next[oc.key];
-                                  else next[oc.key] = v;
-                                  return next;
-                                });
-                              }}
-                            >
-                              {members.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.fullName}
-                                </option>
-                              ))}
-                            </select>
+                          <div
+                            className={
+                              'mw-mrow' + (trocado ? ' is-custom' : '') + (aberto ? ' is-open' : '')
+                            }
+                            key={oc.key}
+                          >
+                            <div className="mw-mrow__head">
+                              <span className="mw-mrow__name">{MONTH_NAMES[mesIdx]}</span>
+                              <select
+                                className="mw-mrow__select"
+                                aria-label={`Quem pagou em ${MONTH_NAMES[mesIdx]}`}
+                                value={oc.paidByMemberId}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setPayerByMonth((prev) => {
+                                    const next = { ...prev };
+                                    // Voltar ao padrão remove a exceção, então
+                                    // trocar o padrão depois volta a valer aqui.
+                                    if (v === memberId) delete next[oc.key];
+                                    else next[oc.key] = v;
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {members.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.fullName}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className={'mw-mrow__more' + (acertaram.length ? ' is-done' : '')}
+                                aria-expanded={aberto}
+                                onClick={() => setOpenMonth(aberto ? null : oc.key)}
+                              >
+                                {acertaram.length > 0
+                                  ? `${acertaram.length} acertou`
+                                  : 'acertos'}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d={aberto ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} />
+                                </svg>
+                              </button>
+                            </div>
+                            {aberto && (
+                              <div className="mw-mrow__body">
+                                {amountCents == null ? (
+                                  <p className="mw-hint" style={{ margin: 0 }}>
+                                    Informe o valor para ver as partes deste mês.
+                                  </p>
+                                ) : (
+                                  <div className="mw-review">
+                                    {splitRows(oc.paidByMemberId, true, 'pagou', {
+                                      ids: settledByMonth[oc.key] ?? [],
+                                      toggle: (alvo) =>
+                                        setSettledByMonth((prev) => {
+                                          const atual = prev[oc.key] ?? [];
+                                          return {
+                                            ...prev,
+                                            [oc.key]: atual.includes(alvo)
+                                              ? atual.filter((id) => id !== alvo)
+                                              : [...atual, alvo],
+                                          };
+                                        }),
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
+                    <p className="mw-hint" style={{ marginTop: 8 }}>
+                      Toque em "acertos" para dizer quem já pagou a parte daquele mês. Dá para
+                      deixar para depois e resolver em Acertos.
+                    </p>
                   </div>
                 )}
 
@@ -822,24 +903,6 @@ export function MovementWizard({
                       </button>
                     </div>
                     {equityWarn}
-                  </div>
-                )}
-                {/* Quem já acertou: vale para todos os meses de uma vez. Marcar
-                    mês a mês seriam doze decisões para o caso mais comum, que é
-                    "acertou tudo" ou "não acertou nada". Quem acertou só parte
-                    ajusta depois em Acertos. */}
-                {members.length > 1 && amountCents != null && (
-                  <div className="field">
-                    <label className="field__label">
-                      Os outros sócios já acertaram a parte deles?
-                    </label>
-                    <div className="mw-review">
-                      {splitRows(memberId, true, 'pagou')}
-                    </div>
-                    <p className="mw-hint" style={{ marginTop: 8 }}>
-                      Vale para os {occurrences.length} meses. No mês em que outra pessoa pagou, ela
-                      é ignorada aqui, porque ninguém deve a si mesmo.
-                    </p>
                   </div>
                 )}
                 <div className="field">
@@ -1359,17 +1422,25 @@ export function MovementWizard({
                 </div>
                 {/* A lista fecha o ciclo: a pessoa vê mês a mês quem pagou
                     antes de gravar seis lançamentos de uma vez. */}
+                {/* É aqui que se vê tudo de uma vez: mês, quem pagou e quantos
+                    já acertaram. A etapa de detalhes mostra um mês por vez. */}
                 <div className="mw-review__row mw-review__row--stack">
                   <span>Quem pagou cada mês</span>
                   <div className="mw-review__months">
-                    {occurrences.map((oc) => (
-                      <span className="mw-review__month" key={oc.key}>
-                        {MONTH_NAMES[Number(oc.key.slice(5, 7)) - 1]}
-                        <strong>
-                          {members.find((m) => m.id === oc.paidByMemberId)?.fullName ?? '—'}
-                        </strong>
-                      </span>
-                    ))}
+                    {occurrences.map((oc) => {
+                      const acertaram = settledOf(oc.key, oc.paidByMemberId);
+                      return (
+                        <span className="mw-review__month" key={oc.key}>
+                          {MONTH_NAMES[Number(oc.key.slice(5, 7)) - 1]}
+                          <strong>
+                            {members.find((m) => m.id === oc.paidByMemberId)?.fullName ?? '—'}
+                            {acertaram.length > 0 && (
+                              <span className="mw-payer"> · {acertaram.length} acertou</span>
+                            )}
+                          </strong>
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </>

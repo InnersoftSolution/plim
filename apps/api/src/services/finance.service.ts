@@ -314,11 +314,10 @@ export class FinanceService {
         }),
       );
 
-      // "Fulano já me acertou": vale para todos os meses, mas o pagador do mês
-      // é sempre ignorado, porque ninguém deve a si mesmo. É isso que faz a
-      // mesma lista funcionar mesmo quando o pagador muda de mês para mês.
+      // "Fulano já me acertou" é por MÊS: quem deve a quem muda junto com o
+      // pagador daquele mês.
       const criada = criadas[criadas.length - 1]!;
-      await this.registerSettledShares(companyId, criada, input.settledMemberIds);
+      await this.registerSettledShares(companyId, criada, oc.settledMemberIds);
     }
     return criadas;
   }

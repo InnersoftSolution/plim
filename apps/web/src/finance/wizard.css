@@ -488,3 +488,87 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ── lista de meses com acerto sob demanda ──────────────────
+   Um mês por linha, fechado. O acerto daquele mês abre só quando a pessoa
+   pede: com seis meses abertos de uma vez a etapa virava um paredão, e na
+   prática só um ou dois precisam de ajuste. */
+.mw-monthlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mw-mrow {
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+}
+/* Mês fora do pagador padrão: contorno da marca, a exceção salta na leitura. */
+.mw-mrow.is-custom {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+.mw-mrow.is-open {
+  background: var(--color-bg-surface);
+  border-color: var(--color-brand-primary);
+}
+.mw-mrow__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.mw-mrow__name {
+  flex: 0 0 auto;
+  min-width: 74px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.mw-mrow__select {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-default);
+  cursor: pointer;
+}
+.mw-mrow__select:focus {
+  outline: none;
+}
+/* Ação discreta: só vira destaque quando há acerto marcado naquele mês. */
+.mw-mrow__more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mw-mrow__more:hover {
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+}
+.mw-mrow__more.is-done {
+  color: var(--color-status-positive);
+  border-color: var(--color-status-positive);
+  background: var(--color-status-positive-bg);
+}
+.mw-mrow__body {
+  padding: 2px 10px 10px;
+}
+.mw-mrow__body .mw-review {
+  margin: 0;
+}

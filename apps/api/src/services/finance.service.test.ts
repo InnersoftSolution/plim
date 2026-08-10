@@ -802,10 +802,9 @@ describe('FinanceService', () => {
           amountCents: 10000,
           splitMode: 'equity',
           occurrences: [
-            { spentOn: '2025-07-01', paidByMemberId: ownerId },
-            { spentOn: '2025-08-01', paidByMemberId: ownerId },
+            { spentOn: '2025-07-01', paidByMemberId: ownerId, settledMemberIds: [partnerId] },
+            { spentOn: '2025-08-01', paidByMemberId: ownerId, settledMemberIds: [partnerId] },
           ],
-          settledMemberIds: [partnerId],
         },
         'u1',
       );
@@ -845,23 +844,47 @@ describe('FinanceService', () => {
           amountCents: 10000,
           splitMode: 'equity',
           occurrences: [
-            { spentOn: '2025-07-01', paidByMemberId: ownerId },
-            // Agosto foi o sócio quem pagou: aqui quem passa a dever é a dona.
+            // Julho: a dona pagou e o sócio já acertou com ela.
+            { spentOn: '2025-07-01', paidByMemberId: ownerId, settledMemberIds: [partnerId] },
+            // Agosto: quem pagou foi o sócio, então quem passa a dever é a dona,
+            // e ela NÃO acertou. É o caso que a lista por pagador resolve.
             { spentOn: '2025-08-01', paidByMemberId: partnerId },
           ],
-          settledMemberIds: [partnerId],
         },
         'u1',
       );
-      // Um acerto só: o de julho, do sócio para a dona. Em agosto o sócio é o
-      // pagador, então ele não acerta consigo mesmo, e a dívida da dona com ele
-      // continua em aberto (a lista marca quem JÁ pagou, não quem recebeu).
+      // Um acerto só: o de julho, do sócio para a dona. A dívida da dona com o
+      // sócio, criada em agosto, continua em aberto.
       const pagamentos = await finance.listSettlementPayments(companyId, 'u1');
       expect(pagamentos).toHaveLength(1);
       expect(pagamentos[0]).toMatchObject({
         fromMemberId: partnerId,
         toMemberId: ownerId,
         amountCents: 4000,
+      });
+    });
+
+    it('acerto de um mês não vaza para o mês pago por outra pessoa', async () => {
+      await finance.createRepeatedExpense(
+        companyId,
+        {
+          description: 'Aluguel',
+          amountCents: 10000,
+          splitMode: 'equity',
+          occurrences: [
+            // Nos dois meses quem pagou foi o sócio; a dona só acertou julho.
+            { spentOn: '2025-07-01', paidByMemberId: partnerId, settledMemberIds: [ownerId] },
+            { spentOn: '2025-08-01', paidByMemberId: partnerId },
+          ],
+        },
+        'u1',
+      );
+      const pagamentos = await finance.listSettlementPayments(companyId, 'u1');
+      expect(pagamentos).toHaveLength(1);
+      expect(pagamentos[0]).toMatchObject({
+        fromMemberId: ownerId,
+        toMemberId: partnerId,
+        amountCents: 6000, // 60% de 100,00
       });
     });
 
