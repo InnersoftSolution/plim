@@ -171,12 +171,23 @@ export function MovementWizard({
   company,
   members,
   onCreated,
+  year,
 }: {
   company: Company;
   members: CompanyMember[];
   /** Salvou o registro (qualquer tipo): recarrega os números e fecha o modal. */
   onCreated: () => void;
+  /**
+   * Ano fechado sendo preenchido de forma retroativa (ex.: "2025"). Prende a
+   * data ao ano inteiro, para o lançamento não escapar para o ano corrente sem
+   * ninguém perceber. Ausente = registro normal, no ano de hoje.
+   */
+  year?: string | null;
 }) {
+  /** Limites da data: dentro do ano quando é retroativo, até hoje quando não é. */
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dateMin = year ? `${year}-01-01` : undefined;
+  const dateMax = year ? `${year}-12-31` : hoje;
   /** 'repeat' é uma tela dentro da etapa Tipo (pergunta se a despesa se repete). */
   const [step, setStep] = useState<WizStep | 'repeat'>('type');
   const [type, setType] = useState<MovementType | ''>('');
@@ -189,7 +200,9 @@ export function MovementWizard({
   const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // Num ano fechado, "hoje" não existe: começa em 1º de janeiro daquele ano e a
+  // pessoa ajusta. O passo de Revisão mostra a data escolhida antes de salvar.
+  const [date, setDate] = useState(year ? `${year}-01-01` : hoje);
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'unpaid'>('paid');
   const [dueDate, setDueDate] = useState('');
   const [note, setNote] = useState('');
@@ -775,12 +788,11 @@ export function MovementWizard({
               </div>
             ) : (
               <div className="field">
-                <label className="field__label">{isRevenue ? 'Quando entrou' : 'Quando foi'}</label>
-                <DateField
-                  value={date}
-                  onChange={setDate}
-                  max={new Date().toISOString().slice(0, 10)}
-                />
+                <label className="field__label">
+                  {isRevenue ? 'Quando entrou' : 'Quando foi'}
+                  {year && ` (em ${year})`}
+                </label>
+                <DateField value={date} onChange={setDate} min={dateMin} max={dateMax} />
               </div>
             )}
             {isRevenue && (

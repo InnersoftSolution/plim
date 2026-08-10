@@ -400,11 +400,13 @@ export function FinancePage() {
               : 'Acompanhe tudo que entrou, saiu ou foi investido na empresa.'}
           </p>
         </div>
-        {!archiveYear && (
-          <Button onClick={() => setWizardOpen(true)}>
-            <IconPlus /> Registrar movimentação
-          </Button>
-        )}
+        {/* O botão vale também no ano fechado: "fechado" descreve o período, não
+            proíbe lançar. Quem está organizando a contabilidade para trás
+            precisa justamente registrar o que aconteceu lá. O rótulo diz o ano
+            para ninguém achar que está lançando no ano corrente. */}
+        <Button onClick={() => setWizardOpen(true)}>
+          <IconPlus /> {archiveYear ? `Registrar em ${archiveYear}` : 'Registrar movimentação'}
+        </Button>
       </div>
 
       {/* ── cards de resumo: saúde do negócio (recebido − gasto) ── */}
@@ -762,8 +764,12 @@ export function FinancePage() {
       {/* ── wizard (mesmo da Home) ── */}
       <Modal
         open={wizardOpen}
-        title="Registrar movimentação"
-        subtitle="O Plim te guia passo a passo, e explica como cada registro afeta os cálculos."
+        title={archiveYear ? `Registrar movimentação em ${archiveYear}` : 'Registrar movimentação'}
+        subtitle={
+          archiveYear
+            ? `Lançamento retroativo: a data fica presa a ${archiveYear}, então nada escapa para o ano corrente.`
+            : 'O Plim te guia passo a passo, e explica como cada registro afeta os cálculos.'
+        }
         wide
         onClose={() => setWizardOpen(false)}
       >
@@ -771,6 +777,7 @@ export function FinancePage() {
           <MovementWizard
             company={company}
             members={members}
+            year={archiveYear}
             onCreated={() => {
               setWizardOpen(false);
               void load();
