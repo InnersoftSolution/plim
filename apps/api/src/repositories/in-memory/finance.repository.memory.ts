@@ -13,6 +13,21 @@ export class InMemoryFinanceRepository implements FinanceRepository {
     return payment;
   }
 
+  async updatePayment(
+    paymentId: string,
+    patch: Partial<Pick<SettlementPayment, 'amountCents' | 'toMemberId' | 'note'>>,
+  ): Promise<SettlementPayment> {
+    const atual = this.payments.get(paymentId);
+    if (!atual) throw new Error(`Acerto ${paymentId} não encontrado`);
+    const atualizado: SettlementPayment = { ...atual, ...patch };
+    this.payments.set(paymentId, atualizado);
+    return atualizado;
+  }
+
+  async deletePayment(paymentId: string): Promise<void> {
+    this.payments.delete(paymentId);
+  }
+
   async listPayments(companyId: string): Promise<SettlementPayment[]> {
     return [...this.payments.values()]
       .filter((p) => p.companyId === companyId)

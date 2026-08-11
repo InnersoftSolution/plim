@@ -235,6 +235,7 @@ export class FinanceService {
           note: `Acerto registrado junto com a despesa "${expense.description}".`,
           status: 'confirmed',
           expenseId: expense.id,
+          isAuto: true,
         });
       }
     }
@@ -348,6 +349,7 @@ export class FinanceService {
         note: `Acerto registrado junto com a despesa "${expense.description}".`,
         status: 'confirmed',
         expenseId: expense.id,
+        isAuto: true,
       });
     }
   }
@@ -427,6 +429,7 @@ export class FinanceService {
           note: `Acerto registrado junto com o aporte "${contribution.description}".`,
           status: 'confirmed',
           expenseId: contribution.id,
+          isAuto: true,
         });
       }
     }
@@ -583,19 +586,18 @@ export class FinanceService {
     const payerChanged = input.paidByMemberId != null && input.paidByMemberId !== expense.paidByMemberId;
     const structural = !isRevenue && (amountChanged || splitChanged || payerChanged);
 
-    if (structural) {
-      const payments = await this.repo.listPayments(companyId);
-      const hasSettlements = payments.some(
-        (p) => p.expenseId === expenseId && p.status === 'confirmed',
-      );
-      if (hasSettlements) {
-        throw new DomainError(
-          'HAS_SETTLEMENTS',
-          'Essa movimentação já tem acertos registrados. Remova os acertos antes de mudar valor, divisão ou quem pagou.',
-          409,
-        );
-      }
-    }
+    /**
+     * Acertos MANUAIS ligados a esta movimentação. Manual é dinheiro que mudou
+     * de mão num valor próprio: mudar a despesa não pode reescrever isso, então
+     * eles ficam intactos e o saldo continua batendo a partir deles.
+     * Os AUTOMÁTICOS ("já me pagou") são ajustados mais abaixo, depois que o
+     * novo rateio existe.
+     */
+    const linkedPayments = structural
+      ? (await this.repo.listPayments(companyId)).filter(
+          (p) => p.expenseId === expenseId && p.status === 'confirmed',
+        )
+      : [];
 
     if (payerChanged && !members.some((m) => m.id === input.paidByMemberId)) {
       throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
@@ -631,7 +633,53 @@ export class FinanceService {
       patch.shares = this.recomputeShares(amountCents, splitMode, input.customShares, members);
     }
 
-    return this.repo.updateExpense(expenseId, patch);
+    const atualizada = await this.repo.updateExpense(expenseId, patch);
+
+    // Só depois de salvar: os acertos automáticos passam a valer sobre o novo
+    // rateio. Fazer antes deixaria acerto ajustado apontando para um valor que
+    // talvez nem fosse gravado (se a atualização falhasse).
+    if (structural && linkedPayments.length > 0) {
+      await this.syncAutoSettlements(atualizada, linkedPayments);
+    }
+
+    return atualizada;
+  }
+
+  /**
+   * Realinha os acertos AUTOMÁTICOS de uma movimentação que mudou de valor,
+   * divisão ou pagador.
+   *
+   * Automático nasceu do "fulano já me pagou": é a afirmação de que a pessoa
+   * quitou A PARTE dela, não um pagamento de valor próprio. Quando a parte
+   * muda, ele acompanha; quando a parte some (virou 0) ou a pessoa passou a ser
+   * o pagador, ele deixa de existir, porque ninguém deve a si mesmo.
+   *
+   * Acerto MANUAL nunca é tocado: aquilo é dinheiro que mudou de mão de verdade
+   * e reescrever seria falsificar o histórico. Ele continua valendo e o saldo
+   * se ajusta sozinho a partir do novo rateio.
+   */
+  private async syncAutoSettlements(
+    expense: Expense,
+    linkedPayments: SettlementPayment[],
+  ): Promise<void> {
+    for (const pagamento of linkedPayments) {
+      if (!pagamento.isAuto) continue;
+      const novaParte = expense.shares.find((s) => s.memberId === pagamento.fromMemberId);
+      const virouPagador = pagamento.fromMemberId === expense.paidByMemberId;
+      if (virouPagador || !novaParte || novaParte.shareCents <= 0) {
+        await this.repo.deletePayment(pagamento.id);
+        continue;
+      }
+      if (
+        novaParte.shareCents !== pagamento.amountCents ||
+        expense.paidByMemberId !== pagamento.toMemberId
+      ) {
+        await this.repo.updatePayment(pagamento.id, {
+          amountCents: novaParte.shareCents,
+          toMemberId: expense.paidByMemberId,
+        });
+      }
+    }
   }
 
   /** Recalcula as partes conforme o modo de rateio (equity/equal/custom). */
@@ -889,6 +937,9 @@ export class FinanceService {
       note: input.note ?? null,
       status: 'confirmed',
       expenseId: input.expenseId ?? null,
+      // Registrado à parte, em Acertos: é dinheiro que mudou de mão num valor
+      // próprio. Nunca é reescrito quando a movimentação de origem muda.
+      isAuto: false,
     });
     return toPaymentDto(payment);
   }

@@ -16,6 +16,17 @@ export interface FinanceRepository {
   ): Promise<Expense>;
   createPayment(data: Omit<SettlementPayment, 'id' | 'createdAt'>): Promise<SettlementPayment>;
   listPayments(companyId: string): Promise<SettlementPayment[]>;
+  /**
+   * Ajuste de um acerto AUTOMÁTICO quando a movimentação de origem muda (novo
+   * valor, nova divisão ou novo pagador). Nunca usado em acerto manual: aquilo
+   * é dinheiro que mudou de mão e não se reescreve.
+   */
+  updatePayment(
+    paymentId: string,
+    patch: Partial<Pick<SettlementPayment, 'amountCents' | 'toMemberId' | 'note'>>,
+  ): Promise<SettlementPayment>;
+  /** Some com o acerto automático que deixou de fazer sentido (parte virou 0). */
+  deletePayment(paymentId: string): Promise<void>;
   /** Exclusão definitiva de uma movimentação (as partilhas caem em cascata). */
   deleteExpense(expenseId: string): Promise<void>;
   /** Cobrança já materializada deste custo nesta competência (idempotência). */

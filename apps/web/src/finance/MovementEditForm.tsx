@@ -5,7 +5,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { financeApi, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
+import { centsToMaskedInput, financeApi, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
 import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
@@ -39,7 +39,7 @@ export function MovementEditForm({
 
   const [description, setDescription] = useState(expense.description);
   const [amount, setAmount] = useState(
-    maskMoneyBRL((expense.amountCents / 100).toFixed(2).replace('.', ',')),
+    centsToMaskedInput(expense.amountCents),
   );
   const [date, setDate] = useState(expense.spentOn);
   const [paidBy, setPaidBy] = useState(expense.paidByMemberId);
@@ -156,6 +156,16 @@ export function MovementEditForm({
         Corrija os dados desta {label}. Ao mudar o valor ou a divisão, o Plim recalcula sozinho a parte
         de cada sócio.
       </p>
+      {/* Antes a edição era barrada quando havia acerto ("remova os acertos
+          antes"), o que obrigava a desfazer o histórico para corrigir um número.
+          Agora ela passa, e o texto conta o que acontece com cada tipo. */}
+      {!isRevenue && (
+        <p className="mw-hint" style={{ marginTop: 0 }}>
+          Se alguém já tinha acertado a parte dele, o acerto marcado no próprio registro acompanha o
+          novo valor. Pagamento lançado à parte em Acertos não é alterado, porque é dinheiro que
+          mudou de mão de verdade: nesse caso confira o saldo depois.
+        </p>
+      )}
       {error && <div className="form-error">{error}</div>}
       <div className="mw-form">
         <Input

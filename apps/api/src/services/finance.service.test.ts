@@ -637,24 +637,92 @@ describe('FinanceService', () => {
     expect(updated.shares.every((s) => s.shareCents === 3000)).toBe(true);
   });
 
-  it('bloqueia mudança estrutural quando já há acerto registrado', async () => {
-    const created = await finance.createExpense(
-      companyId,
-      { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
-      'u1',
-    );
-    // Sócio paga a parte dele → vira acerto amarrado a essa despesa.
-    await finance.createSettlementPayment(
-      companyId,
-      { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 4000, paidOn: '2026-05-01', expenseId: created.id },
-      'u1',
-    );
-    await expect(
-      finance.updateExpense(companyId, created.id, { amountCents: 20000 }, 'u1'),
-    ).rejects.toMatchObject({ code: 'HAS_SETTLEMENTS' });
-    // Mas editar a descrição (não estrutural) continua permitido.
-    const ok = await finance.updateExpense(companyId, created.id, { description: 'Hosting' }, 'u1');
-    expect(ok.description).toBe('Hosting');
+  describe('corrigir o valor com acerto já registrado', () => {
+    it('acerto MANUAL não é reescrito: é dinheiro que mudou de mão', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+        'u1',
+      );
+      // Registrado à parte, em Acertos: o sócio transferiu 40,00 de verdade.
+      await finance.createSettlementPayment(
+        companyId,
+        { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 4000, paidOn: '2026-05-01', expenseId: created.id },
+        'u1',
+      );
+
+      // A edição deixa de ser bloqueada (antes estourava HAS_SETTLEMENTS).
+      const editada = await finance.updateExpense(companyId, created.id, { amountCents: 20000 }, 'u1');
+      expect(editada.amountCents).toBe(20000);
+
+      // O pagamento continua valendo 40,00: o histórico não é falsificado.
+      const pagamentos = await finance.listSettlementPayments(companyId, 'u1');
+      expect(pagamentos).toHaveLength(1);
+      expect(pagamentos[0]!.amountCents).toBe(4000);
+      // A parte nova é 80,00 (40% de 200,00), então ainda faltam 40,00.
+      const balances = await finance.getBalances(companyId, 'u1');
+      expect(balances.find((b) => b.memberId === partnerId)?.netCents).toBe(-4000);
+    });
+
+    it('acerto AUTOMÁTICO acompanha o novo valor', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        {
+          description: 'Juridico',
+          amountCents: 10000,
+          paidByMemberId: ownerId,
+          splitMode: 'equity',
+          // "o sócio já me pagou" no próprio registro: acerto automático.
+          settledMemberIds: [partnerId],
+        },
+        'u1',
+      );
+      expect((await finance.listSettlementPayments(companyId, 'u1'))[0]!.amountCents).toBe(4000);
+
+      // Erro de digitação corrigido: 100,00 vira 3.200,00.
+      await finance.updateExpense(companyId, created.id, { amountCents: 320000 }, 'u1');
+
+      // O acerto vira a parte nova (40% de 3.200,00) e o saldo segue zerado.
+      const pagamentos = await finance.listSettlementPayments(companyId, 'u1');
+      expect(pagamentos).toHaveLength(1);
+      expect(pagamentos[0]!.amountCents).toBe(128000);
+      const balances = await finance.getBalances(companyId, 'u1');
+      expect(balances.find((b) => b.memberId === partnerId)?.netCents).toBe(0);
+    });
+
+    it('acerto automático some quando quem acertou vira o pagador', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        {
+          description: 'Juridico',
+          amountCents: 10000,
+          paidByMemberId: ownerId,
+          splitMode: 'equity',
+          settledMemberIds: [partnerId],
+        },
+        'u1',
+      );
+      // Agora quem pagou foi o próprio sócio: ninguém acerta consigo mesmo.
+      await finance.updateExpense(companyId, created.id, { paidByMemberId: partnerId }, 'u1');
+      expect(await finance.listSettlementPayments(companyId, 'u1')).toHaveLength(0);
+    });
+
+    it('editar a descrição continua não mexendo em acerto nenhum', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        {
+          description: 'Servidor',
+          amountCents: 10000,
+          paidByMemberId: ownerId,
+          splitMode: 'equity',
+          settledMemberIds: [partnerId],
+        },
+        'u1',
+      );
+      const ok = await finance.updateExpense(companyId, created.id, { description: 'Hosting' }, 'u1');
+      expect(ok.description).toBe('Hosting');
+      expect((await finance.listSettlementPayments(companyId, 'u1'))[0]!.amountCents).toBe(4000);
+    });
   });
 
   it('despesa guarda o contato (pago para quem) e a edição troca', async () => {

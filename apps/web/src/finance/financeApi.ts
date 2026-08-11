@@ -140,6 +140,20 @@ export function maskedMoneyToCents(masked: string): number | null {
   return Math.round(value * 100);
 }
 
+/**
+ * Centavos → texto do CAMPO de valor, no formato que a máscara entende.
+ * Omite os centavos quando eles são zero ("3.200" em vez de "3.200,00"): com
+ * valores grandes, o ",00" no fim vira ruído e atrapalha justamente na hora de
+ * conferir a ordem de grandeza, que é onde nascem os erros de digitação.
+ */
+export function centsToMaskedInput(cents: number): string {
+  const temCentavos = cents % 100 !== 0;
+  const texto = temCentavos
+    ? (cents / 100).toFixed(2).replace('.', ',')
+    : String(Math.trunc(cents / 100));
+  return maskMoneyBRL(texto);
+}
+
 /** Converte "1.500,00" / "1500.50" → centavos inteiros. Null se inválido. */
 export function parseMoneyToCents(raw: string): number | null {
   const clean = raw.trim().replace(/[^\d.,]/g, '');

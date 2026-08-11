@@ -14,6 +14,7 @@ interface PaymentRow {
   note: string | null;
   status: 'confirmed' | 'cancelled';
   expense_id: string | null;
+  is_auto: boolean | null;
   created_at: string;
 }
 
@@ -29,6 +30,7 @@ function toPayment(row: PaymentRow): SettlementPayment {
     note: row.note,
     status: row.status,
     expenseId: row.expense_id ?? null,
+    isAuto: row.is_auto ?? false,
     createdAt: new Date(row.created_at),
   };
 }
@@ -199,11 +201,36 @@ export class SupabaseFinanceRepository implements FinanceRepository {
         note: data.note,
         status: data.status,
         expense_id: data.expenseId,
+        is_auto: data.isAuto,
       })
       .select()
       .single<PaymentRow>();
     if (error || !row) throw new Error(`Falha ao registrar pagamento: ${error?.message}`);
     return toPayment(row);
+  }
+
+
+  async updatePayment(
+    paymentId: string,
+    patch: Partial<Pick<SettlementPayment, 'amountCents' | 'toMemberId' | 'note'>>,
+  ): Promise<SettlementPayment> {
+    const row: Record<string, unknown> = {};
+    if (patch.amountCents !== undefined) row.amount_cents = patch.amountCents;
+    if (patch.toMemberId !== undefined) row.to_member_id = patch.toMemberId;
+    if (patch.note !== undefined) row.note = patch.note;
+    const { data, error } = await this.db
+      .from('settlement_payments')
+      .update(row)
+      .eq('id', paymentId)
+      .select()
+      .single<PaymentRow>();
+    if (error || !data) throw new Error(`Falha ao ajustar o acerto: ${error?.message}`);
+    return toPayment(data);
+  }
+
+  async deletePayment(paymentId: string): Promise<void> {
+    const { error } = await this.db.from('settlement_payments').delete().eq('id', paymentId);
+    if (error) throw new Error(`Falha ao remover o acerto: ${error.message}`);
   }
 
   async listPayments(companyId: string): Promise<SettlementPayment[]> {

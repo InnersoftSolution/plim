@@ -20,7 +20,7 @@ import { MovementWizard } from '../finance/MovementWizard';
 import { MovementEditForm } from '../finance/MovementEditForm';
 import { GastosPorCategoriaCard } from '../finance/GastosPorCategoriaCard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
-import { financeApi, formatMoney } from '../finance/financeApi';
+import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
 import { contactApi } from '../finance/contactApi';
 import { recurringApi } from '../finance/recurringApi';
@@ -245,7 +245,7 @@ export function FinancePage() {
           movTypeLabel(e),
           movStatus(e).label,
           nameOf(e.paidByMemberId),
-          (e.amountCents / 100).toFixed(2).replace('.', ','),
+          centsToMaskedInput(e.amountCents),
         ]
           .map(esc)
           .join(sep),

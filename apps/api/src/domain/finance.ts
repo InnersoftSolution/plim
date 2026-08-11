@@ -20,6 +20,13 @@ export interface SettlementPayment {
   status: 'confirmed' | 'cancelled';
   /** Movimentação (despesa/aporte) que gerou a dívida. Nulo = pagamento antigo. */
   expenseId: string | null;
+  /**
+   * Nasceu junto com a movimentação (o "já me pagou" do registro). É uma
+   * afirmação de que a pessoa quitou A PARTE dela, então acompanha o valor da
+   * movimentação quando ele muda. Manual (false) é dinheiro que mudou de mão
+   * num valor próprio: nunca é reescrito.
+   */
+  isAuto: boolean;
   createdAt: Date;
 }
 

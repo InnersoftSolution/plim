@@ -14,7 +14,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { maskMoneyBRL, maskedMoneyToCents, formatMoney } from './financeApi';
+import { centsToMaskedInput, maskMoneyBRL, maskedMoneyToCents, formatMoney } from './financeApi';
 import { recurringApi } from './recurringApi';
 import './wizard.css';
 
@@ -42,7 +42,7 @@ export function RecurringCostForm({
   const [name, setName] = useState(cost?.name ?? '');
   const [category, setCategory] = useState<RecurringCategory | ''>(cost?.category ?? '');
   const [amount, setAmount] = useState(
-    cost ? maskMoneyBRL((cost.amountCents / 100).toFixed(2).replace('.', ',')) : '',
+    cost ? centsToMaskedInput(cost.amountCents) : '',
   );
   const [frequency, setFrequency] = useState<RecurringFrequency | ''>(cost?.frequency ?? 'monthly');
   const [paidBy, setPaidBy] = useState(cost?.paidByMemberId ?? members[0]?.id ?? '');
