@@ -525,7 +525,7 @@ export function FinancePage() {
               const overdue = dueBucket(e) === 'overdue';
               return (
                 <div className={'fin-due__item' + (overdue ? ' is-overdue' : '')} key={e.id}>
-                  <button type="button" className="fin-due__info" onClick={() => setDetail({ kind: e.kind, expense: e })}>
+                  <button type="button" className="fin-due__info" onClick={() => navigate(`/financeiro/movimentacao/${e.id}`)}>
                     <span className="fin-due__desc">{e.description}</span>
                     <span className="fin-due__meta">
                       {e.dueDate ? dueLabel(e.dueDate) : 'a pagar'} · {nameOf(e.paidByMemberId)}
@@ -663,7 +663,13 @@ export function FinancePage() {
               nameOf={nameOf}
               flash={item.kind !== 'recurring' && flashId === item.expense.id}
               generatesSettlement={generatesSettlement}
-              onOpen={() => setDetail(item)}
+              onOpen={() =>
+                                  // Custo recorrente nao e movimentacao: nao tem pagina propria,
+                                  // segue no detalhe atual. So despesa/entrada/aporte navegam.
+                                  item.kind === 'recurring'
+                                    ? setDetail(item)
+                                    : navigate(`/financeiro/movimentacao/${item.expense.id}`)
+                                }
             />
           ))}
         </div>
@@ -679,7 +685,7 @@ export function FinancePage() {
           totalRows={tableRows.length}
           onPage={setTablePage}
           onDownload={downloadCsv}
-          onOpen={(e) => setDetail({ kind: e.kind, expense: e } as MovItem)}
+          onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
         />
       ) : (
         <div className="fin-groups">
@@ -720,7 +726,13 @@ export function FinancePage() {
                         nameOf={nameOf}
                         flash={item.kind !== 'recurring' && flashId === item.expense.id}
                         generatesSettlement={generatesSettlement}
-                        onOpen={() => setDetail(item)}
+                        onOpen={() =>
+                                  // Custo recorrente nao e movimentacao: nao tem pagina propria,
+                                  // segue no detalhe atual. So despesa/entrada/aporte navegam.
+                                  item.kind === 'recurring'
+                                    ? setDetail(item)
+                                    : navigate(`/financeiro/movimentacao/${item.expense.id}`)
+                                }
                       />
                     ))}
                   </div>

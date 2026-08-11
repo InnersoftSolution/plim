@@ -82,6 +82,7 @@ function toPaymentDto(p: SettlementPayment): SettlementPaymentDto {
     note: p.note,
     status: p.status,
     expenseId: p.expenseId,
+    isAuto: p.isAuto,
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -951,6 +952,53 @@ export class FinanceService {
   ): Promise<SettlementPaymentDto[]> {
     await this.companyService.getOverview(companyId, actingUserId);
     return (await this.repo.listPayments(companyId)).map(toPaymentDto);
+  }
+
+  /**
+   * Uma movimentação sozinha, para a PÁGINA de detalhe. Existe em vez de a tela
+   * baixar a lista inteira e procurar: a página tem URL própria e pode ser
+   * aberta direto (link compartilhado, recarregar, voltar do navegador), quando
+   * a lista nem chegou a ser carregada.
+   */
+  async getMovement(
+    companyId: string,
+    expenseId: string,
+    actingUserId?: string | null,
+  ): Promise<Expense & { canConfirm: boolean }> {
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
+    const expense = await this.repo.findExpenseById(companyId, expenseId);
+    if (!expense) {
+      throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
+    }
+    const meId = actingUserId ? members.find((m) => m.userId === actingUserId)?.id ?? null : null;
+    return {
+      ...expense,
+      canConfirm:
+        expense.confirmationStatus === 'pending' && meId != null && expense.paidByMemberId === meId,
+    };
+  }
+
+  /**
+   * Desfaz um acerto. É o par do "marcar que acertou": marcar por engano tem
+   * que ter volta, senão a pessoa fica presa a um saldo errado.
+   *
+   * Vale tanto para o automático quanto para o manual, porque os dois podem ter
+   * sido registrados por engano. A diferença mora na TELA, que avisa com clareza
+   * quando o que está sendo apagado é um pagamento lançado à parte.
+   */
+  async removeSettlementPayment(
+    companyId: string,
+    paymentId: string,
+    actingUserId?: string | null,
+  ): Promise<void> {
+    await this.companyService.getOverview(companyId, actingUserId);
+    const payments = await this.repo.listPayments(companyId);
+    const payment = payments.find((p) => p.id === paymentId);
+    // Confere a empresa antes de apagar: id de outra empresa não pode passar.
+    if (!payment || payment.companyId !== companyId) {
+      throw new NotFoundError('PAYMENT_NOT_FOUND', 'Acerto não encontrado.');
+    }
+    await this.repo.deletePayment(paymentId);
   }
 
   /** Calcula a parte de cada sócio conforme o modo de rateio. */

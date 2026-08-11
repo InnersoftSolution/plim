@@ -637,6 +637,82 @@ describe('FinanceService', () => {
     expect(updated.shares.every((s) => s.shareCents === 3000)).toBe(true);
   });
 
+  describe('página de detalhe e desfazer acerto', () => {
+    it('busca uma movimentação sozinha, sem precisar da lista', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+        'u1',
+      );
+      const detalhe = await finance.getMovement(companyId, created.id, 'u1');
+      expect(detalhe.id).toBe(created.id);
+      expect(detalhe.description).toBe('Servidor');
+      expect(detalhe.shares).toHaveLength(created.shares.length);
+    });
+
+    it('movimentação inexistente devolve MOVEMENT_NOT_FOUND', async () => {
+      await expect(
+        finance.getMovement(companyId, '00000000-0000-0000-0000-000000000000', 'u1'),
+      ).rejects.toMatchObject({ code: 'MOVEMENT_NOT_FOUND' });
+    });
+
+    it('marcar e desmarcar o acerto de um sócio devolve o saldo ao lugar', async () => {
+      const created = await finance.createExpense(
+        companyId,
+        { description: 'Servidor', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+        'u1',
+      );
+      // Marcar: o sócio quita a parte dele (40% de 100,00).
+      const acerto = await finance.createSettlementPayment(
+        companyId,
+        { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 4000, expenseId: created.id },
+        'u1',
+      );
+      let balances = await finance.getBalances(companyId, 'u1');
+      expect(balances.find((b) => b.memberId === partnerId)?.netCents).toBe(0);
+
+      // Desmarcar: volta a dever, sem sobrar registro.
+      await finance.removeSettlementPayment(companyId, acerto.id, 'u1');
+      expect(await finance.listSettlementPayments(companyId, 'u1')).toHaveLength(0);
+      balances = await finance.getBalances(companyId, 'u1');
+      expect(balances.find((b) => b.memberId === partnerId)?.netCents).toBe(-4000);
+    });
+
+    it('acerto inexistente devolve PAYMENT_NOT_FOUND', async () => {
+      await expect(
+        finance.removeSettlementPayment(companyId, '00000000-0000-0000-0000-000000000000', 'u1'),
+      ).rejects.toMatchObject({ code: 'PAYMENT_NOT_FOUND' });
+    });
+
+    it('o acerto diz se nasceu junto com a movimentação ou foi lançado à parte', async () => {
+      const auto = await finance.createExpense(
+        companyId,
+        {
+          description: 'Com marcação',
+          amountCents: 10000,
+          paidByMemberId: ownerId,
+          splitMode: 'equity',
+          settledMemberIds: [partnerId],
+        },
+        'u1',
+      );
+      const manual = await finance.createExpense(
+        companyId,
+        { description: 'Sem marcação', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+        'u1',
+      );
+      await finance.createSettlementPayment(
+        companyId,
+        { fromMemberId: partnerId, toMemberId: ownerId, amountCents: 4000, expenseId: manual.id },
+        'u1',
+      );
+
+      const pagamentos = await finance.listSettlementPayments(companyId, 'u1');
+      expect(pagamentos.find((p) => p.expenseId === auto.id)?.isAuto).toBe(true);
+      expect(pagamentos.find((p) => p.expenseId === manual.id)?.isAuto).toBe(false);
+    });
+  });
+
   describe('corrigir o valor com acerto já registrado', () => {
     it('acerto MANUAL não é reescrito: é dinheiro que mudou de mão', async () => {
       const created = await finance.createExpense(

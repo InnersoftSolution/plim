@@ -9,6 +9,8 @@ import { SetPasswordPage } from './pages/auth/SetPasswordPage';
 import { OnboardingPage } from './pages/onboarding/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FinancePage } from './pages/FinancePage';
+import { MovementDetailPage } from './finance/MovementDetailPage';
+import { MovementEditPage } from './finance/MovementEditPage';
 import { AcertosPage } from './pages/AcertosPage';
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage';
 import { HomeRedirect } from './pages/HomeRedirect';
@@ -78,6 +80,10 @@ export function App() {
           <Route element={<RequireAuth><ActiveCompanyProvider><AppShell /></ActiveCompanyProvider></RequireAuth>}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/financeiro" element={<FinancePage />} />
+            {/* Antes do /:ano de proposito: rota estatica ganha da dinamica no
+                React Router, mas deixar juntas evita alguem inverter depois. */}
+            <Route path="/financeiro/movimentacao/:id" element={<MovementDetailPage />} />
+            <Route path="/financeiro/movimentacao/:id/editar" element={<MovementEditPage />} />
             <Route path="/financeiro/:ano" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />
             <Route path="/acertos/:ano" element={<AcertosPage />} />

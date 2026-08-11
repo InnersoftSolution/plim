@@ -13,6 +13,8 @@ import type { FinanceService } from '../../services/finance.service';
 import { authenticate } from '../auth';
 
 const companyParamsSchema = z.object({ companyId: z.string().uuid() });
+const movParamsSchema = z.object({ companyId: z.string().uuid(), expenseId: z.string().uuid() });
+const paymentParamsSchema = z.object({ companyId: z.string().uuid(), paymentId: z.string().uuid() });
 
 /**
  * Camada HTTP do financeiro. Valida entrada e delega ao FinanceService.
@@ -55,13 +57,18 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     return reply.status(201).send(revenue);
   });
 
+  /** Detalhe de uma movimentação (página própria, com URL). */
+  app.get('/companies/:companyId/expenses/:expenseId', async (request) => {
+    const { companyId, expenseId } = movParamsSchema.parse(request.params);
+    return service.getMovement(companyId, expenseId, request.user?.id ?? null);
+  });
+
   app.get('/companies/:companyId/expenses', async (request) => {
     const { companyId } = companyParamsSchema.parse(request.params);
     return service.listExpenses(companyId, request.user?.id ?? null);
   });
 
   // Confirmação de pagamento pelo sócio pagador.
-  const movParamsSchema = z.object({ companyId: z.string().uuid(), expenseId: z.string().uuid() });
   app.post('/companies/:companyId/expenses/:expenseId/confirm', async (request) => {
     const { companyId, expenseId } = movParamsSchema.parse(request.params);
     return service.setConfirmation(companyId, expenseId, 'confirmed', request.user?.id ?? null);
@@ -117,5 +124,12 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
   app.get('/companies/:companyId/settlement-payments', async (request) => {
     const { companyId } = companyParamsSchema.parse(request.params);
     return service.listSettlementPayments(companyId, request.user?.id ?? null);
+  });
+
+  /** Desfaz um acerto (par do "marcar que acertou"; o front confirma antes). */
+  app.delete('/companies/:companyId/settlement-payments/:paymentId', async (request, reply) => {
+    const { companyId, paymentId } = paymentParamsSchema.parse(request.params);
+    await service.removeSettlementPayment(companyId, paymentId, request.user?.id ?? null);
+    return reply.status(204).send();
   });
 }

@@ -68,6 +68,13 @@ export const settlementPaymentSchema = z.object({
   status: z.enum(['confirmed', 'cancelled']),
   /** Movimentação que gerou a dívida (nulo em pagamentos antigos). */
   expenseId: z.string().uuid().nullable().default(null),
+  /**
+   * Nasceu junto com a movimentação (marcado como "já acertou"), em oposição a
+   * um pagamento lançado à parte em Acertos. A tela usa isso para saber o que
+   * pode desfazer com um toque: desmarcar um acerto automático é corrigir uma
+   * marcação; apagar um pagamento manual é apagar dinheiro que mudou de mão.
+   */
+  isAuto: z.boolean().default(false),
   createdAt: z.string().datetime(),
 });
 export type SettlementPayment = z.infer<typeof settlementPaymentSchema>;

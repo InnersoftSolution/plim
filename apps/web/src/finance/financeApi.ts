@@ -31,6 +31,18 @@ export const financeApi = {
     return apiFetch<MovementSettlement[]>(`/companies/${companyId}/movement-settlements`);
   },
 
+  /** Uma movimentação sozinha, para a página de detalhe (tem URL própria). */
+  getMovement(companyId: string, expenseId: string): Promise<Expense> {
+    return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}`);
+  },
+
+  /** Desfaz um acerto (par do "marcar que acertou"). */
+  removeSettlementPayment(companyId: string, paymentId: string): Promise<void> {
+    return apiFetch<void>(`/companies/${companyId}/settlement-payments/${paymentId}`, {
+      method: 'DELETE',
+    });
+  },
+
   createExpense(companyId: string, input: CreateExpenseInput): Promise<Expense> {
     return apiFetch<Expense>(`/companies/${companyId}/expenses`, {
       method: 'POST',
