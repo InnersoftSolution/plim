@@ -61,7 +61,6 @@ export function MovementDetailPage() {
   if (error) return <ErroDaPagina message={error} />;
   if (!movement) return <ErroDaPagina message="Movimentação não encontrada." />;
 
-  const currency = company.currencyCode;
   const nameOf = (memberId: string) =>
     members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
   const isExpense = movement.kind === 'expense';
@@ -181,7 +180,7 @@ export function MovementDetailPage() {
         </div>
         <h1 className="movp-title">{movement.description}</h1>
         <p className={'movp-amount' + (isRevenue ? ' is-in' : '')} data-financial>
-          {formatMoney(movement.amountCents, currency)}
+          {formatMoney(movement.amountCents)}
         </p>
         <p className="movp-date">
           {toPay && movement.dueDate
@@ -221,7 +220,6 @@ export function MovementDetailPage() {
               <span className="movp-person__value" data-financial>
                 {formatMoney(
                   movement.shares.find((s) => s.memberId === movement.paidByMemberId)?.shareCents ?? 0,
-                  currency,
                 )}
               </span>
             </div>
@@ -233,11 +231,22 @@ export function MovementDetailPage() {
                 <div className={'movp-person' + (acerto ? ' is-settled' : '')} key={s.memberId}>
                   <span className="movp-person__name">
                     {nameOf(s.memberId)}
-                    {acerto && <span className="movp-person__tag is-ok">já acertou</span>}
+                    {acerto ? (
+                      <span className="movp-person__tag is-ok">já acertou</span>
+                    ) : (
+                      /* Sem etiqueta, "quem já pagou" e "quem falta" só se
+                         distinguiam pela cor da linha: fraco para quem enxerga
+                         mal cor e invisível na leitura em voz alta.
+                         Conta em aberto ainda não gerou dívida: ali a parte é
+                         só previsão. */
+                      <span className="movp-person__tag is-due">
+                        {toPay ? 'parte prevista' : 'falta pagar'}
+                      </span>
+                    )}
                   </span>
                   <span className="movp-person__right">
                     <span className="movp-person__value" data-financial>
-                      {formatMoney(s.shareCents, currency)}
+                      {formatMoney(s.shareCents)}
                     </span>
                     {toPay ? null : acerto ? (
                       <button
@@ -318,7 +327,7 @@ export function MovementDetailPage() {
         message={
           <>
             <strong>{movement.description}</strong> de{' '}
-            {formatMoney(movement.amountCents, currency)} será apagada, junto com os acertos ligados a
+            {formatMoney(movement.amountCents)} será apagada, junto com os acertos ligados a
             ela. Os saldos entre os sócios são recalculados. Não tem como desfazer.
           </>
         }
@@ -335,13 +344,13 @@ export function MovementDetailPage() {
           undoing?.isAuto === false ? (
             <>
               Esse acerto foi lançado à parte, em Acertos, de{' '}
-              {formatMoney(undoing.amountCents, currency)}. Ele representa dinheiro que mudou de mão,
+              {formatMoney(undoing.amountCents)}. Ele representa dinheiro que mudou de mão,
               então só apague se tiver sido registrado por engano.
             </>
           ) : (
             <>
               {undoing && nameOf(undoing.fromMemberId)} volta a dever{' '}
-              {undoing && formatMoney(undoing.amountCents, currency)} a {payerName}.
+              {undoing && formatMoney(undoing.amountCents)} a {payerName}.
             </>
           )
         }

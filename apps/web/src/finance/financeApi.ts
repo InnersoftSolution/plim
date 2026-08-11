@@ -178,15 +178,19 @@ export function parseMoneyToCents(raw: string): number | null {
   return Math.round(value * 100);
 }
 
-/** Formata centavos na moeda da empresa (ex.: 150000 → "R$ 1.500,00"). */
-export function formatMoney(cents: number, currencyCode: string | null): string {
-  const value = cents / 100;
-  try {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: currencyCode ?? 'BRL',
-    }).format(value);
-  } catch {
-    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-  }
+/**
+ * Formata centavos em Real (ex.: 150000 → "R$ 1.500,00").
+ *
+ * O Plim trabalha só com Real. A empresa chegou a ter moeda configurável, mas
+ * dinheiro em duas moedas no mesmo rateio não fecha: ou existe conversão com
+ * data e taxa, ou os números mentem. Enquanto não existir isso, uma moeda só.
+ *
+ * Esta é a ÚNICA divisão por 100 da aplicação: cálculo e banco são centavos
+ * inteiros, e reais só aparecem na hora de mostrar.
+ */
+export function formatMoney(cents: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(cents / 100);
 }

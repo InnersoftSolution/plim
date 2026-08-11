@@ -25,7 +25,6 @@ export interface ChartPoint {
 
 export function FinChart({
   points,
-  currency,
   title,
   subtitle,
   caption,
@@ -33,7 +32,6 @@ export function FinChart({
   helpText,
 }: {
   points: ChartPoint[];
-  currency: string | null;
   title: string;
   subtitle: string;
   /** Descrição do gráfico para leitores de tela (aria-label). */
@@ -117,32 +115,32 @@ export function FinChart({
                   {p.projected ? (
                     <span className="fchart__tip-row">
                       <i className="fchart__tip-dot fchart__tip-dot--proj" />
-                      Gasto previsto {formatMoney(flow ? outC : single, currency)}
+                      Gasto previsto {formatMoney(flow ? outC : single)}
                     </span>
                   ) : flow ? (
                     <>
                       <span className="fchart__tip-row">
                         <i className="fchart__tip-dot fchart__tip-dot--in" />
-                        Entrou {formatMoney(inC, currency)}
+                        Entrou {formatMoney(inC)}
                       </span>
                       <span className="fchart__tip-row">
                         <i className="fchart__tip-dot fchart__tip-dot--out" />
-                        Saiu {formatMoney(outC, currency)}
+                        Saiu {formatMoney(outC)}
                       </span>
                       {pend > 0 && (
                         <span className="fchart__tip-row">
                           <i className="fchart__tip-dot fchart__tip-dot--pending" />A pagar{' '}
-                          {formatMoney(pend, currency)}
+                          {formatMoney(pend)}
                         </span>
                       )}
                     </>
                   ) : (
                     <>
-                      <span className="fchart__tip-row">{formatMoney(single, currency)}</span>
+                      <span className="fchart__tip-row">{formatMoney(single)}</span>
                       {pend > 0 && (
                         <span className="fchart__tip-row">
                           <i className="fchart__tip-dot fchart__tip-dot--pending" />A pagar{' '}
-                          {formatMoney(pend, currency)}
+                          {formatMoney(pend)}
                         </span>
                       )}
                     </>

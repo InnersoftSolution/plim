@@ -18,11 +18,17 @@ import { Modal } from '../components/ui/Modal';
 import { DateField } from '../components/ui/DateField';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
-import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from '../finance/financeApi';
+import {
+  centsToMaskedInput,
+  financeApi,
+  formatMoney,
+  maskedMoneyToCents,
+} from '../finance/financeApi';
 import { IconArrowRight, IconCheck } from './dashIcons';
 import './dashboard.css';
 import './acertos.css';
 import '../finance/wizard.css';
+import { MoneyField } from '../finance/MoneyField';
 
 type State =
   | { status: 'loading' }
@@ -196,7 +202,7 @@ export function AcertosPage() {
                     <strong>Ver acertos de {y}</strong>
                     <small>
                       {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
-                      {formatMoney(totalAno, company.currencyCode)} em despesas rateadas
+                      {formatMoney(totalAno)} em despesas rateadas
                     </small>
                   </span>
                   <span className="fin-year__cta" aria-hidden="true">
@@ -256,7 +262,7 @@ export function AcertosPage() {
                     <p className="sac__line">
                       <strong>{s.fromName}</strong> precisa pagar{' '}
                       <strong className="sac__amount" data-financial>
-                        {formatMoney(s.amountCents, company.currencyCode)}
+                        {formatMoney(s.amountCents)}
                       </strong>{' '}
                       para <strong>{s.toName}</strong>
                     </p>
@@ -287,7 +293,7 @@ export function AcertosPage() {
                 .filter((p) => p.status === 'confirmed' && p.toMemberId === b.memberId)
                 .reduce((s, p) => s + p.amountCents, 0);
               const tone = net > 0 ? 'receive' : net < 0 ? 'pay' : 'quite';
-              const fmt = (c: number) => formatMoney(c, company.currencyCode);
+              const fmt = (c: number) => formatMoney(c);
               const result =
                 net < 0 ? 'Precisa pagar' : net > 0 ? 'Vai receber' : 'Tudo certo';
               const explain =
@@ -401,7 +407,7 @@ export function AcertosPage() {
         ) : (
           <div className="ac-groups">
             {groups.map((m) => (
-              <DividaCard key={m.movementId} movement={m} currency={company.currencyCode} />
+              <DividaCard key={m.movementId} movement={m} />
             ))}
           </div>
         )}
@@ -426,7 +432,7 @@ export function AcertosPage() {
                 </span>
                 <span className="dash-settlement__text">
                   <strong>{nameOf(p.fromMemberId)}</strong> pagou{' '}
-                  <strong data-financial>{formatMoney(p.amountCents, company.currencyCode)}</strong> para{' '}
+                  <strong data-financial>{formatMoney(p.amountCents)}</strong> para{' '}
                   <strong>{nameOf(p.toMemberId)}</strong>
                   <span className="ac-mov__meta" style={{ display: 'block' }}>
                     {formatDateBr(p.paidOn)}
@@ -470,10 +476,8 @@ export function AcertosPage() {
  */
 function DividaCard({
   movement,
-  currency,
 }: {
   movement: MovementSettlement;
-  currency: string | null;
 }) {
   const m = movement;
   const quitada = m.remainingCents === 0;
@@ -497,7 +501,7 @@ function DividaCard({
         </div>
         {!quitada && (
           <span className="ac-group__total" data-financial>
-            {formatMoney(m.remainingCents, currency)}
+            {formatMoney(m.remainingCents)}
             <small>em aberto</small>
           </span>
         )}
@@ -505,13 +509,13 @@ function DividaCard({
 
       <div className="ac-group__debts">
         {m.debts.map((d) => (
-          <ParticipanteRow key={d.debtorId} debt={d} payerName={m.payerName} currency={currency} />
+          <ParticipanteRow key={d.debtorId} debt={d} payerName={m.payerName} />
         ))}
       </div>
 
       <footer className="ac-group__foot">
         <span>
-          Total da dívida <strong data-financial>{formatMoney(m.amountCents, currency)}</strong>
+          Total da dívida <strong data-financial>{formatMoney(m.amountCents)}</strong>
         </span>
         <span>
           {quitada ? (
@@ -520,7 +524,7 @@ function DividaCard({
             <>
               Em aberto{' '}
               <strong className="ac-debt__amount" data-financial>
-                {formatMoney(m.remainingCents, currency)}
+                {formatMoney(m.remainingCents)}
               </strong>
             </>
           )}
@@ -534,11 +538,9 @@ function DividaCard({
 function ParticipanteRow({
   debt,
   payerName,
-  currency,
 }: {
   debt: MovementDebt;
   payerName: string;
-  currency: string | null;
 }) {
   const d = debt;
   const status = d.remainingCents === 0 ? 'quitado' : d.paidCents > 0 ? 'parcial' : 'pendente';
@@ -549,17 +551,17 @@ function ParticipanteRow({
       </span>
       <span className="ac-debt__text">
         <strong>{d.debtorName}</strong> · cabe{' '}
-        <strong data-financial>{formatMoney(d.originalCents, currency)}</strong>
+        <strong data-financial>{formatMoney(d.originalCents)}</strong>
         {status === 'quitado' ? (
           <span className="ac-debt__sub ac-debt__sub--paid">
-            pagou {formatMoney(d.originalCents, currency)} para {payerName}
+            pagou {formatMoney(d.originalCents)} para {payerName}
             {d.lastPaidOn ? ` em ${formatDateBr(d.lastPaidOn)}` : ''}
           </span>
         ) : status === 'parcial' ? (
           <span className="ac-debt__sub">
-            pagou {formatMoney(d.paidCents, currency)} · em aberto{' '}
+            pagou {formatMoney(d.paidCents)} · em aberto{' '}
             <strong className="ac-debt__amount" data-financial>
-              {formatMoney(d.remainingCents, currency)}
+              {formatMoney(d.remainingCents)}
             </strong>{' '}
             para {payerName}
           </span>
@@ -567,7 +569,7 @@ function ParticipanteRow({
           <span className="ac-debt__sub">
             em aberto{' '}
             <strong className="ac-debt__amount" data-financial>
-              {formatMoney(d.remainingCents, currency)}
+              {formatMoney(d.remainingCents)}
             </strong>{' '}
             para {payerName}
           </span>
@@ -590,9 +592,10 @@ function NetPaymentForm({
   settlement: Settlement;
   onSaved: () => void;
 }) {
-  const [amount, setAmount] = useState(
-    maskMoneyBRL(String(settlement.amountCents / 100).replace('.', ',')),
-  );
+  // centsToMaskedInput e não String(cents / 100): dividir por 100 aqui punha um
+  // float no meio do caminho, e float em dinheiro é justamente o que a regra do
+  // Plim proíbe. Só a formatação final divide por 100.
+  const [amount, setAmount] = useState(centsToMaskedInput(settlement.amountCents));
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<PaymentMethod | ''>('pix');
   const [note, setNote] = useState('');
@@ -608,7 +611,7 @@ function NetPaymentForm({
     if (cents == null) return setError('Informe um valor válido.');
     if (cents > settlement.amountCents) {
       return setError(
-        `O valor é maior que o pendente entre eles (${formatMoney(settlement.amountCents, company.currencyCode)}).`,
+        `O valor é maior que o pendente entre eles (${formatMoney(settlement.amountCents)}).`,
       );
     }
     setSaving(true);
@@ -632,17 +635,11 @@ function NetPaymentForm({
     <form className="mw" onSubmit={handleSubmit} noValidate>
       {error && <div className="form-error">{error}</div>}
       <p className="mw-hint" style={{ marginTop: 0 }}>
-        {settlement.fromName} precisa pagar {formatMoney(settlement.amountCents, company.currencyCode)} para{' '}
+        {settlement.fromName} precisa pagar {formatMoney(settlement.amountCents)} para{' '}
         {settlement.toName}, o saldo consolidado de todas as despesas entre eles.
       </p>
       <div className="mw-form">
-        <Input
-          label={`Valor pago (${company.currencyCode ?? 'BRL'})`}
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-          autoFocus
-        />
+        <MoneyField label="Valor pago (R$)" value={amount} onChange={setAmount} autoFocus />
         <div className="rc-grid">
           <div className="field">
             <label className="field__label">Data do pagamento</label>
@@ -664,7 +661,7 @@ function NetPaymentForm({
       </div>
       <p className="mw-hint">
         {isPartial
-          ? `Pagamento parcial: sobra ${formatMoney(settlement.amountCents - (cents ?? 0), company.currencyCode)} entre eles.`
+          ? `Pagamento parcial: sobra ${formatMoney(settlement.amountCents - (cents ?? 0))} entre eles.`
           : 'Esse valor zera o acerto entre os dois.'}
       </p>
       <div className="mw-actions">

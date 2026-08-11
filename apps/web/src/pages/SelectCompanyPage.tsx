@@ -110,7 +110,6 @@ export function SelectCompanyPage() {
                 <span className="selco-chip">
                   {memberCount} {memberCount === 1 ? 'sócio' : 'sócios'}
                 </span>
-                {company.currencyCode && <span className="selco-chip">{company.currencyCode}</span>}
               </div>
               <Button block onClick={() => access(company.id)} disabled={enteringId !== null}>
                 {enteringId === company.id ? 'Entrando…' : 'Acessar'}

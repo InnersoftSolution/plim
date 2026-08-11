@@ -4,7 +4,6 @@ import {
   businessModelTypeCatalog,
   businessStageCatalog,
   countryCatalog,
-  currencyCatalog,
   functionalRoleCatalog,
   hasFormalRegistrationCatalog,
   industryCatalog,
@@ -845,7 +844,6 @@ function LocationStep({
   const [countryCode, setCountryCode] = useState(company?.countryCode ?? '');
   const [region, setRegion] = useState(company?.region ?? '');
   const [city, setCity] = useState(company?.city ?? '');
-  const [currencyCode, setCurrencyCode] = useState(company?.currencyCode ?? '');
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -853,21 +851,12 @@ function LocationStep({
   const country = countryCatalog.find((c) => c.code === countryCode);
   const regionLabel = country?.regionLabel ?? 'Estado/Região';
 
-  function handleCountry(code: string) {
-    setCountryCode(code);
-    const cat = countryCatalog.find((c) => c.code === code);
-    if (cat?.currencyCode) setCurrencyCode(cat.currencyCode); // sugere a moeda
-  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError('');
     if (!countryCode) {
       setError('Escolha o país.');
-      return;
-    }
-    if (!currencyCode) {
-      setError('Escolha a moeda.');
       return;
     }
     setError('');
@@ -877,7 +866,9 @@ function LocationStep({
         countryCode,
         region: region.trim() || undefined,
         city: city.trim() || undefined,
-        currencyCode,
+        // Moeda não se escolhe: o Plim trabalha só com Real. Rateio com duas
+        // moedas só fecharia com conversão datada, que não existe aqui.
+        currencyCode: 'BRL',
       });
     } catch (err) {
       setFormError(messageForError(err));
@@ -890,14 +881,14 @@ function LocationStep({
     <>
       <div className="ob-head">
         <h1>Onde esse negócio está começando?</h1>
-        <p>Define a moeda usada nas finanças mais pra frente.</p>
+        <p>Serve para os documentos e obrigações da empresa. Os valores são sempre em Real.</p>
       </div>
       <form className="ob-form" onSubmit={handleSubmit} noValidate>
         {formError && <div className="form-error">{formError}</div>}
         <Select
           label="País"
           value={countryCode}
-          onChange={handleCountry}
+          onChange={setCountryCode}
           options={countryCatalog.map((c) => ({ value: c.code, label: c.label }))}
           placeholder="Selecione…"
           error={!countryCode ? error : undefined}
@@ -916,14 +907,6 @@ function LocationStep({
             onChange={(e) => setCity(e.target.value)}
           />
         </div>
-        <Select
-          label="Moeda principal"
-          value={currencyCode}
-          onChange={setCurrencyCode}
-          options={currencyCatalog.map((c) => ({ value: c.code, label: `${c.label} (${c.symbol})` }))}
-          placeholder="Selecione…"
-          error={countryCode && !currencyCode ? error : undefined}
-        />
         <div className="ob-actions">
           <Button type="submit" block disabled={saving}>
             {saving ? 'Salvando…' : 'Continuar'}
@@ -1401,7 +1384,6 @@ function ReviewStep({
         <Row label="Segmento" value={industryLabel} />
         <Row label="País" value={country?.label ?? null} />
         <Row label="Cidade/região" value={[company.city, company.region].filter(Boolean).join(' · ') || null} />
-        <Row label="Moeda" value={company.currencyCode} />
         <Row label="Estágio" value={stage?.label ?? null} />
         <Row label="Formalização" value={formalizationLabel} />
         <Row label="Natureza jurídica" value={legalLabel} />

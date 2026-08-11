@@ -14,9 +14,10 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { centsToMaskedInput, maskMoneyBRL, maskedMoneyToCents, formatMoney } from './financeApi';
+import { centsToMaskedInput, maskedMoneyToCents, formatMoney } from './financeApi';
 import { recurringApi } from './recurringApi';
 import './wizard.css';
+import { MoneyField } from './MoneyField';
 
 /**
  * Jornada "Custo recorrente" — orientação, não formulário frio.
@@ -169,13 +170,7 @@ export function RecurringCostForm({
             placeholder="Selecione"
             options={recurringCategoryCatalog.map((c) => ({ value: c.id, label: c.label }))}
           />
-          <Input
-            label={`Valor (${company.currencyCode ?? 'BRL'})`}
-            inputMode="decimal"
-            placeholder="0,00"
-            value={amount}
-            onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-          />
+          <MoneyField value={amount} onChange={setAmount} />
         </div>
         <div className="rc-grid">
           <Select
@@ -250,7 +245,7 @@ export function RecurringCostForm({
         maskedMoneyToCents(amount) != null && (
           <p className="mw-hint">
             Na estimativa mensal, esse custo entra como{' '}
-            {formatMoney(monthlyPreview(maskedMoneyToCents(amount)!, frequency), company.currencyCode)}/mês.
+            {formatMoney(monthlyPreview(maskedMoneyToCents(amount)!, frequency))}/mês.
           </p>
         )
       )}

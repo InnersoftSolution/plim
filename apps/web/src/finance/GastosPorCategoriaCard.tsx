@@ -20,13 +20,11 @@ export interface GastoCategoriaRow {
 export function GastosPorCategoriaCard({
   rows,
   totalCents,
-  currency,
   selected,
   onSelect,
 }: {
   rows: GastoCategoriaRow[];
   totalCents: number;
-  currency: string | null;
   /** filtro ativo: '' nenhum, '__none__' sem categoria, ou id. */
   selected: string;
   onSelect: (key: string) => void;
@@ -66,7 +64,7 @@ export function GastosPorCategoriaCard({
       <div className="gpc__head">
         <h2>Gastos por categoria</h2>
         <span className="gpc__total" data-financial>
-          {formatMoney(totalCents, currency)}
+          {formatMoney(totalCents)}
         </span>
       </div>
       <div className="gpc__body">
@@ -92,7 +90,7 @@ export function GastosPorCategoriaCard({
                   >
                     {/* Tooltip nativo: nome, valor e % da fatia. */}
                     <title>
-                      {`${a.row.name}: ${formatMoney(a.row.totalCents, currency)} (${Math.round(a.row.pct * 100)}% · ${a.row.count} mov.)`}
+                      {`${a.row.name}: ${formatMoney(a.row.totalCents)} (${Math.round(a.row.pct * 100)}% · ${a.row.count} mov.)`}
                     </title>
                   </circle>
                 );
@@ -122,7 +120,7 @@ export function GastosPorCategoriaCard({
                   <span className="gpc__meta">
                     {/* Valor na cor da fatia: liga a lista ao gráfico de relance. */}
                     <strong data-financial style={{ color: r.color }}>
-                      {formatMoney(r.totalCents, currency)}
+                      {formatMoney(r.totalCents)}
                     </strong>
                     <small>
                       {Math.round(r.pct * 100)}% · {r.count} mov.

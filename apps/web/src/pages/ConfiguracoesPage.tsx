@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   businessStageCatalog,
   countryCatalog,
-  currencyCatalog,
   formatCep,
   formatCnpj,
   formatPhone,
@@ -87,7 +86,7 @@ export function ConfiguracoesPage() {
     { label: 'Nome definitivo', done: !company.isNameTemporary, step: 'basic' },
     { label: 'Descrição da empresa', done: !!company.description, step: 'basic' },
     { label: 'Segmento', done: !!company.industry, step: 'basic' },
-    { label: 'País e moeda', done: !!company.countryCode && !!company.currencyCode, step: 'location' },
+    { label: 'País', done: !!company.countryCode, step: 'location' },
     { label: 'Estágio do negócio', done: !!company.businessStage, step: 'stage' },
     { label: 'Sócios cadastrados', done: partners.length > 0, step: 'members' },
     { label: 'Participação em 100%', done: Math.round(allocated) === 100, step: 'members' },
@@ -306,7 +305,6 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
   const [businessStage, setBusinessStage] = useState<string>(company.businessStage ?? '');
   const [countryCode, setCountryCode] = useState<string>(company.countryCode ?? '');
   const [city, setCity] = useState(company.city ?? '');
-  const [currencyCode, setCurrencyCode] = useState<string>(company.currencyCode ?? '');
   const [cnpj, setCnpj] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -351,7 +349,6 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
 
   const stage = businessStageCatalog.find((s) => s.id === company.businessStage);
   const country = countryCatalog.find((c) => c.code === company.countryCode);
-  const currency = currencyCatalog.find((c) => c.code === company.currencyCode);
 
   function startEdit(focus?: FocusField) {
     setFocusField(focus ?? null);
@@ -361,7 +358,6 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     setBusinessStage(company.businessStage ?? '');
     setCountryCode(company.countryCode ?? '');
     setCity(company.city ?? '');
-    setCurrencyCode(company.currencyCode ?? '');
     setCnpj(company.registrationNumber ? formatCnpj(company.registrationNumber) : '');
     setPhone(company.phone ? formatPhone(company.phone) : '');
     setEmail(company.email ?? '');
@@ -399,7 +395,6 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
         businessStage: (businessStage || null) as UpdateCompanyInput['businessStage'],
         countryCode: countryCode || null,
         city: city.trim() ? city.trim() : null,
-        currencyCode: currencyCode || null,
         registrationNumber: cnpjDigits ? cnpjDigits : null,
         registrationCountry: cnpjDigits ? 'BR' : null,
         phone: onlyDigits(phone) ? onlyDigits(phone) : null,
@@ -492,7 +487,9 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
           </div>
           <ReadField label="Descrição" value={company.description || '—'} onAdd={() => startEdit('description')} />
           <ReadField label="Estágio" value={stage?.label ?? '—'} />
-          <ReadField label="Moeda" value={currency ? `${currency.code} (${currency.symbol})` : '—'} />
+          {/* Moeda não é campo: o Plim trabalha só com Real. Fica visível para
+              não deixar dúvida sobre em que moeda estão os números. */}
+          <ReadField label="Moeda" value="Real (R$)" />
         </ReadGroup>
 
         <ReadGroup title="Contato" onEdit={() => startEdit('phone')}>
@@ -585,13 +582,6 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
               onChange={setBusinessStage}
               placeholder="Selecione"
               options={businessStageCatalog.map((s) => ({ value: s.id, label: s.label }))}
-            />
-            <Select
-              label="Moeda"
-              value={currencyCode}
-              onChange={setCurrencyCode}
-              placeholder="Selecione"
-              options={currencyCatalog.map((c) => ({ value: c.code, label: `${c.code} (${c.symbol})` }))}
             />
           </div>
         </div>

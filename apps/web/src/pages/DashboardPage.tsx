@@ -334,7 +334,7 @@ function DashboardReady({
           icon={<IconArrowOut />}
           tone="rose"
           label={allTime ? 'Total gasto' : `Gasto em ${monthName}`}
-          value={formatMoney(gastoCents, company.currencyCode)}
+          value={formatMoney(gastoCents)}
           hint={
             filteredExpenses.length > 0
               ? allTime
@@ -348,7 +348,7 @@ function DashboardReady({
             icon={<IconRepeat />}
             tone="indigo"
             label="Custo mensal"
-            value={formatMoney(recurring.monthlyTotalCents, company.currencyCode)}
+            value={formatMoney(recurring.monthlyTotalCents)}
             hint={`${activeCosts.length} ${activeCosts.length === 1 ? 'custo ativo' : 'custos ativos'}, o que custa manter a empresa por mês.`}
           />
         ) : (
@@ -370,7 +370,7 @@ function DashboardReady({
           icon={<IconArrowRight />}
           tone={acertosCents > 0 ? 'amber' : 'green'}
           label="Acertos"
-          value={formatMoney(acertosCents, company.currencyCode)}
+          value={formatMoney(acertosCents)}
           hint={
             acertosCents > 0
               ? 'Alguém pagou mais do que a parte dele. Veja quem acerta com quem.'
@@ -443,7 +443,7 @@ function DashboardReady({
                   <span className="dash-settlement__text">
                     <strong>{s.fromName}</strong> precisa pagar{' '}
                     <strong className="dash-settlement__amount">
-                      {formatMoney(s.amountCents, company.currencyCode)}
+                      {formatMoney(s.amountCents)}
                     </strong>{' '}
                     para <strong>{s.toName}</strong>
                   </span>
@@ -501,7 +501,7 @@ function DashboardReady({
                   </span>
                   {nameOf(e.paidByMemberId)}
                 </span>
-                <span className="dash-row__value">{formatMoney(e.amountCents, company.currencyCode)}</span>
+                <span className="dash-row__value">{formatMoney(e.amountCents)}</span>
               </button>
             ))}
           </div>
@@ -530,11 +530,11 @@ function DashboardReady({
                       {freqLabel(c.frequency)} · pago por {nameOf(c.paidByMemberId)}
                       {c.nextChargeOn ? ` · próxima cobrança ${formatDate(c.nextChargeOn)}` : ''}
                       {c.frequency !== 'monthly' &&
-                        ` · entra como ${formatMoney(c.monthlyEquivalentCents, company.currencyCode)}/mês`}
+                        ` · entra como ${formatMoney(c.monthlyEquivalentCents)}/mês`}
                     </span>
                   </div>
                   <div className="dash-cost__right">
-                    <span className="dash-cost__value">{formatMoney(c.amountCents, company.currencyCode)}</span>
+                    <span className="dash-cost__value">{formatMoney(c.amountCents)}</span>
                     <button
                       className="dash-row__toggle"
                       title={c.active ? 'Desativar (sai da estimativa mensal)' : 'Reativar'}
@@ -550,7 +550,7 @@ function DashboardReady({
               ))}
             </div>
             <p className="dash-panel__note">
-              Estimativa mensal: {formatMoney(recurring.monthlyTotalCents, company.currencyCode)}. Soma
+              Estimativa mensal: {formatMoney(recurring.monthlyTotalCents)}. Soma
               dos custos ativos (anuais ÷12, semanais ×52÷12, trimestrais ÷3). Custos inativos não contam.
             </p>
           </>

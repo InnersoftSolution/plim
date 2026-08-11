@@ -176,8 +176,14 @@
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+/* Fundo branco de propósito: a linha de quem acertou já é verde, e etiqueta
+   verde sobre verde some. */
 .movp-person__tag.is-ok {
   color: var(--color-status-positive);
+}
+.movp-person__tag.is-due {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
 }
 .movp-person__right {
   display: flex;

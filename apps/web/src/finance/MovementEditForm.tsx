@@ -5,12 +5,13 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { centsToMaskedInput, financeApi, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
+import { centsToMaskedInput, financeApi, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
 import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
 import { ContatoSelect } from './ContactFields';
 import './wizard.css';
+import { MoneyField } from './MoneyField';
 
 /**
  * Edição de uma movimentação já registrada (despesa, aporte ou entrada).
@@ -194,13 +195,7 @@ export function MovementEditForm({
           </>
         )}
         <div className="rc-grid">
-          <Input
-            label={`Valor (${company.currencyCode ?? 'BRL'})`}
-            inputMode="decimal"
-            placeholder="0,00"
-            value={amount}
-            onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-          />
+          <MoneyField value={amount} onChange={setAmount} />
           <div className="field">
             <label className="field__label">{isRevenue ? 'Data do recebimento' : 'Data'}</label>
             <DateField value={date} onChange={setDate} />

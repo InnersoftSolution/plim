@@ -155,7 +155,6 @@ export function FinancePage() {
     id ? categories.find((c) => c.id === id) ?? null : null;
   const contactNameOf = (id: string | null) =>
     id ? contacts.find((c) => c.id === id)?.name ?? null : null;
-  const currency = company.currencyCode;
 
   /* ── período: ano corrente (padrão), este mês, ou o ano do arquivo ── */
   const monthKey = new Date().toISOString().slice(0, 7);
@@ -373,7 +372,7 @@ export function FinancePage() {
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
   const chartCaption = isFlowChart
     ? hasProjection
-      ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents, currency)} de custos recorrentes ativos.`
+      ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents)} de custos recorrentes ativos.`
       : `Ano fechado: sem projeção, o histórico completo de ${archiveYear}.`
     : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
   const chartHelp = isFlowChart
@@ -414,13 +413,13 @@ export function FinancePage() {
         <div className="dash-stat">
           <div className="dash-stat__icon dash-stat__icon--green"><IconArrowIn /></div>
           <span className="dash-stat__label">Recebido</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(receitaCents, currency)}</span>
+          <span className="dash-stat__value" data-financial>{formatMoney(receitaCents)}</span>
           <span className="dash-stat__hint">Dinheiro que entrou na empresa (receitas).</span>
         </div>
         <div className="dash-stat">
           <div className="dash-stat__icon dash-stat__icon--rose"><IconArrowOut /></div>
           <span className="dash-stat__label">Total gasto</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(gastoCents, currency)}</span>
+          <span className="dash-stat__value" data-financial>{formatMoney(gastoCents)}</span>
           <span className="dash-stat__hint">Só despesas, aportes não entram aqui.</span>
         </div>
         {/* Resultado negativo é estado comum no início: o número em vermelho já
@@ -437,7 +436,7 @@ export function FinancePage() {
             style={{ color: resultadoCents < 0 ? 'var(--rose-600)' : 'var(--color-status-positive)' }}
           >
             {resultadoCents < 0 ? '−' : '+'}
-            {formatMoney(Math.abs(resultadoCents), currency)}
+            {formatMoney(Math.abs(resultadoCents))}
           </span>
           <span className="dash-stat__hint">
             {resultadoCents < 0
@@ -468,7 +467,7 @@ export function FinancePage() {
             <IconClock />
           </div>
           <span className="dash-stat__label">A vencer</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(payableCents, currency)}</span>
+          <span className="dash-stat__value" data-financial>{formatMoney(payableCents)}</span>
           <span className="dash-stat__hint">
             {payable.length === 0
               ? 'Nenhuma conta a pagar em aberto.'
@@ -489,7 +488,7 @@ export function FinancePage() {
               <p className="fin-confirm__text">
                 {e.createdByMemberId ? `${nameOf(e.createdByMemberId)} registrou` : 'Registraram'} que você{' '}
                 {e.kind === 'contribution' ? 'aportou' : 'pagou'}{' '}
-                <strong>{formatMoney(e.amountCents, currency)}</strong> em <strong>{e.description}</strong>.
+                <strong>{formatMoney(e.amountCents)}</strong> em <strong>{e.description}</strong>.
                 Confirme se essa informação está correta.
               </p>
               <div className="fin-confirm__actions">
@@ -531,7 +530,7 @@ export function FinancePage() {
                       {e.dueDate ? dueLabel(e.dueDate) : 'a pagar'} · {nameOf(e.paidByMemberId)}
                     </span>
                   </button>
-                  <span className="fin-due__value" data-financial>{formatMoney(e.amountCents, currency)}</span>
+                  <span className="fin-due__value" data-financial>{formatMoney(e.amountCents)}</span>
                   <Button onClick={() => markPaid(e.id)} disabled={busyId === e.id}>
                     Marcar como paga
                   </Button>
@@ -584,7 +583,6 @@ export function FinancePage() {
         <>
           <FinChart
             points={chart.points}
-            currency={currency}
             title={chartTitle}
             subtitle={chartSubtitle}
             caption={chartCaption}
@@ -599,7 +597,6 @@ export function FinancePage() {
         <GastosPorCategoriaCard
           rows={gastoCat.rows}
           totalCents={gastoCat.total}
-          currency={currency}
           selected={categoryFilter}
           onSelect={(key) => setCategoryFilter(key)}
         />
@@ -659,7 +656,6 @@ export function FinancePage() {
             <MovRow
               key={item.kind === 'recurring' ? `rc-${item.cost.id}` : item.expense.id}
               item={item}
-              currency={currency}
               nameOf={nameOf}
               flash={item.kind !== 'recurring' && flashId === item.expense.id}
               generatesSettlement={generatesSettlement}
@@ -676,7 +672,6 @@ export function FinancePage() {
       ) : viewMode === 'table' ? (
         <MovTable
           rows={tablePageRows}
-          currency={currency}
           nameOf={nameOf}
           categoryNameOf={(id) => categoryOf(id)?.name ?? null}
           contactNameOf={contactNameOf}
@@ -710,7 +705,7 @@ export function FinancePage() {
                     {group.length} {group.length === 1 ? 'movimentação' : 'movimentações'}
                   </span>
                   <span className="fin-group__total">
-                    {gastoMes > 0 && <span data-financial>{formatMoney(gastoMes, currency)}</span>}
+                    {gastoMes > 0 && <span data-financial>{formatMoney(gastoMes)}</span>}
                     <span className="fin-group__chev" aria-hidden="true">
                       <IconChevronDown />
                     </span>
@@ -722,7 +717,6 @@ export function FinancePage() {
                       <MovRow
                         key={item.kind === 'recurring' ? `rc-${item.cost.id}` : item.expense.id}
                         item={item}
-                        currency={currency}
                         nameOf={nameOf}
                         flash={item.kind !== 'recurring' && flashId === item.expense.id}
                         generatesSettlement={generatesSettlement}
@@ -760,7 +754,7 @@ export function FinancePage() {
                     <strong>Visualizar movimentações de {y}</strong>
                     <small>
                       {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
-                      {formatMoney(gastoAno, currency)} em despesas
+                      {formatMoney(gastoAno)} em despesas
                     </small>
                   </span>
                   <span className="fin-year__cta" aria-hidden="true">
@@ -807,7 +801,6 @@ export function FinancePage() {
         {detail && (
           <MovDetail
             item={detail}
-            currency={currency}
             nameOf={nameOf}
             category={detail.kind !== 'recurring' ? categoryOf(detail.expense.categoryId) : null}
             contactName={detail.kind !== 'recurring' ? contactNameOf(detail.expense.contactId) : null}
@@ -885,14 +878,12 @@ export function FinancePage() {
 /* ── linha da lista ── */
 function MovRow({
   item,
-  currency,
   nameOf,
   flash,
   generatesSettlement,
   onOpen,
 }: {
   item: MovItem;
-  currency: string | null;
   nameOf: (id: string) => string;
   flash: boolean;
   generatesSettlement: (e: Expense) => boolean;
@@ -917,7 +908,7 @@ function MovRow({
         </div>
         <div className="fin-mov__right">
           <span className="fin-mov__value" data-financial>
-            {formatMoney(c.amountCents, currency)}
+            {formatMoney(c.amountCents)}
           </span>
           <span className={'fin-mov__impact' + (!isOnce && c.active ? ' is-ok' : '')}>
             {isOnce ? 'pagamento único' : c.active ? 'no custo mensal' : 'inativo'}
@@ -998,7 +989,7 @@ function MovRow({
       </div>
       <div className="fin-mov__right">
         <span className="fin-mov__value" data-financial>
-          {formatMoney(e.amountCents, currency)}
+          {formatMoney(e.amountCents)}
         </span>
         {toPay ? (
           <span className={'fin-mov__impact ' + (overdue ? 'is-refused' : 'is-pending')}>
@@ -1062,7 +1053,6 @@ function movStatus(e: Expense): { label: string; cls: string } {
  */
 function MovTable({
   rows,
-  currency,
   nameOf,
   categoryNameOf,
   contactNameOf,
@@ -1074,7 +1064,6 @@ function MovTable({
   onOpen,
 }: {
   rows: Expense[];
-  currency: string | null;
   nameOf: (id: string) => string;
   categoryNameOf: (id: string | null) => string | null;
   contactNameOf: (id: string | null) => string | null;
@@ -1121,7 +1110,7 @@ function MovTable({
                   </td>
                   <td>{nameOf(e.paidByMemberId)}</td>
                   <td className="fin-table__num" data-financial>
-                    {formatMoney(e.amountCents, currency)}
+                    {formatMoney(e.amountCents)}
                   </td>
                 </tr>
               );
@@ -1187,7 +1176,6 @@ function confInfo(status: string) {
 /* ── detalhe: explica o que a movimentação é e como afetou os cálculos ── */
 function MovDetail({
   item,
-  currency,
   nameOf,
   category,
   contactName,
@@ -1202,7 +1190,6 @@ function MovDetail({
   onEditMovement,
 }: {
   item: MovItem;
-  currency: string | null;
   nameOf: (id: string) => string;
   category: Category | null;
   contactName: string | null;
@@ -1309,7 +1296,7 @@ function MovDetail({
           </span>
         </div>
         <h3 className="movd-title">{cfg.title}</h3>
-        <div className="movd-amount" data-financial>{formatMoney(cfg.amount, currency)}</div>
+        <div className="movd-amount" data-financial>{formatMoney(cfg.amount)}</div>
         {toPay && exp?.dueDate ? (
           <span className="movd-date">Vencimento: {formatDate(exp.dueDate)}</span>
         ) : cfg.date ? (
@@ -1373,8 +1360,7 @@ function MovDetail({
       <div className="movd-section">
         <span className="movd-section__title">Dados financeiros</span>
         <div className="mw-review">
-          <Row k="Valor" v={formatMoney(cfg.amount, currency)} mono />
-          <Row k="Moeda" v={currency ?? 'BRL'} />
+          <Row k="Valor" v={formatMoney(cfg.amount)} mono />
           {item.kind === 'recurring' ? (
             <>
               <Row
@@ -1386,7 +1372,7 @@ function MovDetail({
               <Row k="Frequência" v={freqLabel(item.cost.frequency)} />
               <Row
                 k="Equivalente mensal"
-                v={item.cost.frequency === 'once' ? 'Pagamento único' : formatMoney(item.cost.monthlyEquivalentCents, currency)}
+                v={item.cost.frequency === 'once' ? 'Pagamento único' : formatMoney(item.cost.monthlyEquivalentCents)}
                 mono={item.cost.frequency !== 'once'}
               />
               <Row k="Entrou no total gasto?" v="Não, custo recorrente é separado" />
@@ -1508,7 +1494,7 @@ function MovDetail({
                     {paid && <span className="movd-share__badge">pagou</span>}
                   </span>
                   <span className="movd-share__value" data-financial>
-                    cabe {formatMoney(s.shareCents, currency)}
+                    cabe {formatMoney(s.shareCents)}
                   </span>
                 </div>
               );
@@ -1537,7 +1523,7 @@ function MovDetail({
                   <div className="movd-settle__row" key={s.memberId}>
                     <span>
                       <strong>{nameOf(s.memberId)}</strong> deve{' '}
-                      <strong className="movd-settle__amount">{formatMoney(s.shareCents, currency)}</strong> para{' '}
+                      <strong className="movd-settle__amount">{formatMoney(s.shareCents)}</strong> para{' '}
                       <strong>{nameOf(exp.paidByMemberId)}</strong>
                     </span>
                   </div>
@@ -1566,7 +1552,7 @@ function MovDetail({
             </p>
             <div className="movd-removeconfirm__warn">
               Essa ação é <strong>irreversível</strong>. A movimentação de{' '}
-              {formatMoney(cfg.amount, currency)} sai do histórico
+              {formatMoney(cfg.amount)} sai do histórico
               {isDespesa && generatesSettlement(exp)
                 ? ', e os saldos e acertos entre sócios são recalculados sem ela.'
                 : '.'}

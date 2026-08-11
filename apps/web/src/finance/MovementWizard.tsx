@@ -15,7 +15,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
-import { financeApi, formatMoney, maskMoneyBRL, maskedMoneyToCents } from './financeApi';
+import { financeApi, formatMoney, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
 import { contactApi } from './contactApi';
 import { CategoriaSelect, TagsInput } from './CategoryFields';
@@ -23,6 +23,7 @@ import { ContatoSelect } from './ContactFields';
 import { recurringApi } from './recurringApi';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
+import { MoneyField } from './MoneyField';
 
 /**
  * Jornada "Adicionar movimentação" — guiada, nunca formulário frio.
@@ -394,7 +395,7 @@ export function MovementWizard({
     ? [
         `Cria ${occurrences.length} ${occurrences.length === 1 ? 'movimentação' : 'movimentações'}, uma por mês, todas já pagas.`,
         retroTotalCents != null
-          ? `Soma ${formatMoney(retroTotalCents, company.currencyCode)} ao total gasto de ${year}.`
+          ? `Soma ${formatMoney(retroTotalCents)} ao total gasto de ${year}.`
           : `Entra no total gasto de ${year}.`,
         members.length > 1
           ? 'Cada mês entra nos acertos com o pagador daquele mês, conforme a divisão escolhida.'
@@ -410,7 +411,7 @@ export function MovementWizard({
                 recurringPastCharges.length === 1 ? 'movimentação já paga' : 'movimentações já pagas'
               }, uma por mês vencido${
                 amountCents != null
-                  ? `, somando ${formatMoney(amountCents * recurringPastCharges.length, company.currencyCode)}`
+                  ? `, somando ${formatMoney(amountCents * recurringPastCharges.length)}`
                   : ''
               }.`,
               'Os meses que já passaram entram como história, não como conta a pagar vencida.',
@@ -420,7 +421,7 @@ export function MovementWizard({
           ? [
               `Entra no custo mensal da empresa${
                 amountCents != null
-                  ? ` (${formatMoney(monthlyEquivalent(amountCents, frequency), company.currencyCode)} por mês)`
+                  ? ` (${formatMoney(monthlyEquivalent(amountCents, frequency))} por mês)`
                   : ''
               } enquanto estiver ativa.`,
               hasRecurringPast
@@ -531,7 +532,7 @@ export function MovementWizard({
                 {settled ? 'já me pagou ✓' : 'está devendo'}
               </button>
             )}
-            <strong data-financial>{formatMoney(s.cents, company.currencyCode)}</strong>
+            <strong data-financial>{formatMoney(s.cents)}</strong>
           </span>
         </div>
       );
@@ -963,12 +964,10 @@ export function MovementWizard({
                   onCreate={createCategoryInline}
                   movementType="despesa"
                 />
-                <Input
-                  label={`Valor de cada mês (${company.currencyCode ?? 'BRL'})`}
-                  inputMode="decimal"
-                  placeholder="0,00"
+                <MoneyField
+                  label="Valor de cada mês (R$)"
                   value={amount}
-                  onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
+                  onChange={setAmount}
                 />
                 <div className="mw-grid">
                   <Select
@@ -1034,8 +1033,8 @@ export function MovementWizard({
               {retroTotalCents != null && occurrences.length > 0 && (
                 <p className="mw-hint">
                   {occurrences.length} {occurrences.length === 1 ? 'movimentação' : 'movimentações'} de{' '}
-                  {formatMoney(amountCents!, company.currencyCode)}, somando{' '}
-                  <strong>{formatMoney(retroTotalCents, company.currencyCode)}</strong> em {year}.
+                  {formatMoney(amountCents!)}, somando{' '}
+                  <strong>{formatMoney(retroTotalCents)}</strong> em {year}.
                 </p>
               )}
               <div className="mw-actions">
@@ -1067,13 +1066,7 @@ export function MovementWizard({
                     placeholder="Selecione"
                     options={recurringCategoryCatalog.map((c) => ({ value: c.id, label: c.label }))}
                   />
-                  <Input
-                    label={`Valor (${company.currencyCode ?? 'BRL'})`}
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    value={amount}
-                    onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-                  />
+                  <MoneyField value={amount} onChange={setAmount} />
                 </div>
                 <div className="mw-grid">
                   <Select
@@ -1202,13 +1195,7 @@ export function MovementWizard({
                 <TagsInput value={tags} onChange={setTags} />
               </>
             )}
-            <Input
-              label={`Valor (${company.currencyCode ?? 'BRL'})`}
-              inputMode="decimal"
-              placeholder="0,00"
-              value={amount}
-              onChange={(e) => setAmount(maskMoneyBRL(e.target.value))}
-            />
+            <MoneyField value={amount} onChange={setAmount} />
             {isExpense && (
               <div className="field">
                 <label className="field__label">Essa despesa já foi paga?</label>
@@ -1535,7 +1522,7 @@ export function MovementWizard({
             </div>
             <div className="mw-review__row">
               <span>{isRetroRepeated ? 'Valor de cada mês' : 'Valor'}</span>
-              <strong data-financial>{amountCents != null ? formatMoney(amountCents, company.currencyCode) : '—'}</strong>
+              <strong data-financial>{amountCents != null ? formatMoney(amountCents) : '—'}</strong>
             </div>
             {isRetroRepeated ? (
               <>
@@ -1548,7 +1535,7 @@ export function MovementWizard({
                 <div className="mw-review__row">
                   <span>Total do período</span>
                   <strong data-financial>
-                    {retroTotalCents != null ? formatMoney(retroTotalCents, company.currencyCode) : '—'}
+                    {retroTotalCents != null ? formatMoney(retroTotalCents) : '—'}
                   </strong>
                 </div>
                 {/* A lista fecha o ciclo: a pessoa vê mês a mês quem pagou
@@ -1675,7 +1662,7 @@ export function MovementWizard({
                         </span>
                       )}
                     </span>
-                    <strong data-financial>{formatMoney(s.cents, company.currencyCode)}</strong>
+                    <strong data-financial>{formatMoney(s.cents)}</strong>
                   </div>
                 );
               })}

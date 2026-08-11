@@ -1,0 +1,25 @@
+/* Eco do valor por extenso, logo abaixo do campo. Discreto no caso comum e
+   visível quando o valor entra na faixa de atenção. */
+.moneyfield {
+  display: flex;
+  flex-direction: column;
+}
+.moneyfield__echo {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  /* Primeira letra maiúscula sem duplicar a string em JS. */
+  &::first-letter {
+    text-transform: uppercase;
+  }
+}
+.moneyfield__echo.is-warn {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
+  border-radius: var(--radius-input);
+  padding: 8px 10px;
+}
+.moneyfield__flag {
+  font-weight: 700;
+}

@@ -25,6 +25,13 @@ export interface ServiceLogger {
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
+ * Moeda única do Plim. Não é preferência de empresa: o rateio, o saldo e o
+ * acerto entre sócios só fecham dentro de uma moeda, e conversão exige taxa
+ * com data, que o produto não tem. Vale para toda empresa, nova ou antiga.
+ */
+const CURRENCY_CODE = 'BRL';
+
+/**
  * Detecta o tipo real da imagem pelos primeiros bytes (magic number). Devolve o
  * mesmo formato do enum do contrato, ou null se nao reconhecer. Evita confiar
  * apenas no contentType informado pelo cliente.
@@ -143,7 +150,9 @@ export class CompanyService {
       countryCode: null,
       region: null,
       city: null,
-      currencyCode: null,
+      // O Plim trabalha só com Real. Rateio e acerto em duas moedas exigiriam
+      // conversão com data e taxa; enquanto isso não existe, uma moeda só.
+      currencyCode: CURRENCY_CODE,
       logoUrl: null,
       businessModelType: null,
       hasFormalRegistration: null,
@@ -191,7 +200,13 @@ export class CompanyService {
     actingUserId?: string | null,
   ): Promise<Company> {
     await this.assertMembership(companyId, actingUserId);
-    return this.repo.updateCompany(companyId, patch as CompanyUpdate);
+    // A moeda não é editável: qualquer valor que chegue no patch é ignorado, e
+    // toda empresa que passa por aqui fica em Real. Assim uma empresa antiga,
+    // criada quando dava para escolher, se acerta sozinha na primeira edição.
+    return this.repo.updateCompany(companyId, {
+      ...(patch as CompanyUpdate),
+      currencyCode: CURRENCY_CODE,
+    });
   }
 
   /** Marca o onboarding como concluído (botão "Ir para o dashboard" na revisão). */
