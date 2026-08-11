@@ -168,6 +168,38 @@ function monthsBetween(year: string, from: number, to: number): string[] {
   return meses;
 }
 
+/**
+ * Cobranças mensais de `start` (YYYY-MM-DD) que já venceram até `until`,
+ * inclusive. Preserva o dia da cobrança e encolhe em mês curto (31 jan → 28
+ * fev), igual ao backend. Teto de 60 para não travar com data absurda.
+ */
+function monthlyChargesUntil(start: string, until: string): string[] {
+  const [ano, mes, dia] = start.split('-').map(Number) as [number, number, number];
+  const datas: string[] = [];
+  for (let i = 0; i < 60; i++) {
+    const base = new Date(Date.UTC(ano, mes - 1 + i, 1));
+    const ultimoDia = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+    const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), Math.min(dia, ultimoDia)));
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > until) break;
+    datas.push(iso);
+  }
+  return datas;
+}
+
+/** Mesma regra, para saber quando cai a PRÓXIMA cobrança depois de `until`. */
+function nextMonthlyChargeAfter(start: string, until: string): string {
+  const [ano, mes, dia] = start.split('-').map(Number) as [number, number, number];
+  for (let i = 0; i < 120; i++) {
+    const base = new Date(Date.UTC(ano, mes - 1 + i, 1));
+    const ultimoDia = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+    const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), Math.min(dia, ultimoDia)));
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > until) return iso;
+  }
+  return start;
+}
+
 /** Origens comuns de receita (chips de um toque; "+" abre origem própria). */
 const REVENUE_SOURCES = ['Asaas', 'Mercado Livre', 'Stripe', 'Pix', 'Cliente direto', 'Boleto'];
 
@@ -295,13 +327,39 @@ export function MovementWizard({
   const isUnpaid = isExpense && paymentStatus === 'unpaid';
   const amountCents = maskedMoneyToCents(amount);
   /** Meses do período escolhido, como competências YYYY-MM-01. */
+  /**
+   * Custo recorrente do ano corrente que COMEÇOU no passado (ex.: "cobra desde
+   * janeiro"). Os meses já vencidos são história: viram movimentações já pagas,
+   * com pagador e acerto por mês, igual ao ano fechado. Só o que ainda vai
+   * vencer continua sendo custo recorrente.
+   *
+   * Sem isso, o Plim criava uma conta a pagar VENCIDA para cada mês passado,
+   * todas no mesmo pagador: sete cobranças em aberto de algo já pago.
+   *
+   * Limitado a mensal de propósito: é o caso real, e para anual/semanal a
+   * conta de competências fica frágil sem ganho prático.
+   */
+  const recurringPastCharges =
+    isRecurringExpense && !year && frequency === 'monthly' && date && date < hoje
+      ? monthlyChargesUntil(date, hoje)
+      : [];
+  const hasRecurringPast = recurringPastCharges.length > 0;
+  /** Primeira cobrança que ainda vai acontecer (o recorrente começa daí). */
+  const recurringFirstFuture = hasRecurringPast ? nextMonthlyChargeAfter(date, hoje) : date;
+  /** O recorrente só sobrevive se ainda houver cobrança dentro do período. */
+  const keepsRecurring = !hasRecurringPast || !endsOn || recurringFirstFuture <= endsOn;
+
   const occurrences = isRetroRepeated
     ? monthsBetween(year, fromMonth, toMonth).map((mes) => ({
         key: mes,
         spentOn: `${mes}-01`,
         paidByMemberId: payerByMonth[mes] ?? memberId,
       }))
-    : [];
+    : recurringPastCharges.map((dia) => ({
+        key: dia,
+        spentOn: dia,
+        paidByMemberId: payerByMonth[dia] ?? memberId,
+      }));
   const retroTotalCents = amountCents != null ? amountCents * occurrences.length : null;
   /** Acertos de um mês, já sem o pagador dele (ninguém deve a si mesmo). */
   const settledOf = (key: string, payerId: string) =>
@@ -315,7 +373,9 @@ export function MovementWizard({
   const kindLabel = isRetroRepeated
     ? 'Despesa que se repetiu'
     : isRecurringExpense
-    ? 'Despesa recorrente'
+    ? hasRecurringPast && !keepsRecurring
+      ? 'Despesa que se repetiu'
+      : 'Despesa recorrente'
     : isExpense
       ? isUnpaid
         ? 'Conta a pagar'
@@ -343,13 +403,32 @@ export function MovementWizard({
       ]
     : isRecurringExpense
     ? [
-        `Entra no custo mensal da empresa${
-          amountCents != null
-            ? ` (${formatMoney(monthlyEquivalent(amountCents, frequency), company.currencyCode)} por mês)`
-            : ''
-        } enquanto estiver ativa.`,
-        'Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.',
-        'Ajuda a prever quanto custa manter a empresa.',
+        // O passado vem primeiro: é o que muda os números de imediato.
+        ...(hasRecurringPast
+          ? [
+              `Cria ${recurringPastCharges.length} ${
+                recurringPastCharges.length === 1 ? 'movimentação já paga' : 'movimentações já pagas'
+              }, uma por mês vencido${
+                amountCents != null
+                  ? `, somando ${formatMoney(amountCents * recurringPastCharges.length, company.currencyCode)}`
+                  : ''
+              }.`,
+              'Os meses que já passaram entram como história, não como conta a pagar vencida.',
+            ]
+          : []),
+        ...(keepsRecurring
+          ? [
+              `Entra no custo mensal da empresa${
+                amountCents != null
+                  ? ` (${formatMoney(monthlyEquivalent(amountCents, frequency), company.currencyCode)} por mês)`
+                  : ''
+              } enquanto estiver ativa.`,
+              hasRecurringPast
+                ? `A cobrança automática começa em ${formatDateBr(recurringFirstFuture)}, dividida entre os sócios.`
+                : 'Na data da cobrança, o Plim gera a conta a pagar já dividida entre os sócios.',
+            ]
+          : ['O período já terminou, então não fica cobrança automática nenhuma para o futuro.']),
+        ...(endsOn ? [`Para de cobrar sozinha em ${formatDateBr(endsOn)}.`] : []),
       ]
     : isUnpaid
       ? [
@@ -479,6 +558,113 @@ export function MovementWizard({
     setStep(to);
   }
 
+  /**
+   * Lista de meses com o acerto sob demanda. Serve aos DOIS casos: o ano
+   * fechado e a parte passada de um custo recorrente do ano corrente. O
+   * desenho e o mesmo porque o problema e o mesmo: meses que ja aconteceram,
+   * cada um com o seu pagador.
+   */
+  function mesesBlock() {
+    return (
+      <>
+  {/* Um mês por linha, fechado. O acerto daquele mês só aparece
+      quando a pessoa abre: mostrar os seis de uma vez era um
+      paredão, e quase sempre só um ou dois precisam de ajuste. */}
+  {occurrences.length > 0 && members.length > 1 && (
+    <div className="field">
+      <label className="field__label">
+        Mês a mês ({occurrences.length}{' '}
+        {occurrences.length === 1 ? 'mês' : 'meses'})
+      </label>
+      <div className="mw-monthlist">
+        {occurrences.map((oc) => {
+          const mesIdx = Number(oc.key.slice(5, 7)) - 1;
+          const trocado = payerByMonth[oc.key] != null;
+          const aberto = openMonth === oc.key;
+          const acertaram = settledOf(oc.key, oc.paidByMemberId);
+          return (
+            <div
+              className={
+                'mw-mrow' + (trocado ? ' is-custom' : '') + (aberto ? ' is-open' : '')
+              }
+              key={oc.key}
+            >
+              <div className="mw-mrow__head">
+                <span className="mw-mrow__name">{MONTH_NAMES[mesIdx]}</span>
+                <select
+                  className="mw-mrow__select"
+                  aria-label={`Quem pagou em ${MONTH_NAMES[mesIdx]}`}
+                  value={oc.paidByMemberId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPayerByMonth((prev) => {
+                      const next = { ...prev };
+                      // Voltar ao padrão remove a exceção, então
+                      // trocar o padrão depois volta a valer aqui.
+                      if (v === memberId) delete next[oc.key];
+                      else next[oc.key] = v;
+                      return next;
+                    });
+                  }}
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.fullName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={'mw-mrow__more' + (acertaram.length ? ' is-done' : '')}
+                  aria-expanded={aberto}
+                  onClick={() => setOpenMonth(aberto ? null : oc.key)}
+                >
+                  {acertaram.length > 0
+                    ? `${acertaram.length} acertou`
+                    : 'acertos'}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={aberto ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} />
+                  </svg>
+                </button>
+              </div>
+              {aberto && (
+                <div className="mw-mrow__body">
+                  {amountCents == null ? (
+                    <p className="mw-hint" style={{ margin: 0 }}>
+                      Informe o valor para ver as partes deste mês.
+                    </p>
+                  ) : (
+                    <div className="mw-review">
+                      {splitRows(oc.paidByMemberId, true, 'pagou', {
+                        ids: settledByMonth[oc.key] ?? [],
+                        toggle: (alvo) =>
+                          setSettledByMonth((prev) => {
+                            const atual = prev[oc.key] ?? [];
+                            return {
+                              ...prev,
+                              [oc.key]: atual.includes(alvo)
+                                ? atual.filter((id) => id !== alvo)
+                                : [...atual, alvo],
+                            };
+                          }),
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mw-hint" style={{ marginTop: 8 }}>
+        Toque em "acertos" para dizer quem já pagou a parte daquele mês. Dá para
+        deixar para depois e resolver em Acertos.
+      </p>
+    </div>
+  )}
+      </>
+    );
+  }
   function validateDetails(): boolean {
     if (description.trim().length < 1) {
       setError(
@@ -552,19 +738,41 @@ export function MovementWizard({
           }),
         });
       } else if (isRecurringExpense) {
-        // Despesa que se repete: o backend guarda como custo recorrente e cuida
-        // de gerar a conta a pagar dividida na data da cobrança.
-        await recurringApi.create(company.id, {
-          name: description.trim(),
-          category: recCategory as RecurringCategory,
-          amountCents: amountCents!,
-          frequency,
-          paidByMemberId: memberId,
-          splitMode: splitMode === 'equal' ? 'equal' : 'equity',
-          nextChargeOn: date || null,
-          endsOn: endsOn || null,
-          note: note.trim() || null,
-        });
+        // Começou no passado: os meses já vencidos entram primeiro, como
+        // história (já pagos, com pagador e acerto de cada um). Se algo falhar
+        // aqui, o recorrente nem chega a ser criado — melhor não gravar nada do
+        // que deixar o passado pela metade e a cobrança futura já valendo.
+        if (hasRecurringPast) {
+          await financeApi.createRepeatedExpense(company.id, {
+            description: description.trim(),
+            amountCents: amountCents!,
+            splitMode: splitMode === 'custom' ? 'equity' : splitMode,
+            note: note.trim() || null,
+            occurrences: occurrences.map((o) => {
+              const acertaram = settledOf(o.key, o.paidByMemberId);
+              return {
+                spentOn: o.spentOn,
+                paidByMemberId: o.paidByMemberId,
+                settledMemberIds: acertaram.length > 0 ? acertaram : undefined,
+              };
+            }),
+          });
+        }
+        // O recorrente passa a valer só do próximo vencimento em diante, senão
+        // a materialização recriaria os meses passados como conta a pagar.
+        if (keepsRecurring) {
+          await recurringApi.create(company.id, {
+            name: description.trim(),
+            category: recCategory as RecurringCategory,
+            amountCents: amountCents!,
+            frequency,
+            paidByMemberId: memberId,
+            splitMode: splitMode === 'equal' ? 'equal' : 'equity',
+            nextChargeOn: (hasRecurringPast ? recurringFirstFuture : date) || null,
+            endsOn: endsOn || null,
+            note: note.trim() || null,
+          });
+        }
       } else if (type === 'expense') {
         await financeApi.createExpense(company.id, {
           description: description.trim(),
@@ -787,101 +995,7 @@ export function MovementWizard({
                   options={members.map((m) => ({ value: m.id, label: m.fullName }))}
                 />
 
-                {/* Um mês por linha, fechado. O acerto daquele mês só aparece
-                    quando a pessoa abre: mostrar os seis de uma vez era um
-                    paredão, e quase sempre só um ou dois precisam de ajuste. */}
-                {occurrences.length > 0 && members.length > 1 && (
-                  <div className="field">
-                    <label className="field__label">
-                      Mês a mês ({occurrences.length}{' '}
-                      {occurrences.length === 1 ? 'mês' : 'meses'})
-                    </label>
-                    <div className="mw-monthlist">
-                      {occurrences.map((oc) => {
-                        const mesIdx = Number(oc.key.slice(5, 7)) - 1;
-                        const trocado = payerByMonth[oc.key] != null;
-                        const aberto = openMonth === oc.key;
-                        const acertaram = settledOf(oc.key, oc.paidByMemberId);
-                        return (
-                          <div
-                            className={
-                              'mw-mrow' + (trocado ? ' is-custom' : '') + (aberto ? ' is-open' : '')
-                            }
-                            key={oc.key}
-                          >
-                            <div className="mw-mrow__head">
-                              <span className="mw-mrow__name">{MONTH_NAMES[mesIdx]}</span>
-                              <select
-                                className="mw-mrow__select"
-                                aria-label={`Quem pagou em ${MONTH_NAMES[mesIdx]}`}
-                                value={oc.paidByMemberId}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  setPayerByMonth((prev) => {
-                                    const next = { ...prev };
-                                    // Voltar ao padrão remove a exceção, então
-                                    // trocar o padrão depois volta a valer aqui.
-                                    if (v === memberId) delete next[oc.key];
-                                    else next[oc.key] = v;
-                                    return next;
-                                  });
-                                }}
-                              >
-                                {members.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.fullName}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className={'mw-mrow__more' + (acertaram.length ? ' is-done' : '')}
-                                aria-expanded={aberto}
-                                onClick={() => setOpenMonth(aberto ? null : oc.key)}
-                              >
-                                {acertaram.length > 0
-                                  ? `${acertaram.length} acertou`
-                                  : 'acertos'}
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d={aberto ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} />
-                                </svg>
-                              </button>
-                            </div>
-                            {aberto && (
-                              <div className="mw-mrow__body">
-                                {amountCents == null ? (
-                                  <p className="mw-hint" style={{ margin: 0 }}>
-                                    Informe o valor para ver as partes deste mês.
-                                  </p>
-                                ) : (
-                                  <div className="mw-review">
-                                    {splitRows(oc.paidByMemberId, true, 'pagou', {
-                                      ids: settledByMonth[oc.key] ?? [],
-                                      toggle: (alvo) =>
-                                        setSettledByMonth((prev) => {
-                                          const atual = prev[oc.key] ?? [];
-                                          return {
-                                            ...prev,
-                                            [oc.key]: atual.includes(alvo)
-                                              ? atual.filter((id) => id !== alvo)
-                                              : [...atual, alvo],
-                                          };
-                                        }),
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="mw-hint" style={{ marginTop: 8 }}>
-                      Toque em "acertos" para dizer quem já pagou a parte daquele mês. Dá para
-                      deixar para depois e resolver em Acertos.
-                    </p>
-                  </div>
-                )}
+                {mesesBlock()}
 
                 {members.length > 1 && (
                   <div className="field">
@@ -993,6 +1107,23 @@ export function MovementWizard({
                     />
                   </div>
                 </div>
+                {/* Começou no passado: os meses já vencidos são história, e
+                    entram um a um, com pagador e acerto próprios. Só o que
+                    ainda vai vencer segue como custo recorrente. */}
+                {hasRecurringPast && (
+                  <>
+                    <p className="mw-hint" style={{ marginTop: 0 }}>
+                      Essa cobrança começou antes de hoje. Os{' '}
+                      <strong>{recurringPastCharges.length}</strong>{' '}
+                      {recurringPastCharges.length === 1 ? 'mês que já venceu entra' : 'meses que já venceram entram'}{' '}
+                      como movimentação já paga.{' '}
+                      {keepsRecurring
+                        ? `A cobrança automática começa em ${formatDateBr(recurringFirstFuture)}.`
+                        : 'Como o período já terminou, não fica nada para cobrar no futuro.'}
+                    </p>
+                    {mesesBlock()}
+                  </>
+                )}
                 {members.length > 1 && (
                   <div className="field">
                     <label className="field__label">Como dividir entre os sócios</label>
