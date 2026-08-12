@@ -262,22 +262,51 @@ export function AcertosPage() {
             </div>
           ) : (
             <div className="sac-list">
-              {settlements.map((s) => (
-                <article className="sac" key={`${s.fromMemberId}-${s.toMemberId}`}>
-                  <span className="sac__avatar">{initials(s.fromName)}</span>
-                  <div className="sac__body">
-                    <p className="sac__line">
-                      <strong>{s.fromName}</strong> precisa pagar{' '}
-                      <strong className="sac__amount" data-financial>
-                        {formatMoney(s.amountCents)}
-                      </strong>{' '}
-                      para <strong>{s.toName}</strong>
-                    </p>
-                    <span className="sac__status">Pendente</span>
-                  </div>
-                  <Button onClick={() => setNetPaying(s)}>Registrar pagamento</Button>
-                </article>
-              ))}
+              {settlements.map((s) => {
+                const chave = `${s.fromMemberId}-${s.toMemberId}`;
+                const aberto = !!openCalc[chave];
+                return (
+                  <article className={'sac' + (aberto ? ' is-open' : '')} key={chave}>
+                    <div className="sac__main">
+                      <span className="sac__avatar">{initials(s.fromName)}</span>
+                      <div className="sac__body">
+                        <p className="sac__line">
+                          <strong>{s.fromName}</strong> precisa pagar{' '}
+                          <strong className="sac__amount" data-financial>
+                            {formatMoney(s.amountCents)}
+                          </strong>{' '}
+                          para <strong>{s.toName}</strong>
+                        </p>
+                        <span className="sac__status">Pendente</span>
+                      </div>
+                      <div className="sac__actions">
+                        {/* "De onde vem esse valor" fica AQUI, e não só no bloco
+                            de baixo: a pergunta nasce olhando o número, e mandar
+                            a pessoa procurar a explicação em outro lugar da
+                            página é responder tarde demais. */}
+                        <button
+                          type="button"
+                          className="sac__why"
+                          aria-expanded={aberto}
+                          onClick={() => setOpenCalc((m) => ({ ...m, [chave]: !aberto }))}
+                        >
+                          {aberto ? 'Ocultar detalhe' : 'De onde vem esse valor'}
+                        </button>
+                        <Button onClick={() => setNetPaying(s)}>Registrar pagamento</Button>
+                      </div>
+                    </div>
+                    {aberto && (
+                      <ComposicaoDaDivida
+                        settlement={s}
+                        balance={balances.find((b) => b.memberId === s.fromMemberId)}
+                        payments={payments}
+                        movements={movements}
+                        nameOf={nameOf}
+                      />
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -481,6 +510,127 @@ export function AcertosPage() {
  * Recorrentes ganham o selo "Recorrente"; o status geral vira "Quitada" quando
  * ninguém deve mais.
  */
+/**
+ * Uma linha do cálculo, com sinal explícito. Positivo é o que ABATE a dívida
+ * (dinheiro que a pessoa colocou), negativo é o que a AUMENTA.
+ */
+function LinhaDoCalculo({ rotulo, cents }: { rotulo: string; cents: number }) {
+  const negativo = cents < 0;
+  return (
+    <div className="sac__calc-row">
+      <dt>{rotulo}</dt>
+      <dd className={negativo ? 'is-neg' : 'is-pos'} data-financial>
+        {negativo ? '−' : '+'} {formatMoney(Math.abs(cents))}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * De onde vem o valor que a pessoa precisa pagar.
+ *
+ * São duas perguntas diferentes e a tela responde as duas, nesta ordem:
+ *  1. como o saldo chegou nesse número (o que cabia, o que ela pagou, o que já
+ *     acertou com os outros sócios);
+ *  2. em quais movimentações ela ainda tem parte em aberto.
+ *
+ * O valor do resumo é LÍQUIDO: o Plim cruza as dívidas de todo mundo para
+ * ninguém pagar e receber ao mesmo tempo. Por isso a lista de movimentações
+ * pode somar diferente do total, e a tela diz isso em vez de deixar a pessoa
+ * achar que a conta está errada.
+ */
+function ComposicaoDaDivida({
+  settlement,
+  balance,
+  payments,
+  movements,
+  nameOf,
+}: {
+  settlement: Settlement;
+  balance: MemberBalance | undefined;
+  payments: SettlementPayment[];
+  movements: MovementSettlement[];
+  nameOf: (id: string) => string;
+}) {
+  const devedorId = settlement.fromMemberId;
+  const pagosParaSocios = payments
+    .filter((p) => p.fromMemberId === devedorId && p.status === 'confirmed')
+    .reduce((soma, p) => soma + p.amountCents, 0);
+  const recebidosDeSocios = payments
+    .filter((p) => p.toMemberId === devedorId && p.status === 'confirmed')
+    .reduce((soma, p) => soma + p.amountCents, 0);
+
+  /** Movimentações em que essa pessoa ainda tem parte em aberto. */
+  const emAberto = movements
+    .flatMap((m) =>
+      m.debts
+        .filter((d) => d.debtorId === devedorId && d.remainingCents > 0)
+        .map((d) => ({ mov: m, cents: d.remainingCents })),
+    )
+    .sort((a, b) => b.mov.spentOn.localeCompare(a.mov.spentOn));
+  const somaEmAberto = emAberto.reduce((soma, i) => soma + i.cents, 0);
+
+  return (
+    <div className="sac__detalhe">
+      {balance && (
+        /* Com sinal em cada linha a conta FECHA na tela: quem quiser conferir
+           soma de cima para baixo e chega no total. Sem sinal, os mesmos
+           números pareciam soltos e a pessoa desconfiava do resultado. */
+        <dl className="sac__calc">
+          <LinhaDoCalculo rotulo={`Parte que cabia a ${settlement.fromName}`} cents={-balance.owedCents} />
+          <LinhaDoCalculo rotulo="Pagou de despesas da empresa" cents={balance.paidCents} />
+          {pagosParaSocios > 0 && (
+            <LinhaDoCalculo rotulo="Já pagou para sócios" cents={pagosParaSocios} />
+          )}
+          {recebidosDeSocios > 0 && (
+            <LinhaDoCalculo rotulo="Já recebeu de sócios" cents={-recebidosDeSocios} />
+          )}
+          <div className="sac__calc-row sac__calc-row--final">
+            <dt>Falta pagar</dt>
+            <dd data-financial>{formatMoney(settlement.amountCents)}</dd>
+          </div>
+        </dl>
+      )}
+
+      <div className="sac__movs">
+        <h4 className="sac__movs-titulo">Movimentações em que ainda tem parte em aberto</h4>
+        {emAberto.length === 0 ? (
+          <p className="sac__movs-vazio">
+            Nenhuma movimentação em aberto. Esse saldo vem de acertos já registrados entre os sócios.
+          </p>
+        ) : (
+          <>
+            <ul className="sac__movs-lista">
+              {emAberto.map(({ mov, cents }) => (
+                <li key={`${mov.movementId}-${mov.payerId}`}>
+                  <Link to={`/financeiro/movimentacao/${mov.movementId}`} className="sac__mov">
+                    <span className="sac__mov-nome">
+                      {mov.description}
+                      <small>
+                        {formatDateBr(mov.spentOn)} · para {nameOf(mov.payerId)}
+                      </small>
+                    </span>
+                    <span className="sac__mov-valor" data-financial>
+                      {formatMoney(cents)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            {somaEmAberto !== settlement.amountCents && (
+              <p className="sac__movs-nota">
+                A lista soma {formatMoney(somaEmAberto)}, e não {formatMoney(settlement.amountCents)},
+                porque o Plim cruza as dívidas de todos antes de mostrar o resultado: quem tem valor a
+                receber de alguém não paga e recebe ao mesmo tempo.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DividaCard({
   movement,
 }: {

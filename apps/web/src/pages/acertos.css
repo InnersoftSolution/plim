@@ -4,14 +4,43 @@
   flex-direction: column;
   gap: 10px;
 }
+/* O card deixou de ser uma linha só: ele abre a composição do valor logo
+   abaixo, no mesmo lugar onde a pergunta nasce. */
 .sac {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
   padding: 14px 16px;
   border: 1px solid var(--color-border-default);
   border-radius: 16px;
   background: var(--color-bg-surface);
+}
+.sac.is-open {
+  border-color: var(--color-border-brand);
+}
+.sac__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sac__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* Ação secundária: texto, não botão cheio. Competir com "Registrar pagamento"
+   deixaria as duas com o mesmo peso, e só uma delas mexe em dinheiro. */
+.sac__why {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.sac__why:hover {
+  color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
 }
 .sac__avatar {
   flex-shrink: 0;
@@ -50,6 +79,129 @@
 }
 .sac .btn {
   flex-shrink: 0;
+}
+
+/* ── composição do valor devido (abre dentro do card) ── */
+.sac__detalhe {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sac__calc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sac__calc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-text-subtle);
+}
+.sac__calc-row dd {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-default);
+  white-space: nowrap;
+}
+.sac__calc-row dd.is-pos {
+  color: var(--color-status-positive);
+}
+.sac__calc-row dd.is-neg {
+  color: var(--color-text-default);
+}
+.sac__calc-row--final {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-default);
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.sac__calc-row--final dd {
+  color: var(--rose-600);
+}
+
+.sac__movs-titulo {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+.sac__movs-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+}
+/* Cada linha leva à movimentação: a pergunta seguinte de quem vê a dívida é
+   "de qual gasto é isso?", e a resposta está a um toque. */
+.sac__mov {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  text-decoration: none;
+  color: inherit;
+}
+.sac__mov:hover {
+  border-color: var(--color-border-brand);
+  background: var(--color-bg-brand-soft);
+}
+.sac__mov-nome {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-default);
+  min-width: 0;
+}
+.sac__mov-nome small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+.sac__mov-valor {
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sac__movs-vazio,
+.sac__movs-nota {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.sac__movs-nota {
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .sac__main {
+    flex-wrap: wrap;
+  }
+  /* Empilhado: lado a lado, "Registrar pagamento" estourava a largura do card.
+     A ação principal fica embaixo, larga, no alcance do polegar. */
+  .sac__actions {
+    width: 100%;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .sac__actions .btn {
+    width: 100%;
+  }
+  .sac__mov {
+    align-items: flex-start;
+  }
 }
 
 /* ── Bloco B: Detalhamento por sócio (resultado + cálculo recolhível) ── */
