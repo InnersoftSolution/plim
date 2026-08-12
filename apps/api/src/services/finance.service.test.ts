@@ -399,6 +399,70 @@ describe('FinanceService', () => {
     expect(shareOf(expense.shares, ownerId)).toBe(7000);
   });
 
+  /* ── responsabilidade: a parte guarda de onde veio (migração 0033) ── */
+
+  it('grava a regra da parte junto com o valor, para a tela poder explicar', async () => {
+    const porParticipacao = await finance.createExpense(
+      companyId,
+      { description: 'Contador', amountCents: 10000, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    expect(porParticipacao.shares.every((s) => s.rule === 'equity')).toBe(true);
+    expect(porParticipacao.shares.every((s) => s.participates)).toBe(true);
+
+    const iguais = await finance.createExpense(
+      companyId,
+      { description: 'Almoço', amountCents: 9000, paidByMemberId: ownerId, splitMode: 'equal' },
+      'u1',
+    );
+    expect(iguais.shares.every((s) => s.rule === 'equal')).toBe(true);
+  });
+
+  it('parte digitada à mão nasce como manual, e parte zero vira "não participa"', async () => {
+    const expense = await finance.createExpense(
+      companyId,
+      {
+        description: 'Advogado',
+        amountCents: 10000,
+        paidByMemberId: ownerId,
+        splitMode: 'custom',
+        customShares: [
+          { memberId: ownerId, shareCents: 10000 },
+          { memberId: partnerId, shareCents: 0 },
+        ],
+      },
+      'u1',
+    );
+    const dono = expense.shares.find((s) => s.memberId === ownerId)!;
+    const socio = expense.shares.find((s) => s.memberId === partnerId)!;
+    expect(dono).toMatchObject({ shareCents: 10000, participates: true, rule: 'manual' });
+    // Quem ficou com parte zero não participa desta despesa: é decisão, não
+    // esquecimento, e é o que o bloco de acertos usa para não cobrar ninguém.
+    expect(socio).toMatchObject({ shareCents: 0, participates: false, rule: 'manual' });
+  });
+
+  it('quem não participa não entra no saldo nem gera acerto', async () => {
+    await finance.createExpense(
+      companyId,
+      {
+        description: 'Advogado',
+        amountCents: 10000,
+        paidByMemberId: ownerId,
+        splitMode: 'custom',
+        customShares: [
+          { memberId: ownerId, shareCents: 10000 },
+          { memberId: partnerId, shareCents: 0 },
+        ],
+      },
+      'u1',
+    );
+    const balances = await finance.getBalances(companyId, 'u1');
+    const socio = balances.find((b) => b.memberId === partnerId)!;
+    expect(socio.owedCents).toBe(0);
+    expect(socio.netCents).toBe(0);
+    expect(balances.reduce((s, b) => s + b.netCents, 0)).toBe(0);
+  });
+
   it('custom: rejeita partes que não somam o total', async () => {
     await expect(
       finance.createExpense(

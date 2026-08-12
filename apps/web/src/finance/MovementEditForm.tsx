@@ -5,6 +5,13 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
+import {
+  PayersField,
+  payersError,
+  payersToPayload,
+  singlePayer,
+  type Payers,
+} from './PayersField';
 import { centsToMaskedInput, financeApi, maskedMoneyToCents } from './financeApi';
 import { categoryApi } from './categoryApi';
 import { contactApi } from './contactApi';
@@ -44,6 +51,20 @@ export function MovementEditForm({
   );
   const [date, setDate] = useState(expense.spentOn);
   const [paidBy, setPaidBy] = useState(expense.paidByMemberId);
+  /**
+   * Quem colocou o dinheiro. Abre em "mais de uma" quando a movimentação já
+   * tem vários pagamentos, senão a edição esconderia o que foi registrado.
+   */
+  const [payers, setPayers] = useState<Payers>(() =>
+    expense.payments.length > 1
+      ? {
+          mode: 'multi',
+          amounts: Object.fromEntries(
+            expense.payments.map((p) => [p.memberId, centsToMaskedInput(p.amountCents)]),
+          ),
+        }
+      : singlePayer(expense.paidByMemberId),
+  );
   const [splitMode, setSplitMode] = useState<ExpenseSplitMode>(
     expense.splitMode === 'custom' ? 'equity' : expense.splitMode,
   );
@@ -101,7 +122,15 @@ export function MovementEditForm({
       if (srcVal !== (expense.source ?? null)) patch.source = srcVal;
       if (accVal !== (expense.account ?? null)) patch.account = accVal;
     } else {
-      if (paidBy !== expense.paidByMemberId) patch.paidByMemberId = paidBy;
+      // Só manda `payments` quando a pessoa mexeu de fato em quem pagou:
+      // reescrever o histórico sem necessidade é o que a RN1 proíbe.
+      if (payers.mode === 'multi') {
+        const quemPagou = payersToPayload(payers, expense.paidByMemberId);
+        patch.payments = quemPagou.payments;
+        patch.paidByMemberId = quemPagou.paidByMemberId;
+      } else if (paidBy !== expense.paidByMemberId) {
+        patch.paidByMemberId = paidBy;
+      }
       if (!customBlocked && splitMode !== expense.splitMode) patch.splitMode = splitMode;
     }
     if (!isAporte) {
@@ -111,6 +140,14 @@ export function MovementEditForm({
         tags.length !== (expense.tags ?? []).length ||
         tags.some((t, i) => t !== (expense.tags ?? [])[i]);
       if (tagsChanged) patch.tags = tags;
+    }
+
+    if (!isRevenue && !isAporte && members.length > 1) {
+      const erroPagadores = payersError(payers, maskedMoneyToCents(amount));
+      if (erroPagadores) {
+        setError(erroPagadores);
+        return;
+      }
     }
 
     if (Object.keys(patch).length === 0) {
@@ -204,12 +241,25 @@ export function MovementEditForm({
 
         {!isRevenue && (
           <div className="rc-grid">
-            <Select
-              label={isAporte ? 'Quem aportou' : 'Quem pagou'}
-              value={paidBy}
-              onChange={setPaidBy}
-              options={members.map((m) => ({ value: m.id, label: m.fullName }))}
-            />
+            {isAporte || members.length < 2 ? (
+              <Select
+                label={isAporte ? 'Quem aportou' : 'Quem pagou'}
+                value={paidBy}
+                onChange={setPaidBy}
+                options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+              />
+            ) : (
+              <PayersField
+                members={members}
+                label="Quem pagou"
+                payers={payers}
+                onChange={(p) => {
+                  setPayers(p);
+                  if (p.mode === 'single') setPaidBy(p.memberId);
+                }}
+                amountCents={maskedMoneyToCents(amount)}
+              />
+            )}
             {hasShares && !customBlocked && (
               <Select
                 label="Como dividir entre os sócios"

@@ -134,7 +134,20 @@
   color: var(--color-text-subtle);
 }
 
-/* ── quem deve o quê ───────────────────────────────────── */
+/* Título com o status do pagamento à direita: a pergunta "está paga?" se
+   responde no cabeçalho do bloco, sem precisar ler o corpo. */
+.movp-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.movp-card__head .movp-card__title {
+  margin-bottom: 0;
+}
+
+/* ── quem pagou / quem deve o quê ──────────────────────── */
 .movp-people {
   display: flex;
   flex-direction: column;
@@ -185,6 +198,18 @@
   color: var(--color-status-warning);
   background: var(--color-status-warning-bg);
 }
+/* Linha do total: fecha a lista de pagamentos sem parecer mais um sócio. */
+.movp-person--total {
+  background: transparent;
+  border-style: dashed;
+}
+.movp-person--total .movp-person__name {
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .movp-person__right {
   display: flex;
   align-items: center;
@@ -223,6 +248,73 @@
 .movp-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ── acerto entre sócios ───────────────────────────────── */
+/* Um cartão por devedor, com uma linha por credor. Agrupar assim responde
+   "quanto EU devo, e para quem", que é a pergunta de quem abre a tela. */
+.movp-acertos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.movp-acerto {
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+  overflow: hidden;
+}
+.movp-acerto__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.movp-acerto__quem {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.movp-acerto__total {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-status-warning);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Verde quando o devedor já quitou tudo: a cor de alerta some junto com a
+   pendência, senão a tela continua parecendo cobrança. */
+.movp-acerto__total.is-ok {
+  color: var(--color-status-positive);
+}
+.movp-acerto__linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-default);
+}
+.movp-acerto__linha:first-of-type {
+  border-top: none;
+}
+.movp-acerto__linha.is-settled {
+  background: var(--color-status-positive-bg);
+}
+.movp-acerto__para {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: var(--color-text-subtle);
+}
+.movp-acerto__para [data-financial] {
+  font-weight: 700;
+  color: var(--color-text-default);
+  font-variant-numeric: tabular-nums;
 }
 
 .movp-note {
@@ -297,6 +389,16 @@
   }
   .movp-amount {
     font-size: 26px;
+  }
+  .movp-acerto__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .movp-acerto__linha {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
   .movp-person {
     flex-direction: column;

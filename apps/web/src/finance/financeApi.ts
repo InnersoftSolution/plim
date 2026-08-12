@@ -5,6 +5,8 @@ import type {
   CreateRevenueInput,
   CreateSettlementPaymentInput,
   Expense,
+  InheritanceInput,
+  InheritancePreview,
   MemberBalance,
   MovementSettlement,
   Settlement,
@@ -80,6 +82,24 @@ export const financeApi = {
 
   createSettlementPayment(companyId: string, input: CreateSettlementPaymentInput): Promise<SettlementPayment> {
     return apiFetch<SettlementPayment>(`/companies/${companyId}/settlement-payments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
+   * Jornada do sócio novo. A prévia não escreve nada: mostra quanto ele passa a
+   * assumir e para quem fica devendo, para a pessoa decidir olhando a conta.
+   */
+  previewInheritance(companyId: string, input: InheritanceInput): Promise<InheritancePreview> {
+    return apiFetch<InheritancePreview>(`/companies/${companyId}/heranca/previa`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  applyInheritance(companyId: string, input: InheritanceInput): Promise<InheritancePreview> {
+    return apiFetch<InheritancePreview>(`/companies/${companyId}/heranca/aplicar`, {
       method: 'POST',
       body: JSON.stringify(input),
     });

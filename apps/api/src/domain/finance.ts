@@ -4,6 +4,7 @@ import type {
   MovementKind,
   PaymentMethod,
   PaymentStatus,
+  ResponsibilityRule,
 } from '@plim/shared';
 
 /** Pagamento de acerto entre sócios (quitação total ou parcial). */
@@ -30,9 +31,37 @@ export interface SettlementPayment {
   createdAt: Date;
 }
 
+/**
+ * RESPONSABILIDADE de um sócio pelo custo, que não é a mesma coisa que
+ * pagamento: quem pagou vive em ExpensePayment e nunca muda, enquanto isto é
+ * decisão da sociedade e pode ser revista quando entra ou sai gente.
+ * Ver docs/PAGAMENTO-E-RESPONSABILIDADE.md.
+ */
 export interface ExpenseShare {
   memberId: string;
   shareCents: number;
+  /** false = este sócio ficou de fora desta despesa (decisão, com parte zero). */
+  participates: boolean;
+  /** De onde veio o número. Nulo em linha gravada antes da 0033. */
+  rule: ResponsibilityRule | null;
+}
+
+/**
+ * PAGAMENTO da movimentação: quem tirou dinheiro do bolso e quanto.
+ *
+ * Uma movimentação pode ter vários. Se cada sócia pagou a parte dela direto ao
+ * fornecedor, a despesa está quitada e não existe acerto nenhum; se uma pagou
+ * tudo, a diferença vira dívida das outras com ela.
+ *
+ * Isto é histórico e não se reescreve quando a sociedade muda (RN1). Quem muda
+ * é a responsabilidade (ExpenseShare).
+ */
+export interface ExpensePayment {
+  id: string;
+  memberId: string;
+  amountCents: number;
+  /** Data em que o dinheiro saiu (YYYY-MM-DD). */
+  paidOn: string;
 }
 
 export interface Expense {
@@ -49,8 +78,14 @@ export interface Expense {
   /** Data do gasto (YYYY-MM-DD). */
   spentOn: string;
   splitMode: ExpenseSplitMode;
-  /** Parte de cada sócio (soma = amountCents). */
+  /** Responsabilidade: parte de cada sócio (soma = amountCents). */
   shares: ExpenseShare[];
+  /**
+   * Quem pagou e quanto. Vazio = nada saiu ainda (conta a pagar).
+   * A soma pode ser menor que amountCents: despesa paga pela metade é estado
+   * válido, e o que falta é conta com o fornecedor, não dívida entre sócios.
+   */
+  payments: ExpensePayment[];
   note: string | null;
   /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
   source: string | null;

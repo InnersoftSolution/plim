@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
+import { HerancaDialog } from '../finance/HerancaDialog';
 import { useAuth } from '../auth/AuthContext';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
@@ -67,6 +68,8 @@ export function SociedadePage() {
   const [removing, setRemoving] = useState<CompanyMember | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState('');
+  /** Sócio cuja jornada de "assume o passado?" está aberta. */
+  const [heranca, setHeranca] = useState<CompanyMember | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -290,6 +293,14 @@ export function SociedadePage() {
                         : 'Enviar convite'}
                   </button>
                 )}
+                {/* Sócio que entrou depois pode assumir (ou não) as despesas
+                    de antes. Fica aqui, na linha dele, porque é uma decisão
+                    sobre aquela pessoa, e não uma configuração da empresa. */}
+                {m.role !== 'account_owner' && (
+                  <button className="soc-member__edit" onClick={() => setHeranca(m)}>
+                    Despesas anteriores
+                  </button>
+                )}
                 <button className="soc-member__edit" onClick={() => setEditing(m)}>
                   Editar
                 </button>
@@ -322,6 +333,22 @@ export function SociedadePage() {
       />
 
       {/* modais */}
+      <Modal
+        open={heranca != null}
+        onClose={() => setHeranca(null)}
+        title="Despesas anteriores à entrada"
+        subtitle="Decida se essa pessoa assume parte do que foi gasto antes de ela entrar."
+      >
+        {heranca && (
+          <HerancaDialog
+            companyId={company.id}
+            member={heranca}
+            onClose={() => setHeranca(null)}
+            onApplied={() => void load()}
+          />
+        )}
+      </Modal>
+
       <Modal
         open={addOpen}
         title="Adicionar sócio"

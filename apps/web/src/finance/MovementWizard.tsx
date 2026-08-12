@@ -24,6 +24,13 @@ import { recurringApi } from './recurringApi';
 import '../pages/finance.css'; // reusa .fin-split (toggle de divisão)
 import './wizard.css';
 import { MoneyField } from './MoneyField';
+import {
+  PayersField,
+  payersError,
+  payersToPayload,
+  singlePayer,
+  type Payers,
+} from './PayersField';
 
 /**
  * Jornada "Adicionar movimentação" — guiada, nunca formulário frio.
@@ -273,6 +280,13 @@ export function MovementWizard({
   const [dueDate, setDueDate] = useState('');
   const [note, setNote] = useState('');
   const [memberId, setMemberId] = useState(members[0]?.id ?? '');
+  /**
+   * Quem colocou o dinheiro. Começa como uma pessoa só (o caso comum) e pode
+   * virar vários quando cada sócio pagou a parte dele direto ao fornecedor.
+   * `memberId` continua sendo a fonte para os fluxos que só têm um pagador
+   * (aporte, retroativo, custo recorrente).
+   */
+  const [payers, setPayers] = useState<Payers>(() => singlePayer(members[0]?.id ?? ''));
   const [splitMode, setSplitMode] = useState<ExpenseSplitMode>('equity');
   /** Aporte reembolsável: os sócios pagam a parte deles ao autor. */
   const [reimbursable, setReimbursable] = useState(false);
@@ -709,6 +723,13 @@ export function MovementWizard({
       setError('Informe a data de vencimento dessa conta a pagar.');
       return false;
     }
+    if (isExpense && !isUnpaid) {
+      const erroPagadores = payersError(payers, amountCents);
+      if (erroPagadores) {
+        setError(erroPagadores);
+        return false;
+      }
+    }
     return true;
   }
 
@@ -775,10 +796,15 @@ export function MovementWizard({
           });
         }
       } else if (type === 'expense') {
+        const quemPagou =
+          paymentStatus === 'unpaid'
+            ? { paidByMemberId: memberId, payments: undefined }
+            : payersToPayload(payers, memberId);
         await financeApi.createExpense(company.id, {
           description: description.trim(),
           amountCents: amountCents!,
-          paidByMemberId: memberId,
+          paidByMemberId: quemPagou.paidByMemberId,
+          payments: quemPagou.payments,
           spentOn: paymentStatus === 'unpaid' ? undefined : date,
           splitMode,
           note: note.trim() || null,
@@ -786,7 +812,7 @@ export function MovementWizard({
           dueDate: paymentStatus === 'unpaid' ? dueDate : null,
           settledMemberIds:
             paymentStatus === 'paid' && settledIds.length > 0
-              ? settledIds.filter((id) => id !== memberId)
+              ? settledIds.filter((id) => id !== quemPagou.paidByMemberId)
               : undefined,
           categoryId,
           tags,
@@ -1342,13 +1368,34 @@ export function MovementWizard({
               </div>
             )}
             {/* pessoas/divisão na MESMA tela (antes era um passo à parte) */}
-            {!isRevenue && (
-              <Select
-                label={isUnpaid ? 'Quem vai pagar' : isExpense ? 'Quem pagou' : 'Sócio que aportou'}
-                value={memberId}
-                onChange={setMemberId}
-                options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+            {/* Despesa já paga pode ter vários pagadores. Conta a pagar não:
+                ali ninguém pagou nada ainda, só se define quem vai pagar. */}
+            {isExpense && !isUnpaid && members.length > 1 ? (
+              <PayersField
+                members={members}
+                label="Quem pagou"
+                payers={payers}
+                onChange={(p) => {
+                  setPayers(p);
+                  if (p.mode === 'single') setMemberId(p.memberId);
+                  // Com vários pagadores não existe "o credor": a marcação de
+                  // "já me pagou" volta a fazer sentido só com um pagador.
+                  else setSettledIds([]);
+                }}
+                amountCents={amountCents}
               />
+            ) : (
+              !isRevenue && (
+                <Select
+                  label={isUnpaid ? 'Quem vai pagar' : isExpense ? 'Quem pagou' : 'Sócio que aportou'}
+                  value={memberId}
+                  onChange={(v) => {
+                    setMemberId(v);
+                    setPayers(singlePayer(v));
+                  }}
+                  options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+                />
+              )
             )}
             {isExpense && (
               <div className="field">
@@ -1377,10 +1424,19 @@ export function MovementWizard({
                 {equityWarn}
                 {amountCents != null && members.length > 1 && (
                   <div className="mw-review mw-splitpreview">
-                    {splitRows(memberId, !isUnpaid, isUnpaid ? 'vai pagar' : 'pagou')}
+                    {/* Com vários pagadores a marcação "já me pagou" sai: não
+                        existe um credor só, então o acerto se registra depois,
+                        em Acertos, com destino e valor explícitos. */}
+                    {splitRows(
+                      // Com vários pagadores não faz sentido apontar "· pagou"
+                      // em uma pessoa só: mais de uma colocou dinheiro.
+                      payers.mode === 'multi' ? '' : memberId,
+                      !isUnpaid && payers.mode === 'single',
+                      isUnpaid ? 'vai pagar' : 'pagou',
+                    )}
                   </div>
                 )}
-                {!isUnpaid && members.length > 1 && (
+                {!isUnpaid && members.length > 1 && payers.mode === 'single' && (
                   <p className="mw-hint">
                     Alguém já te passou a parte dela? Toque em "está devendo" para marcar como
                     acertado. O Plim registra o acerto junto com a despesa.

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ConfirmationStatus } from '@plim/shared';
-import type { Expense, SettlementPayment } from '../../domain/finance';
-import type { FinanceRepository } from '../finance.repository';
+import type { Expense, ExpensePayment, SettlementPayment } from '../../domain/finance';
+import type { FinanceRepository, NewExpense } from '../finance.repository';
 
 export class InMemoryFinanceRepository implements FinanceRepository {
   private expenses = new Map<string, Expense>();
@@ -34,10 +34,27 @@ export class InMemoryFinanceRepository implements FinanceRepository {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async createExpense(data: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> {
-    const expense: Expense = { ...data, id: randomUUID(), createdAt: new Date() };
+  async createExpense(data: NewExpense): Promise<Expense> {
+    const expense: Expense = {
+      ...data,
+      // Os pagamentos ganham id aqui, como no banco.
+      payments: data.payments.map((p) => ({ ...p, id: randomUUID() })),
+      id: randomUUID(),
+      createdAt: new Date(),
+    };
     this.expenses.set(expense.id, expense);
     return expense;
+  }
+
+  async replaceExpensePayments(
+    expenseId: string,
+    payments: Omit<ExpensePayment, 'id'>[],
+  ): Promise<ExpensePayment[]> {
+    const e = this.expenses.get(expenseId);
+    if (!e) throw new Error(`Movimentação ${expenseId} não encontrada`);
+    const novos = payments.map((p) => ({ ...p, id: randomUUID() }));
+    this.expenses.set(expenseId, { ...e, payments: novos });
+    return novos;
   }
 
   async listExpenses(companyId: string): Promise<Expense[]> {

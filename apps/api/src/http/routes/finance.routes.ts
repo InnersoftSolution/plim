@@ -5,6 +5,7 @@ import {
   createRepeatedExpenseSchema,
   createRevenueSchema,
   createSettlementPaymentSchema,
+  inheritanceInputSchema,
   payExpenseSchema,
   updateMovementSchema,
 } from '@plim/shared';
@@ -119,6 +120,23 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
     const input = createSettlementPaymentSchema.parse(request.body);
     const payment = await service.createSettlementPayment(companyId, input, request.user?.id ?? null);
     return reply.status(201).send(payment);
+  });
+
+  /**
+   * Jornada do sócio novo: o que fazer com as despesas anteriores à entrada
+   * dele. A prévia não escreve nada; quem escreve é /aplicar, depois que a
+   * pessoa vê a conta e confirma.
+   */
+  app.post('/companies/:companyId/heranca/previa', async (request) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    const input = inheritanceInputSchema.parse(request.body);
+    return service.previewInheritance(companyId, input, request.user?.id ?? null);
+  });
+
+  app.post('/companies/:companyId/heranca/aplicar', async (request) => {
+    const { companyId } = companyParamsSchema.parse(request.params);
+    const input = inheritanceInputSchema.parse(request.body);
+    return service.applyInheritance(companyId, input, request.user?.id ?? null);
   });
 
   app.get('/companies/:companyId/settlement-payments', async (request) => {

@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { financeApi, formatMoney } from './financeApi';
+import { acertosDaMovimentacao, totalPago } from './movimentacaoAcerto';
 import './movementdetail.css';
 
 /**
@@ -70,12 +71,25 @@ export function MovementDetailPage() {
   const confirmed = movement.confirmationStatus === 'confirmed';
   const payerName = nameOf(movement.paidByMemberId);
 
-  /** Partes de quem NÃO pagou: é sobre elas que existe dívida. */
-  const devedores = movement.shares.filter(
-    (s) => s.memberId !== movement.paidByMemberId && s.shareCents > 0,
+  /**
+   * PAGAMENTO: quem tirou dinheiro do bolso. Pode ser mais de uma pessoa, e não
+   * se confunde com a responsabilidade pelo custo (as partes). Uma despesa pode
+   * estar 100% paga ao fornecedor e ainda ter valor a acertar entre os sócios.
+   */
+  const pagoCents = totalPago(movement.payments);
+  const faltaAoFornecedor = Math.max(0, movement.amountCents - pagoCents);
+  const parcial = movement.paymentStatus === 'partial';
+  const varios = movement.payments.length > 1;
+
+  /** ACERTO: só as diferenças entre o que cada um pagou e o que lhe cabia. */
+  const acertos = isExpense ? acertosDaMovimentacao(movement) : [];
+  /** Acerto já registrado entre esse par (devedor → credor). */
+  const acertoRegistrado = (devedorId: string, credorId: string) =>
+    payments.find((p) => p.fromMemberId === devedorId && p.toMemberId === credorId) ?? null;
+  /** Quem ainda tem valor em aberto, depois de descontar o que já foi pago. */
+  const aindaDevem = acertos.filter((a) =>
+    a.para.some((d) => !acertoRegistrado(a.devedorId, d.credorId)),
   );
-  const acertoDe = (memberId: string) =>
-    payments.find((p) => p.fromMemberId === memberId) ?? null;
 
   /**
    * O que aconteceu com o dinheiro, em frases. Substitui as seis linhas de
@@ -105,25 +119,41 @@ export function MovementDetailPage() {
       'Aporte é capital, não gasto: não soma no total gasto nem na média mensal.',
     );
   } else {
-    frases.push(`${payerName} pagou e o valor entrou no total gasto da empresa.`);
-    if (devedores.length > 0) {
+    frases.push(
+      varios
+        ? `${movement.payments.map((p) => nameOf(p.memberId)).join(' e ')} pagaram, e o valor entrou no total gasto da empresa.`
+        : `${payerName} pagou e o valor entrou no total gasto da empresa.`,
+    );
+    if (parcial) {
       frases.push(
-        `A parte de ${devedores.map((s) => nameOf(s.memberId)).join(', ')} ficou como dívida com ${payerName}.`,
+        `Ainda faltam ${formatMoney(faltaAoFornecedor)} para quitar com o fornecedor. Esse pedaço é conta em aberto, não dívida entre sócios.`,
       );
+    }
+    if (aindaDevem.length > 0) {
+      frases.push(
+        `${aindaDevem.map((a) => nameOf(a.devedorId)).join(', ')} ${aindaDevem.length > 1 ? 'têm' : 'tem'} valor a regularizar com quem adiantou.`,
+      );
+    } else if (acertos.length > 0) {
+      frases.push('Todo mundo já acertou a parte: não há nada em aberto entre os sócios.');
     } else {
-      frases.push('A parte que cabia coincide com quem pagou, então não há nada a acertar.');
+      frases.push('Cada um pagou exatamente a parte que cabia: não há nada a acertar.');
     }
   }
 
-  async function marcarAcerto(memberId: string, shareCents: number) {
+  /**
+   * Registra que o devedor acertou com AQUELE credor. O credor vem explícito
+   * porque com mais de um pagador a dívida se reparte, e supor um destino só
+   * criaria acerto no lugar errado.
+   */
+  async function marcarAcerto(devedorId: string, credorId: string, cents: number) {
     if (!movement) return;
-    setBusyMember(memberId);
+    setBusyMember(devedorId + credorId);
     setError('');
     try {
       await financeApi.createSettlementPayment(company.id, {
-        fromMemberId: memberId,
-        toMemberId: movement.paidByMemberId,
-        amountCents: shareCents,
+        fromMemberId: devedorId,
+        toMemberId: credorId,
+        amountCents: cents,
         expenseId: movement.id,
       });
       await load();
@@ -135,7 +165,7 @@ export function MovementDetailPage() {
   }
 
   async function desfazerAcerto(pagamento: SettlementPayment) {
-    setBusyMember(pagamento.fromMemberId);
+    setBusyMember(pagamento.fromMemberId + pagamento.toMemberId);
     setError('');
     try {
       await financeApi.removeSettlementPayment(company.id, pagamento.id);
@@ -172,8 +202,8 @@ export function MovementDetailPage() {
             {isRevenue ? 'Entrada' : isAporte ? 'Aporte' : toPay ? 'Conta a pagar' : 'Despesa'}
           </span>
           {isExpense && (
-            <span className={'movp-chip movp-chip--' + (toPay ? 'warn' : 'ok')}>
-              {toPay ? 'Em aberto' : 'Paga'}
+            <span className={'movp-chip movp-chip--' + (toPay || parcial ? 'warn' : 'ok')}>
+              {toPay ? 'Em aberto' : parcial ? 'Parcial' : 'Paga'}
             </span>
           )}
           {!confirmed && <span className="movp-chip movp-chip--warn">Aguardando confirmação</span>}
@@ -187,7 +217,11 @@ export function MovementDetailPage() {
             ? `Vence em ${formatDate(movement.dueDate)}`
             : formatDate(movement.spentOn)}
           {' · '}
-          {isRevenue ? 'recebido por' : 'pago por'} {payerName}
+          {isRevenue
+            ? `recebido por ${payerName}`
+            : varios
+              ? `pago por ${movement.payments.length} sócios`
+              : `pago por ${payerName}`}
         </p>
       </header>
 
@@ -203,85 +237,155 @@ export function MovementDetailPage() {
         </ul>
       </section>
 
-      {/* 3) o coração da tela: quem deve o quê, com a ação em cada linha */}
-      {isExpense && devedores.length > 0 && (
+      {/* 3) PAGAMENTO: quem colocou dinheiro. Fato consumado, não muda. */}
+      {!isRevenue && movement.payments.length > 0 && (
         <section className="movp-card">
-          <h2 className="movp-card__title">Quem deve o quê</h2>
+          <div className="movp-card__head">
+            <h2 className="movp-card__title">Pagamento da despesa</h2>
+            <span className={'movp-chip movp-chip--' + (parcial ? 'warn' : 'ok')}>
+              {parcial ? 'Parcial' : 'Paga'}
+            </span>
+          </div>
           <p className="movp-card__sub">
-            {payerName} pagou o total. Marque quem já acertou a parte.
+            Quem tirou dinheiro do bolso. Isso é com o fornecedor, e não muda quando entra ou sai
+            sócio.
           </p>
 
           <div className="movp-people">
-            <div className="movp-person is-payer">
-              <span className="movp-person__name">
-                {payerName}
-                <span className="movp-person__tag">pagou o total</span>
-              </span>
-              <span className="movp-person__value" data-financial>
-                {formatMoney(
-                  movement.shares.find((s) => s.memberId === movement.paidByMemberId)?.shareCents ?? 0,
-                )}
-              </span>
-            </div>
-
-            {devedores.map((s) => {
-              const acerto = acertoDe(s.memberId);
-              const ocupado = busyMember === s.memberId;
-              return (
-                <div className={'movp-person' + (acerto ? ' is-settled' : '')} key={s.memberId}>
-                  <span className="movp-person__name">
-                    {nameOf(s.memberId)}
-                    {acerto ? (
-                      <span className="movp-person__tag is-ok">já acertou</span>
-                    ) : (
-                      /* Sem etiqueta, "quem já pagou" e "quem falta" só se
-                         distinguiam pela cor da linha: fraco para quem enxerga
-                         mal cor e invisível na leitura em voz alta.
-                         Conta em aberto ainda não gerou dívida: ali a parte é
-                         só previsão. */
-                      <span className="movp-person__tag is-due">
-                        {toPay ? 'parte prevista' : 'falta pagar'}
-                      </span>
-                    )}
-                  </span>
-                  <span className="movp-person__right">
-                    <span className="movp-person__value" data-financial>
-                      {formatMoney(s.shareCents)}
-                    </span>
-                    {toPay ? null : acerto ? (
-                      <button
-                        type="button"
-                        className="movp-action"
-                        disabled={ocupado}
-                        onClick={() => setUndoing(acerto)}
-                      >
-                        desfazer
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="movp-action is-primary"
-                        disabled={ocupado}
-                        onClick={() => marcarAcerto(s.memberId, s.shareCents)}
-                      >
-                        {ocupado ? 'salvando…' : 'já me pagou'}
-                      </button>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
+            {movement.payments.map((p) => (
+              <div className="movp-person is-payer" key={p.id}>
+                <span className="movp-person__name">
+                  {nameOf(p.memberId)}
+                  <span className="movp-person__tag">pagou</span>
+                </span>
+                <span className="movp-person__value" data-financial>
+                  {formatMoney(p.amountCents)}
+                </span>
+              </div>
+            ))}
+            {/* Total só quando ele acrescenta: com um pagador que pagou tudo,
+                repetir o mesmo número duas vezes é ruído. */}
+            {(varios || parcial) && (
+              <div className="movp-person movp-person--total">
+                <span className="movp-person__name">{parcial ? 'Já foi pago' : 'Total'}</span>
+                <span className="movp-person__value" data-financial>
+                  {formatMoney(pagoCents)}
+                </span>
+              </div>
+            )}
           </div>
 
-          {toPay && (
+          {parcial && (
             <p className="movp-note">
-              Marque a conta como paga para poder registrar quem acertou a parte dela.
+              Faltam {formatMoney(faltaAoFornecedor)} para quitar com o fornecedor. Esse valor é
+              conta em aberto, não entra no acerto entre os sócios.
             </p>
           )}
         </section>
       )}
 
-      {/* 4) o resto dos dados, sem competir com o que importa */}
+      {/* 4) ACERTO: só as diferenças entre quem pagou e de quem é o custo. */}
+      {isExpense && !toPay && (
+        <section className="movp-card">
+          <h2 className="movp-card__title">Acerto entre sócios</h2>
+          {acertos.length === 0 ? (
+            <p className="movp-card__sub">
+              Cada um pagou exatamente a parte que cabia. Não há nada a acertar nesta movimentação.
+            </p>
+          ) : (
+            <>
+              <p className="movp-card__sub">
+                A diferença entre o que cada um pagou e a parte que cabia a ele.
+              </p>
+              <div className="movp-acertos">
+                {acertos.map((a) => {
+                  // O que ainda falta: o já registrado sai da conta, senão a
+                  // tela cobraria de novo quem já pagou.
+                  const pendente = a.para
+                    .filter((d) => !acertoRegistrado(a.devedorId, d.credorId))
+                    .reduce((soma, d) => soma + d.cents, 0);
+                  return (
+                  <div className="movp-acerto" key={a.devedorId}>
+                    <div className="movp-acerto__head">
+                      <span className="movp-acerto__quem">{nameOf(a.devedorId)}</span>
+                      <span
+                        className={'movp-acerto__total' + (pendente === 0 ? ' is-ok' : '')}
+                        data-financial
+                      >
+                        {pendente === 0
+                          ? `${formatMoney(a.totalCents)} já acertados`
+                          : `${formatMoney(pendente)} a regularizar`}
+                      </span>
+                    </div>
+                    {a.para.map((destino) => {
+                      const registrado = acertoRegistrado(a.devedorId, destino.credorId);
+                      const ocupado = busyMember === a.devedorId + destino.credorId;
+                      return (
+                        <div
+                          className={'movp-acerto__linha' + (registrado ? ' is-settled' : '')}
+                          key={destino.credorId}
+                        >
+                          <span className="movp-acerto__para">
+                            <span data-financial>{formatMoney(destino.cents)}</span> para{' '}
+                            {nameOf(destino.credorId)}
+                            {registrado && <span className="movp-person__tag is-ok">já acertou</span>}
+                          </span>
+                          {registrado ? (
+                            <button
+                              type="button"
+                              className="movp-action"
+                              disabled={ocupado}
+                              onClick={() => setUndoing(registrado)}
+                            >
+                              desfazer
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="movp-action is-primary"
+                              disabled={ocupado}
+                              onClick={() =>
+                                marcarAcerto(a.devedorId, destino.credorId, destino.cents)
+                              }
+                            >
+                              {ocupado ? 'salvando…' : 'registrar acerto'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Conta a pagar: a divisão ainda é previsão, não dívida. */}
+      {isExpense && toPay && movement.shares.length > 0 && (
+        <section className="movp-card">
+          <h2 className="movp-card__title">Parte prevista de cada sócio</h2>
+          <p className="movp-card__sub">
+            Ninguém pagou nada ainda. Marque a conta como paga para o acerto entre sócios existir.
+          </p>
+          <div className="movp-people">
+            {movement.shares
+              .filter((s) => s.shareCents > 0)
+              .map((s) => (
+                <div className="movp-person" key={s.memberId}>
+                  <span className="movp-person__name">{nameOf(s.memberId)}</span>
+                  <span className="movp-person__value" data-financial>
+                    {formatMoney(s.shareCents)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {/* 5) o resto dos dados, sem competir com o que importa */}
       <section className="movp-card">
         <h2 className="movp-card__title">Detalhes</h2>
         <dl className="movp-rows">
@@ -289,7 +393,11 @@ export function MovementDetailPage() {
           {movement.categoryId && <Linha k="Categoria" v="—" hidden />}
           <Linha
             k={isRevenue ? 'Recebido por' : 'Pago por'}
-            v={payerName}
+            v={
+              varios
+                ? movement.payments.map((p) => nameOf(p.memberId)).join(', ')
+                : payerName
+            }
           />
           {movement.createdByMemberId && movement.createdByMemberId !== movement.paidByMemberId && (
             <Linha k="Registrado por" v={nameOf(movement.createdByMemberId)} />
@@ -311,7 +419,7 @@ export function MovementDetailPage() {
         </dl>
       </section>
 
-      {/* 5) ações, no fim: destino da leitura, não competição com ela */}
+      {/* 6) ações, no fim: destino da leitura, não competição com ela */}
       <div className="movp-actions">
         <Button onClick={() => navigate(`/financeiro/movimentacao/${movement.id}/editar`)}>
           Editar movimentação

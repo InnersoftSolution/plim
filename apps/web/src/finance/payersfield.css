@@ -1,0 +1,124 @@
+/* Bloco "quem pagou": lista de sócios com o valor que cada um colocou. */
+.payers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.payers__hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+.payers__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+}
+/* Nome à esquerda, valor à direita: a coluna de valores fica alinhada e dá
+   para conferir a soma batendo o olho. */
+.payers__row {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  align-items: center;
+  gap: 12px;
+}
+.payers__input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.payers__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+/* Conferência da soma. Vira um aviso com corpo, e não uma linha de texto
+   colorida: a mensagem antiga se perdia no meio dos campos justamente quando
+   mais precisava ser vista. */
+.payers__soma {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-input);
+  border: 1px solid transparent;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.payers__soma-icone {
+  display: flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.payers__soma-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.payers__soma-titulo {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.payers__soma-detalhe {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* O título carrega o número e fica em mono; a explicação é frase e fica na
+   fonte do texto, senão a linha inteira vira leitura de extrato. */
+.payers__soma-titulo {
+  font-family: var(--font-mono);
+}
+
+/* Estado inicial (nada preenchido): neutro. Só vira cor de aviso depois que a
+   pessoa começa a informar valores. */
+.payers__soma {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+  color: var(--color-text-muted);
+}
+.payers__soma.is-ok {
+  background: var(--color-status-positive-bg);
+  border-color: rgba(21, 179, 119, 0.25);
+  color: var(--color-status-positive);
+}
+.payers__soma.is-parcial {
+  background: var(--color-status-warning-bg);
+  border-color: rgba(217, 143, 20, 0.25);
+  color: var(--color-status-warning);
+}
+.payers__soma.is-erro {
+  background: var(--color-status-negative-bg);
+  border-color: rgba(214, 47, 86, 0.28);
+  color: var(--color-status-negative);
+}
+
+/* Campo em erro: a borda mostra ONDE corrigir. Sem isso a pessoa lê "passou do
+   valor" e volta a olhar linha por linha para descobrir qual mexer. */
+.payers__input--erro {
+  border-color: var(--color-status-negative);
+}
+.payers__input--erro:focus {
+  border-color: var(--color-status-negative);
+  box-shadow: 0 0 0 3px var(--color-status-negative-bg);
+}
+
+@media (max-width: 640px) {
+  /* Coluna única no celular: 150px de campo ao lado do nome espremia os dois. */
+  .payers__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .payers__input {
+    text-align: left;
+  }
+  .payers__list {
+    padding: 12px;
+  }
+}

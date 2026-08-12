@@ -9,12 +9,82 @@ import { z } from 'zod';
 export const expenseSplitModeSchema = z.enum(['equity', 'equal', 'custom']);
 export type ExpenseSplitMode = z.infer<typeof expenseSplitModeSchema>;
 
-/** Parte de um sócio numa despesa (em centavos inteiros). */
+/**
+ * De onde veio a parte de um sócio, para a tela conseguir explicar o número.
+ * - equity: proporcional à participação societária.
+ * - equal: partes iguais.
+ * - manual: valor digitado à mão.
+ * - inherited: herdada ao entrar na sociedade (jornada do sócio novo).
+ */
+export const responsibilityRuleSchema = z.enum(['equity', 'equal', 'manual', 'inherited']);
+export type ResponsibilityRule = z.infer<typeof responsibilityRuleSchema>;
+
+/**
+ * Parte de um sócio numa despesa (em centavos inteiros): a RESPONSABILIDADE
+ * pelo custo, que é decisão da sociedade e pode ser revista.
+ *
+ * Não confundir com pagamento (ExpensePayment), que é quem tirou dinheiro do
+ * bolso e nunca muda. A diferença entre os dois é o que gera acerto entre
+ * sócios. Ver docs/PAGAMENTO-E-RESPONSABILIDADE.md.
+ *
+ * `participates: false` guarda a decisão de que o sócio ficou de fora desta
+ * despesa, com parte zero. É diferente de não existir linha nenhuma: o
+ * primeiro é escolha registrada, o segundo é ausência de informação.
+ */
 export const expenseShareSchema = z.object({
   memberId: z.string().uuid(),
   shareCents: z.number().int().nonnegative(),
+  participates: z.boolean().default(true),
+  rule: responsibilityRuleSchema.nullable().default(null),
 });
 export type ExpenseShare = z.infer<typeof expenseShareSchema>;
+
+/**
+ * Parte informada pela tela quando a divisão é manual. Só o par sócio/valor:
+ * `participates` e `rule` são conclusão do backend (quem digitou um valor está
+ * participando, e a regra é 'manual' por definição), não coisa que o front
+ * decide.
+ */
+export const expenseShareInputSchema = z.object({
+  memberId: z.string().uuid(),
+  shareCents: z.number().int().nonnegative(),
+});
+export type ExpenseShareInput = z.infer<typeof expenseShareInputSchema>;
+
+/**
+ * Pagamento de uma movimentação: quem colocou dinheiro e quanto.
+ *
+ * Uma movimentação pode ter VÁRIOS pagamentos. Se cada sócia pagou a parte
+ * dela direto ao fornecedor, a despesa está quitada e não existe acerto
+ * nenhum. Se uma pagou tudo, a diferença vira dívida das outras com ela.
+ *
+ * Isto é histórico: entrada ou saída de sócio nunca reescreve estas linhas
+ * (RN1). Quem muda com a sociedade é a responsabilidade, não o pagamento.
+ */
+export const expensePaymentSchema = z.object({
+  id: z.string().uuid(),
+  expenseId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  amountCents: z.number().int().positive(),
+  /** Data em que o dinheiro saiu (YYYY-MM-DD). */
+  paidOn: z.string(),
+  createdAt: z.string().datetime(),
+});
+export type ExpensePayment = z.infer<typeof expensePaymentSchema>;
+
+/**
+ * Um pagador informado na tela ("a Gabrielli pagou R$ 1.000 direto à empresa").
+ * A soma dos pagamentos não precisa fechar com o valor total: despesa paga
+ * pela metade é estado válido, e o que falta aparece como conta em aberto com
+ * o fornecedor, nunca como dívida entre sócios.
+ */
+export const expensePaymentInputSchema = z.object({
+  memberId: z.string().uuid(),
+  amountCents: z.number().int().positive('Valor deve ser maior que zero'),
+  /** Data do pagamento (YYYY-MM-DD). Ausente = data da movimentação. */
+  paidOn: z.string().date().optional(),
+});
+export type ExpensePaymentInput = z.infer<typeof expensePaymentInputSchema>;
 
 /**
  * Acerto líquido entre dois sócios: quem paga → quem recebe (RB006).
@@ -102,13 +172,21 @@ export const confirmationStatusSchema = z.enum(['confirmed', 'pending', 'refused
 export type ConfirmationStatus = z.infer<typeof confirmationStatusSchema>;
 
 /**
- * Situação de pagamento da despesa (jornada "contas a pagar").
- * - paid: já foi paga (como sempre foi) → entra nos cálculos.
+ * Situação de pagamento da despesa PERANTE O FORNECEDOR. Nada a ver com acerto
+ * entre sócios: uma despesa pode estar 100% paga e ainda haver valor a
+ * regularizar entre as pessoas.
+ * - paid: o valor cheio já saiu → entra nos cálculos.
+ * - partial: saiu parte do valor. O que falta é conta em aberto com o
+ *   fornecedor, nunca dívida entre sócios.
  * - unpaid: conta a pagar, com data de vencimento → só lembrete, NÃO entra
  *   no total gasto/acertos até ser marcada como paga.
  * Aportes são sempre 'paid' (não têm vencimento).
+ *
+ * A partir da 0033 isto é DERIVADO da soma dos pagamentos, e não um campo
+ * digitado. 'partial' ainda não é produzido por nenhum código: o tratamento
+ * chega na fatia B (ver docs/PAGAMENTO-E-RESPONSABILIDADE.md).
  */
-export const paymentStatusSchema = z.enum(['paid', 'unpaid']);
+export const paymentStatusSchema = z.enum(['paid', 'partial', 'unpaid']);
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 
 /**
@@ -119,9 +197,18 @@ export const createExpenseSchema = z.object({
   description: z.string().trim().min(1, 'Descreva a despesa').max(120),
   amountCents: z.number().int().positive('Valor deve ser maior que zero'),
   paidByMemberId: z.string().uuid(),
+  /**
+   * Quem colocou dinheiro, quando mais de uma pessoa pagou a mesma conta
+   * (ex.: cada sócia transferiu a parte dela direto ao fornecedor).
+   *
+   * Ausente ou vazio = pagamento único do `paidByMemberId`, que é o caso
+   * comum. A soma pode ser menor que o valor: despesa paga pela metade é
+   * estado válido, e o que falta é conta com o fornecedor.
+   */
+  payments: z.array(expensePaymentInputSchema).max(20).optional(),
   spentOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
   splitMode: expenseSplitModeSchema.default('equity'),
-  customShares: z.array(expenseShareSchema).optional(),
+  customShares: z.array(expenseShareInputSchema).optional(),
   note: z.string().trim().max(300).nullable().optional(),
   /** 'paid' (padrão) = já paga; 'unpaid' = conta a pagar (exige dueDate). */
   paymentStatus: paymentStatusSchema.optional(),
@@ -207,8 +294,10 @@ export const updateMovementSchema = z
     spentOn: z.string().date().optional(),
     note: z.string().trim().max(300).nullable().optional(),
     paidByMemberId: z.string().uuid().optional(),
+    /** Substitui quem pagou e quanto. Ver createExpenseSchema.payments. */
+    payments: z.array(expensePaymentInputSchema).max(20).optional(),
     splitMode: expenseSplitModeSchema.optional(),
-    customShares: z.array(expenseShareSchema).optional(),
+    customShares: z.array(expenseShareInputSchema).optional(),
     source: z.string().trim().max(60).nullable().optional(),
     account: z.string().trim().max(60).nullable().optional(),
     categoryId: z.string().uuid().nullable().optional(),
@@ -284,9 +373,20 @@ export const expenseSchema = z.object({
   description: z.string(),
   amountCents: z.number().int(),
   currencyCode: z.string().nullable(),
+  /**
+   * DEPRECADO desde a 0033: use `payments`. Continua preenchido com o maior
+   * pagador, para não quebrar o que já lê este campo. Sai na fatia G.
+   */
   paidByMemberId: z.string().uuid(),
+  /**
+   * Quem colocou dinheiro nesta movimentação, e quanto cada um colocou.
+   * Vazio = ainda não saiu dinheiro (conta a pagar).
+   * Preenchido pela API a partir da fatia C; até lá chega vazio.
+   */
+  payments: z.array(expensePaymentSchema).default([]),
   spentOn: z.string(),
   splitMode: expenseSplitModeSchema,
+  /** Responsabilidade: de quem é o custo. Não é quem pagou. */
   shares: z.array(expenseShareSchema),
   note: z.string().nullable(),
   /** Origem da receita (Asaas, Mercado Livre...). Nulo em gasto/aporte. */
@@ -364,3 +464,67 @@ export const movementSettlementSchema = z.object({
   debts: z.array(movementDebtSchema),
 });
 export type MovementSettlement = z.infer<typeof movementSettlementSchema>;
+
+/* ── jornada do sócio novo: herdar (ou não) as despesas anteriores ── */
+
+/**
+ * Como a pessoa que acabou de entrar trata as despesas de antes.
+ * - none: não participa do passado (padrão seguro).
+ * - equity: assume conforme a participação societária dela.
+ * - percent: assume um percentual definido à mão.
+ *
+ * "Revisar despesa por despesa" não é modo: é a pessoa editando cada
+ * movimentação pela tela, que já existe.
+ */
+export const inheritanceModeSchema = z.enum(['none', 'equity', 'percent']);
+export type InheritanceMode = z.infer<typeof inheritanceModeSchema>;
+
+export const inheritanceInputSchema = z
+  .object({
+    memberId: z.string().uuid(),
+    /** Despesas ANTERIORES a esta data entram na conta (YYYY-MM-DD). */
+    since: z.string().date(),
+    mode: inheritanceModeSchema,
+    /** 0–100 com 2 casas. Obrigatório quando mode = 'percent'. */
+    percent: z.number().min(0).max(100).optional(),
+  })
+  .refine((v) => v.mode !== 'percent' || v.percent != null, {
+    message: 'Informe o percentual que essa pessoa assume.',
+    path: ['percent'],
+  });
+export type InheritanceInput = z.infer<typeof inheritanceInputSchema>;
+
+/** Uma despesa do passado e quanto o sócio novo passa a assumir dela. */
+export const inheritanceLineSchema = z.object({
+  expenseId: z.string().uuid(),
+  description: z.string(),
+  spentOn: z.string(),
+  amountCents: z.number().int(),
+  /** Parte que o sócio novo passa a ter (centavos). */
+  shareCents: z.number().int().nonnegative(),
+});
+export type InheritanceLine = z.infer<typeof inheritanceLineSchema>;
+
+/**
+ * Prévia do que vai acontecer, para a pessoa confirmar antes de qualquer
+ * escrita. Nenhuma jornada que mexe em dinheiro alheio começa pelo salvar.
+ */
+export const inheritancePreviewSchema = z.object({
+  memberId: z.string().uuid(),
+  /** Quantas movimentações entram na conta. */
+  expenseCount: z.number().int().nonnegative(),
+  /** Soma das despesas do período (centavos). */
+  periodTotalCents: z.number().int().nonnegative(),
+  /** Quanto o sócio novo passa a assumir no total (centavos). */
+  totalCents: z.number().int().nonnegative(),
+  /** Para quem ele fica devendo, e quanto de cada. */
+  owedTo: z.array(
+    z.object({
+      memberId: z.string().uuid(),
+      fullName: z.string(),
+      amountCents: z.number().int().nonnegative(),
+    }),
+  ),
+  lines: z.array(inheritanceLineSchema),
+});
+export type InheritancePreview = z.infer<typeof inheritancePreviewSchema>;

@@ -5,10 +5,16 @@ import type {
   CreateRevenueInput,
   CreateSettlementPaymentInput,
   ExpenseShare,
+  ExpenseShareInput,
   ExpenseSplitMode,
+  InheritanceInput,
+  InheritanceLine,
+  InheritancePreview,
   MemberBalance,
   MovementDebt,
   MovementSettlement,
+  PaymentStatus,
+  ResponsibilityRule,
   Settlement,
   SettlementPayment as SettlementPaymentDto,
   UpdateMovementInput,
@@ -49,6 +55,175 @@ export function nextChargeDate(chargeOn: string, frequency: RecurringCost['frequ
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const date = new Date(Date.UTC(year, month, Math.min(d, lastDay)));
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * De onde veio a parte de cada sócio, gravado junto com o número para a tela
+ * conseguir explicar ("dividido pela participação" × "digitado à mão").
+ * 'custom' vira 'manual': é o mesmo fato com o nome que o usuário entende.
+ */
+export function responsibilityRuleOf(splitMode: ExpenseSplitMode): ResponsibilityRule {
+  return splitMode === 'custom' ? 'manual' : splitMode;
+}
+
+
+/**
+ * Situação da despesa PERANTE O FORNECEDOR, derivada do que foi pago.
+ *
+ * Não confundir com acerto entre sócios: uma despesa pode estar Paga e ainda
+ * haver valor a regularizar entre as pessoas.
+ *
+ * 'unpaid' gravado é conta a pagar e continua valendo (nada saiu). Já a
+ * diferença entre 'paid' e 'partial' vem da soma dos pagamentos, e não de um
+ * campo digitado, porque campo digitado mente quando alguém esquece de mudar.
+ */
+export function paymentStatusOf(expense: {
+  amountCents: number;
+  payments: { amountCents: number }[];
+  paymentStatus: PaymentStatus;
+}): PaymentStatus {
+  if (expense.paymentStatus === 'unpaid') return 'unpaid';
+  const pago = totalPago(expense.payments);
+  if (pago <= 0) return expense.paymentStatus;
+  return pago >= expense.amountCents ? 'paid' : 'partial';
+}
+
+export function totalPago(payments: { amountCents: number }[]): number {
+  return payments.reduce((soma, p) => soma + p.amountCents, 0);
+}
+
+/**
+ * Quanto da responsabilidade de cada sócio já está VALENDO nesta movimentação.
+ *
+ * Numa despesa quitada é a parte cheia. Numa despesa paga pela metade, só se
+ * pode acertar entre sócios o dinheiro que de fato saiu do bolso de alguém: o
+ * que falta ainda é conta com o fornecedor, e vira responsabilidade de cada um
+ * quando for pago. Sem isso o saldo dos sócios deixaria de somar zero e os
+ * acertos passariam a cobrar dívida que ninguém adiantou.
+ *
+ * Usa o mesmo método do maior resto do rateio, então as partes efetivas somam
+ * exatamente o valor pago, sem centavo sobrando.
+ */
+function responsabilidadeEfetiva(expense: {
+  amountCents: number;
+  shares: ExpenseShare[];
+  payments: { amountCents: number }[];
+}): Map<string, number> {
+  const pago = Math.min(totalPago(expense.payments), expense.amountCents);
+  const cents = computeSplit(
+    pago,
+    expense.shares.map((s) => s.shareCents),
+  );
+  return new Map(expense.shares.map((s, i) => [s.memberId, cents[i]!]));
+}
+
+
+
+/**
+ * Quem deve a quem DENTRO de uma movimentação, agrupado por credor.
+ *
+ * Casa o maior devedor com o maior credor (mesmo método guloso dos acertos
+ * gerais). Devolve um par credor → lista de dívidas, porque com mais de um
+ * pagador a dívida de cada sócio se reparte entre quem adiantou.
+ */
+function credoresDaMovimentacao(expense: {
+  amountCents: number;
+  shares: ExpenseShare[];
+  payments: { memberId: string; amountCents: number }[];
+}): Map<string, { debtorId: string; cents: number }[]> {
+  const efetivas = responsabilidadeEfetiva(expense);
+  const saldos = new Map<string, number>();
+  for (const s of expense.shares) {
+    saldos.set(s.memberId, -(efetivas.get(s.memberId) ?? 0));
+  }
+  for (const p of expense.payments) {
+    saldos.set(p.memberId, (saldos.get(p.memberId) ?? 0) + p.amountCents);
+  }
+
+  const devedores = [...saldos.entries()]
+    .filter(([, c]) => c < 0)
+    .map(([id, c]) => ({ id, cents: -c }))
+    .sort((a, b) => b.cents - a.cents);
+  const credores = [...saldos.entries()]
+    .filter(([, c]) => c > 0)
+    .map(([id, c]) => ({ id, cents: c }))
+    .sort((a, b) => b.cents - a.cents);
+
+  const porCredor = new Map<string, { debtorId: string; cents: number }[]>();
+  let di = 0;
+  let ci = 0;
+  while (di < devedores.length && ci < credores.length) {
+    const devedor = devedores[di]!;
+    const credor = credores[ci]!;
+    const valor = Math.min(devedor.cents, credor.cents);
+    if (valor > 0) {
+      const lista = porCredor.get(credor.id) ?? [];
+      lista.push({ debtorId: devedor.id, cents: valor });
+      porCredor.set(credor.id, lista);
+    }
+    devedor.cents -= valor;
+    credor.cents -= valor;
+    if (devedor.cents === 0) di += 1;
+    if (credor.cents === 0) ci += 1;
+  }
+  return porCredor;
+}
+
+/**
+ * Valida e normaliza os pagadores informados na tela.
+ *
+ * Devolve `null` quando não veio nada, e aí vale o pagamento único do
+ * `paidByMemberId`. O que a validação protege:
+ *   - sócio inexistente (dinheiro atribuído a quem não é da empresa);
+ *   - soma acima do valor da movimentação, que criaria crédito do nada;
+ *   - pagamento zerado, que é linha sem significado.
+ */
+function normalizaPagadores(
+  entrada: { memberId: string; amountCents: number; paidOn?: string }[] | undefined,
+  members: CompanyMember[],
+  amountCents: number,
+  dataPadrao: string,
+): { memberId: string; amountCents: number; paidOn: string }[] | null {
+  if (!entrada || entrada.length === 0) return null;
+  for (const p of entrada) {
+    if (!members.some((m) => m.id === p.memberId)) {
+      throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
+    }
+  }
+  const soma = entrada.reduce((s, p) => s + p.amountCents, 0);
+  if (soma > amountCents) {
+    throw new DomainError(
+      'PAYMENTS_ABOVE_AMOUNT',
+      'A soma do que cada um pagou passou do valor da movimentação.',
+    );
+  }
+  return entrada.map((p) => ({
+    memberId: p.memberId,
+    amountCents: p.amountCents,
+    paidOn: p.paidOn ?? dataPadrao,
+  }));
+}
+
+/** Maior pagador: alimenta a coluna antiga paid_by_member_id (sai na fatia G). */
+function maiorPagador(
+  payments: { memberId: string; amountCents: number }[],
+  padrao: string,
+): string {
+  return payments.reduce((maior, p) => (p.amountCents > maior.amountCents ? p : maior), {
+    memberId: padrao,
+    amountCents: -1,
+  }).memberId;
+}
+
+/**
+ * Pagamento único: o sócio informado colocou o valor cheio.
+ *
+ * É o caso comum e o único que a tela sabe registrar hoje; a partir da fatia C
+ * a pessoa poderá informar mais de um pagador. Conta a pagar não gera
+ * pagamento nenhum, porque nada saiu ainda.
+ */
+function pagamentoIntegral(memberId: string, amountCents: number, paidOn: string) {
+  return [{ memberId, amountCents, paidOn }];
 }
 
 /**
@@ -148,7 +323,14 @@ export class FinanceService {
             paidByMemberId: cost.paidByMemberId,
             spentOn: charge,
             splitMode: cost.splitMode,
-            shares: members.map((m, i) => ({ memberId: m.id, shareCents: split[i]! })),
+            // Conta a pagar nasce sem pagamento: ninguém tirou do bolso ainda.
+            payments: [],
+            shares: members.map((m, i) => ({
+              memberId: m.id,
+              shareCents: split[i]!,
+              participates: true,
+              rule: responsibilityRuleOf(cost.splitMode),
+            })),
             note: null,
             source: null,
             account: null,
@@ -191,16 +373,32 @@ export class FinanceService {
       throw new DomainError('DUE_DATE_REQUIRED', 'Informe a data de vencimento da conta a pagar.');
     }
 
+    const dia = input.spentOn ?? new Date().toISOString().slice(0, 10);
+    const informados = normalizaPagadores(input.payments, members, input.amountCents, dia);
+    if (isUnpaid && informados) {
+      throw new DomainError(
+        'UNPAID_WITH_PAYMENTS',
+        'Conta a pagar não tem pagamento: nada saiu ainda.',
+      );
+    }
+    const payments = isUnpaid
+      ? []
+      : informados ?? pagamentoIntegral(input.paidByMemberId, input.amountCents, dia);
+
     const expense = await this.repo.createExpense({
       companyId,
       kind: 'expense',
       description: input.description,
       amountCents: input.amountCents,
       currencyCode: company.currencyCode,
-      paidByMemberId: input.paidByMemberId,
-      spentOn: input.spentOn ?? new Date().toISOString().slice(0, 10),
+      // Coluna antiga: fica com o maior pagador, para o que ainda a lê.
+      paidByMemberId: informados
+        ? maiorPagador(informados, input.paidByMemberId)
+        : input.paidByMemberId,
+      spentOn: dia,
       splitMode: input.splitMode,
       shares,
+      payments,
       note: input.note ?? null,
       source: null,
       account: null,
@@ -217,8 +415,13 @@ export class FinanceService {
 
     // "Fulano já me pagou a parte dele": registra o acerto na hora, junto
     // com a despesa. Só faz sentido para despesa JÁ PAGA e confirmada.
+    // Com mais de um pagador não existe "o credor": a dívida de cada sócio se
+    // reparte entre quem adiantou, e marcar isso na criação viraria adivinhação.
+    // Nesse caso o acerto se registra depois, em Acertos, com valor e destino
+    // explícitos. A tela também não oferece a marcação quando há vários.
     if (
       input.settledMemberIds?.length &&
+      expense.payments.length <= 1 &&
       expense.paymentStatus === 'paid' &&
       expense.confirmationStatus === 'confirmed'
     ) {
@@ -300,6 +503,7 @@ export class FinanceService {
           spentOn: oc.spentOn,
           splitMode: input.splitMode,
           shares,
+          payments: pagamentoIntegral(oc.paidByMemberId, input.amountCents, oc.spentOn),
           note: input.note ?? null,
           source: null,
           account: null,
@@ -381,7 +585,13 @@ export class FinanceService {
           const weights =
             input.splitMode === 'equal' ? members.map(() => 1) : members.map((m) => m.equityPercent ?? 0);
           const cents = computeSplit(input.amountCents, weights);
-          return members.map((m, i) => ({ memberId: m.id, shareCents: cents[i]! }));
+          const rule = responsibilityRuleOf(input.splitMode === 'equal' ? 'equal' : 'equity');
+          return members.map((m, i) => ({
+            memberId: m.id,
+            shareCents: cents[i]!,
+            participates: true,
+            rule,
+          }));
         })()
       : [];
     const splitMode = input.reimbursable ? input.splitMode ?? 'equity' : 'custom';
@@ -396,6 +606,12 @@ export class FinanceService {
       spentOn: input.contributedOn ?? new Date().toISOString().slice(0, 10),
       splitMode,
       shares,
+      // O autor do aporte colocou o dinheiro: é pagamento como qualquer outro.
+      payments: pagamentoIntegral(
+        input.memberId,
+        input.amountCents,
+        input.contributedOn ?? new Date().toISOString().slice(0, 10),
+      ),
       note: input.note ?? null,
       source: null,
       account: null,
@@ -466,6 +682,8 @@ export class FinanceService {
       amountCents: input.amountCents,
       currencyCode: company.currencyCode,
       paidByMemberId: receiver.id, // vínculo obrigatório (a conta real fica em account)
+      // Entrada é dinheiro que CHEGOU: nenhum sócio pagou nada aqui.
+      payments: [],
       spentOn: input.receivedOn ?? new Date().toISOString().slice(0, 10),
       splitMode: 'custom',
       shares: [], // receita não divide entre sócios
@@ -532,7 +750,15 @@ export class FinanceService {
     if (expense.paymentStatus !== 'unpaid') {
       throw new DomainError('ALREADY_PAID', 'Esta despesa já está paga.');
     }
-    return this.repo.markExpensePaid(expenseId, paidOn ?? new Date().toISOString().slice(0, 10));
+    const dia = paidOn ?? new Date().toISOString().slice(0, 10);
+    const paga = await this.repo.markExpensePaid(expenseId, dia);
+    // A conta a pagar não tinha pagamento nenhum; agora tem. Sem esta linha o
+    // dinheiro sairia do bolso de alguém sem ninguém ficar credor.
+    const payments = await this.repo.replaceExpensePayments(
+      expenseId,
+      pagamentoIntegral(paga.paidByMemberId, paga.amountCents, dia),
+    );
+    return { ...paga, payments };
   }
 
   /**
@@ -634,7 +860,48 @@ export class FinanceService {
       patch.shares = this.recomputeShares(amountCents, splitMode, input.customShares, members);
     }
 
-    const atualizada = await this.repo.updateExpense(expenseId, patch);
+    // Pagadores informados na tela substituem o histórico desta movimentação.
+    // É edição explícita de quem colocou dinheiro, diferente do ajuste
+    // automático mais abaixo (que só acompanha valor e pagador).
+    const informados = !isRevenue
+      ? normalizaPagadores(
+          input.payments,
+          members,
+          input.amountCents ?? expense.amountCents,
+          input.spentOn ?? expense.spentOn,
+        )
+      : null;
+    if (informados) patch.paidByMemberId = maiorPagador(informados, expense.paidByMemberId);
+
+    let atualizada = await this.repo.updateExpense(expenseId, patch);
+
+    if (informados) {
+      atualizada = {
+        ...atualizada,
+        payments: await this.repo.replaceExpensePayments(expenseId, informados),
+      };
+    }
+
+    /**
+     * Pagamento acompanha valor e pagador, mas só enquanto a movimentação tem
+     * UM pagador que pagou tudo, que é o que a tela sabe registrar hoje. Se
+     * alguém já dividiu o pagamento entre sócios (fatia C em diante), reescrever
+     * aqui apagaria o histórico de quem colocou dinheiro, e histórico não se
+     * reescreve (RN1): nesse caso a edição de valor não mexe em pagamento.
+     */
+    const pagamentoUnicoIntegral =
+      expense.payments.length === 1 && expense.payments[0]!.amountCents === expense.amountCents;
+    if (!informados && !isRevenue && (amountChanged || payerChanged) && pagamentoUnicoIntegral) {
+      const payments = await this.repo.replaceExpensePayments(
+        expenseId,
+        pagamentoIntegral(
+          atualizada.paidByMemberId,
+          atualizada.amountCents,
+          expense.payments[0]!.paidOn,
+        ),
+      );
+      atualizada = { ...atualizada, payments };
+    }
 
     // Só depois de salvar: os acertos automáticos passam a valer sobre o novo
     // rateio. Fazer antes deixaria acerto ajustado apontando para um valor que
@@ -644,6 +911,186 @@ export class FinanceService {
     }
 
     return atualizada;
+  }
+
+
+  /* ── jornada do sócio novo: herdar (ou não) o passado ──────────── */
+
+  /**
+   * Movimentações anteriores à entrada do sócio que podem ser herdadas.
+   *
+   * Só despesa confirmada e com rateio: receita não divide, aporte não
+   * reembolsável não gera dívida, e conta a pagar ainda não tem dinheiro
+   * envolvido. Quem já tem parte na despesa não entra de novo.
+   */
+  private async despesasHerdaveis(
+    companyId: string,
+    memberId: string,
+    since: string,
+  ): Promise<Expense[]> {
+    const todas = await this.repo.listExpenses(companyId);
+    return todas.filter(
+      (e) =>
+        e.spentOn < since &&
+        e.confirmationStatus === 'confirmed' &&
+        e.shares.length > 0 &&
+        (e.kind === 'expense' || e.kind === 'contribution') &&
+        paymentStatusOf(e) !== 'unpaid' &&
+        !e.shares.some((sh) => sh.memberId === memberId && sh.shareCents > 0),
+    );
+  }
+
+  /**
+   * Novo rateio de UMA despesa incluindo o sócio que entrou depois.
+   *
+   * O pagamento não é tocado (RN1): o que muda é de quem é o custo. Quem já
+   * estava fora da despesa (participates = false) continua fora, porque isso
+   * foi decisão de alguém e não sobra de cálculo.
+   */
+  private rateioComHerdeiro(
+    expense: Expense,
+    members: CompanyMember[],
+    memberId: string,
+    input: InheritanceInput,
+  ): ExpenseShare[] {
+    const antigos = expense.shares.filter((sh) => sh.memberId !== memberId);
+    const participantes = antigos.filter((sh) => sh.participates !== false);
+
+    if (input.mode === 'equity') {
+      // Redivide entre os participantes de antes MAIS o novo, pela participação
+      // societária de cada um. Sócio que estava fora desta despesa segue fora.
+      const pesos = [
+        ...participantes.map((sh) => members.find((m) => m.id === sh.memberId)?.equityPercent ?? 0),
+        members.find((m) => m.id === memberId)?.equityPercent ?? 0,
+      ];
+      const cents = computeSplit(expense.amountCents, pesos);
+      return [
+        ...participantes.map((sh, i) => ({ ...sh, shareCents: cents[i]!, rule: 'inherited' as const })),
+        {
+          memberId,
+          shareCents: cents[cents.length - 1]!,
+          participates: true,
+          rule: 'inherited' as const,
+        },
+        ...antigos.filter((sh) => sh.participates === false),
+      ];
+    }
+
+    // Percentual à mão: o novo assume a fatia dele e o resto se redistribui
+    // entre os antigos na mesma proporção de antes, para não bagunçar acordos
+    // que já existiam. Centésimos de por cento para não passar por float.
+    const centesimos = Math.round((input.percent ?? 0) * 100);
+    const doNovo = Math.round((expense.amountCents * centesimos) / 10000);
+    const resto = expense.amountCents - doNovo;
+    const cents = computeSplit(
+      resto,
+      participantes.map((sh) => sh.shareCents),
+    );
+    return [
+      ...participantes.map((sh, i) => ({ ...sh, shareCents: cents[i]!, rule: 'inherited' as const })),
+      { memberId, shareCents: doNovo, participates: true, rule: 'inherited' as const },
+      ...antigos.filter((sh) => sh.participates === false),
+    ];
+  }
+
+  /**
+   * Prévia de "esse sócio assume as despesas anteriores?". Não escreve nada:
+   * mexer no dinheiro dos outros começa mostrando a conta, não salvando.
+   */
+  async previewInheritance(
+    companyId: string,
+    input: InheritanceInput,
+    actingUserId?: string | null,
+  ): Promise<InheritancePreview> {
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
+    const novo = members.find((m) => m.id === input.memberId);
+    if (!novo) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
+
+    const despesas = await this.despesasHerdaveis(companyId, input.memberId, input.since);
+    const lines: InheritanceLine[] = [];
+    const devePara = new Map<string, number>();
+    let totalCents = 0;
+    let periodTotalCents = 0;
+
+    for (const e of despesas) {
+      periodTotalCents += e.amountCents;
+      if (input.mode === 'none') continue;
+      const novasPartes = this.rateioComHerdeiro(e, members, input.memberId, input);
+      const parte = novasPartes.find((sh) => sh.memberId === input.memberId)?.shareCents ?? 0;
+      if (parte <= 0) continue;
+      totalCents += parte;
+      lines.push({
+        expenseId: e.id,
+        description: e.description,
+        spentOn: e.spentOn,
+        amountCents: e.amountCents,
+        shareCents: parte,
+      });
+      // A dívida vai para quem adiantou o dinheiro NAQUELA despesa, na mesma
+      // proporção do que cada um pagou (RN6). Maior resto para fechar exato.
+      const pagos = e.payments.length > 0 ? e.payments : [];
+      const fatias = computeSplit(
+        parte,
+        pagos.map((p) => p.amountCents),
+      );
+      pagos.forEach((p, i) => {
+        if (p.memberId === input.memberId) return;
+        devePara.set(p.memberId, (devePara.get(p.memberId) ?? 0) + fatias[i]!);
+      });
+    }
+
+    return {
+      memberId: input.memberId,
+      expenseCount: despesas.length,
+      periodTotalCents,
+      totalCents,
+      owedTo: [...devePara.entries()]
+        .filter(([, cents]) => cents > 0)
+        .map(([memberId, amountCents]) => ({
+          memberId,
+          fullName: members.find((m) => m.id === memberId)?.fullName ?? 'Sócio',
+          amountCents,
+        }))
+        .sort((a, b) => b.amountCents - a.amountCents),
+      lines,
+    };
+  }
+
+  /**
+   * Aplica a decisão. 'none' não escreve nada de propósito: não participar do
+   * passado é o estado em que as despesas já estão.
+   */
+  async applyInheritance(
+    companyId: string,
+    input: InheritanceInput,
+    actingUserId?: string | null,
+  ): Promise<InheritancePreview> {
+    const previa = await this.previewInheritance(companyId, input, actingUserId);
+    if (input.mode === 'none') return previa;
+
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
+    const despesas = await this.despesasHerdaveis(companyId, input.memberId, input.since);
+    const acertos = (await this.repo.listPayments(companyId)).filter(
+      (p) => p.status === 'confirmed',
+    );
+
+    for (const e of despesas) {
+      const shares = this.rateioComHerdeiro(e, members, input.memberId, input);
+      if (shares.reduce((soma, sh) => soma + sh.shareCents, 0) !== e.amountCents) {
+        throw new DomainError(
+          'SPLIT_SUM_MISMATCH',
+          `O novo rateio de "${e.description}" não fecha com o valor. Nada foi alterado nessa despesa.`,
+        );
+      }
+      const atualizada = await this.repo.updateExpense(e.id, { shares, splitMode: 'custom' });
+      // Os acertos automáticos valiam sobre a parte antiga; agora acompanham a
+      // nova. Os manuais continuam intocados: são dinheiro que mudou de mão.
+      await this.syncAutoSettlements(
+        atualizada,
+        acertos.filter((p) => p.expenseId === e.id),
+      );
+    }
+    return previa;
   }
 
   /**
@@ -687,7 +1134,7 @@ export class FinanceService {
   private recomputeShares(
     amountCents: number,
     splitMode: ExpenseSplitMode,
-    customShares: ExpenseShare[] | undefined,
+    customShares: ExpenseShareInput[] | undefined,
     members: CompanyMember[],
   ): ExpenseShare[] {
     if (splitMode === 'custom') {
@@ -701,12 +1148,19 @@ export class FinanceService {
       if (total !== amountCents) {
         throw new DomainError('SPLIT_SUM_MISMATCH', 'As partes precisam somar exatamente o valor.');
       }
-      return shares;
+      // Parte zero digitada à mão é a forma antiga de dizer "não participa".
+      return shares.map((s) => ({ ...s, participates: s.shareCents > 0, rule: 'manual' as const }));
     }
     const weights =
       splitMode === 'equal' ? members.map(() => 1) : members.map((m) => m.equityPercent ?? 0);
     const cents = computeSplit(amountCents, weights);
-    return members.map((m, i) => ({ memberId: m.id, shareCents: cents[i]! }));
+    const rule = responsibilityRuleOf(splitMode);
+    return members.map((m, i) => ({
+      memberId: m.id,
+      shareCents: cents[i]!,
+      participates: true,
+      rule,
+    }));
   }
 
   async listExpenses(companyId: string, actingUserId?: string | null) {
@@ -723,12 +1177,21 @@ export class FinanceService {
     // canConfirm: sou o pagador E está aguardando minha confirmação.
     return expenses.map((e) => ({
       ...e,
+      // Situação perante o fornecedor sai da soma dos pagamentos, não do campo.
+      paymentStatus: paymentStatusOf(e),
       canConfirm: e.confirmationStatus === 'pending' && meId != null && e.paidByMemberId === meId,
     }));
   }
 
   /**
-   * Saldo de cada sócio: o que pagou − a parte que lhe cabe (centavos).
+   * Saldo de cada sócio: o que PAGOU − a RESPONSABILIDADE que lhe cabe.
+   *
+   * As duas colunas são independentes (ver docs/PAGAMENTO-E-RESPONSABILIDADE.md):
+   * pagou vem de expense_payments, que é histórico de quem tirou do bolso;
+   * deve vem de expense_shares, que é decisão da sociedade e pode ser revista
+   * quando entra ou sai sócio. Por isso uma despesa 100% paga ao fornecedor
+   * ainda pode ter valor a acertar entre as pessoas.
+   *
    * Considera SÓ despesas — aportes não geram dívida entre sócios (RB002).
    * Pagamentos de acerto registrados entram no saldo: quem pagou reduz a
    * dívida (net sobe); quem recebeu reduz o crédito (net desce).
@@ -741,17 +1204,27 @@ export class FinanceService {
     const expenses = (await this.repo.listExpenses(companyId)).filter(
       (e) =>
         e.confirmationStatus === 'confirmed' &&
-        e.paymentStatus === 'paid' &&
+        // Parcial entra: o que já saiu do bolso de alguém é dinheiro real e
+        // gera acerto. O que falta pagar é conta com o fornecedor, e fica de
+        // fora até sair.
+        paymentStatusOf(e) !== 'unpaid' &&
         (e.kind === 'expense' || (e.kind === 'contribution' && e.shares.length > 0)),
     );
     const payments = (await this.repo.listPayments(companyId)).filter((p) => p.status === 'confirmed');
 
     return members.map((m) => {
-      const paidCents = expenses
-        .filter((e) => e.paidByMemberId === m.id)
-        .reduce((sum, e) => sum + e.amountCents, 0);
+      // Soma o que a pessoa colocou de dinheiro, e não mais "as despesas em que
+      // ela figura como A pagadora". A diferença aparece quando duas sócias
+      // pagam a mesma conta direto ao fornecedor: as duas pagaram, e o modelo
+      // antigo só sabia reconhecer uma.
+      const paidCents = expenses.reduce(
+        (sum, e) =>
+          sum +
+          e.payments.filter((p) => p.memberId === m.id).reduce((s, p) => s + p.amountCents, 0),
+        0,
+      );
       const owedCents = expenses.reduce(
-        (sum, e) => sum + (e.shares.find((s) => s.memberId === m.id)?.shareCents ?? 0),
+        (sum, e) => sum + (responsabilidadeEfetiva(e).get(m.id) ?? 0),
         0,
       );
       const sentCents = payments
@@ -805,7 +1278,9 @@ export class FinanceService {
       .filter(
         (e) =>
           e.confirmationStatus === 'confirmed' &&
-          e.paymentStatus === 'paid' &&
+          // Parcial entra pelo que já saiu do bolso de alguém; o que falta é
+          // conta com o fornecedor, não dívida entre sócios.
+          paymentStatusOf(e) !== 'unpaid' &&
           (e.kind === 'expense' || (e.kind === 'contribution' && e.shares.length > 0)),
       )
       // Mais antigas primeiro: o pool de pagamentos antigos quita as dívidas
@@ -824,51 +1299,55 @@ export class FinanceService {
 
     const out: MovementSettlement[] = [];
     for (const m of movements) {
-      const payerId = m.paidByMemberId;
-      const debts: MovementDebt[] = [];
-      for (const share of m.shares) {
-        if (share.memberId === payerId || share.shareCents <= 0) continue;
-        const direct = payments.filter(
-          (p) => p.expenseId === m.id && p.fromMemberId === share.memberId && p.toMemberId === payerId,
-        );
-        const directlyPaid = direct.reduce((sum, p) => sum + p.amountCents, 0);
-        // Data do pagamento mais recente amarrado a essa dívida (para exibição).
-        const lastPaidOn = direct.reduce<string | null>(
-          (acc, p) => (acc == null || p.paidOn > acc ? p.paidOn : acc),
-          null,
-        );
-        let remaining = Math.max(0, share.shareCents - directlyPaid);
-        if (remaining > 0) {
-          const k = `${share.memberId}->${payerId}`;
-          const pool = legacyPool.get(k) ?? 0;
-          if (pool > 0) {
-            const used = Math.min(pool, remaining);
-            remaining -= used;
-            legacyPool.set(k, pool - used);
+      // Quem deve a quem NESTA movimentação: a diferença entre o que cada um
+      // pagou e a parte que lhe cabia. Com mais de um pagador existe mais de um
+      // credor, então a movimentação vira um bloco por credor. Supor "o
+      // pagador" seria cobrar todo mundo da pessoa errada.
+      for (const [payerId, deveres] of credoresDaMovimentacao(m)) {
+        const debts: MovementDebt[] = [];
+        for (const { debtorId, cents } of deveres) {
+          const direct = payments.filter(
+            (p) => p.expenseId === m.id && p.fromMemberId === debtorId && p.toMemberId === payerId,
+          );
+          const directlyPaid = direct.reduce((sum, p) => sum + p.amountCents, 0);
+          // Data do pagamento mais recente amarrado a essa dívida (exibição).
+          const lastPaidOn = direct.reduce<string | null>(
+            (acc, p) => (acc == null || p.paidOn > acc ? p.paidOn : acc),
+            null,
+          );
+          let remaining = Math.max(0, cents - directlyPaid);
+          if (remaining > 0) {
+            const k = `${debtorId}->${payerId}`;
+            const pool = legacyPool.get(k) ?? 0;
+            if (pool > 0) {
+              const used = Math.min(pool, remaining);
+              remaining -= used;
+              legacyPool.set(k, pool - used);
+            }
           }
+          debts.push({
+            debtorId,
+            debtorName: nameOf(debtorId),
+            originalCents: cents,
+            paidCents: cents - remaining,
+            remainingCents: remaining,
+            lastPaidOn,
+          });
         }
-        debts.push({
-          debtorId: share.memberId,
-          debtorName: nameOf(share.memberId),
-          originalCents: share.shareCents,
-          paidCents: share.shareCents - remaining,
-          remainingCents: remaining,
-          lastPaidOn,
+        if (debts.length === 0) continue;
+        out.push({
+          movementId: m.id,
+          kind: m.kind,
+          description: m.description,
+          spentOn: m.spentOn,
+          amountCents: m.amountCents,
+          payerId,
+          payerName: nameOf(payerId),
+          recorrente: m.recurringCostId != null,
+          remainingCents: debts.reduce((sum, d) => sum + d.remainingCents, 0),
+          debts,
         });
       }
-      if (debts.length === 0) continue;
-      out.push({
-        movementId: m.id,
-        kind: m.kind,
-        description: m.description,
-        spentOn: m.spentOn,
-        amountCents: m.amountCents,
-        payerId,
-        payerName: nameOf(payerId),
-        recorrente: m.recurringCostId != null,
-        remainingCents: debts.reduce((sum, d) => sum + d.remainingCents, 0),
-        debts,
-      });
     }
     // Exibição: pendentes primeiro, depois mais recentes.
     return out.sort((a, b) => {
@@ -898,11 +1377,12 @@ export class FinanceService {
 
     if (input.expenseId) {
       const movements = await this.getMovementSettlements(companyId, actingUserId);
-      const mov = movements.find((m) => m.movementId === input.expenseId);
-      const debt =
-        mov && mov.payerId === input.toMemberId
-          ? mov.debts.find((d) => d.debtorId === input.fromMemberId)
-          : undefined;
+      // Uma movimentação pode ter vários credores: procura o bloco DAQUELE
+      // credor, e não o primeiro bloco da movimentação.
+      const mov = movements.find(
+        (m) => m.movementId === input.expenseId && m.payerId === input.toMemberId,
+      );
+      const debt = mov?.debts.find((d) => d.debtorId === input.fromMemberId);
       if (!mov || !debt) {
         throw new DomainError('SETTLEMENT_NOT_PENDING', 'Não há acerto pendente nessa movimentação.');
       }
@@ -973,6 +1453,7 @@ export class FinanceService {
     const meId = actingUserId ? members.find((m) => m.userId === actingUserId)?.id ?? null : null;
     return {
       ...expense,
+      paymentStatus: paymentStatusOf(expense),
       canConfirm:
         expense.confirmationStatus === 'pending' && meId != null && expense.paidByMemberId === meId,
     };
@@ -1014,7 +1495,8 @@ export class FinanceService {
       if (total !== input.amountCents) {
         throw new DomainError('SPLIT_SUM_MISMATCH', 'As partes precisam somar exatamente o valor da despesa.');
       }
-      return shares;
+      // Parte zero digitada à mão é a forma antiga de dizer "não participa".
+      return shares.map((s) => ({ ...s, participates: s.shareCents > 0, rule: 'manual' as const }));
     }
 
     const weights =
@@ -1022,6 +1504,12 @@ export class FinanceService {
         ? members.map(() => 1)
         : members.map((m) => m.equityPercent ?? 0);
     const cents = computeSplit(input.amountCents, weights);
-    return members.map((m, i) => ({ memberId: m.id, shareCents: cents[i]! }));
+    const rule = responsibilityRuleOf(input.splitMode);
+    return members.map((m, i) => ({
+      memberId: m.id,
+      shareCents: cents[i]!,
+      participates: true,
+      rule,
+    }));
   }
 }
