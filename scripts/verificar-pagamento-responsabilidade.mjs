@@ -167,6 +167,18 @@ for (const empresa of alvo) {
   const idsQueContam = new Set(contam.map((e) => e.id));
   const confirmados = (acertos ?? []).filter((a) => a.status === 'confirmed');
 
+  // Uma movimentação com dois pagadores é justamente o que o modelo novo
+  // representa e o antigo não sabia: a comparação abaixo passa a ser
+  // informativa, não uma conferência.
+  const temVariosPagadores = (pagamentos ?? []).some(
+    (p, _i, todosOsPagamentos) =>
+      todosOsPagamentos.filter((x) => x.expense_id === p.expense_id).length > 1,
+  );
+  if (temVariosPagadores) {
+    console.log('\n  Há movimentação com mais de um pagador: as colunas antiga e nova divergem por');
+    console.log('  desenho, e a conferência que vale é a soma dos saldos dar zero.');
+  }
+
   console.log('\n  Sócio                  pagou (antigo)   pagou (novo)      deve       saldo');
   let somaSaldos = 0;
   for (const m of members) {
@@ -195,10 +207,20 @@ for (const empresa of alvo) {
       `  ${m.full_name.padEnd(20)} ${brl(pagouAntigo).padStart(14)} ${(pagouNovo == null ? '(sem tabela)' : brl(pagouNovo)).padStart(14)} ${brl(deve).padStart(11)} ${brl(saldo).padStart(11)}`,
     );
 
+    // Divergência entre os dois caminhos só é problema quando TODA movimentação
+    // tem um pagador só. A partir do momento em que alguém registra dois
+    // pagadores, o caminho antigo (que credita 100% a uma pessoa) diverge de
+    // propósito, e exigir igualdade viraria alarme falso.
     if (pagouNovo != null && pagouNovo !== pagouAntigo) {
-      falha(
-        `${m.full_name}: o backfill mudou o que essa pessoa pagou (${brl(pagouAntigo)} → ${brl(pagouNovo)})`,
-      );
+      if (temVariosPagadores) {
+        console.log(
+          `    (divergência esperada: há movimentação com mais de um pagador, e o caminho antigo credita tudo a uma pessoa)`,
+        );
+      } else {
+        falha(
+          `${m.full_name}: o backfill mudou o que essa pessoa pagou (${brl(pagouAntigo)} → ${brl(pagouNovo)})`,
+        );
+      }
     }
   }
 

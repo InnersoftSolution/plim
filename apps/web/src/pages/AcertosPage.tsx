@@ -146,13 +146,20 @@ export function AcertosPage() {
   const matches = makeMatcher(query);
   const hasFilter = query.trim().length > 0;
 
-  // Detalhe por movimentação: só o ano corrente na página principal (2025 e
-  // anteriores ficam nos cards de arquivo). No arquivo, trava no ano dele.
-  const detailYear = archiveYear ?? currentYear;
-  // Busca inteligente + arquivo. Com busca (ou no arquivo) mostra tudo, inclusive
-  // já quitadas; na home sem busca, só as pendentes.
+  /**
+   * O que entra na lista de movimentações.
+   *
+   * Dívida em aberto não tem ano: ela existe até alguém pagar. Por isso a
+   * página principal mostra TODA pendente, de qualquer ano, e os cards de ano
+   * servem para revisitar o que já foi quitado. Antes o filtro de ano vinha
+   * primeiro, e uma despesa de 2025 ainda em aberto sumia da tela.
+   *
+   * No arquivo de um ano, trava naquele ano e mostra tudo, quitado ou não.
+   * Com busca, procura em todos os anos: quem digita um nome quer achar, não
+   * ser barrado por recorte de período.
+   */
   const groups = movements
-    .filter((m) => m.spentOn.startsWith(detailYear))
+    .filter((m) => (archiveYear ? m.spentOn.startsWith(archiveYear) : true))
     .filter((m) => matches(`${m.description} ${m.payerName} ${dateHaystack(m.spentOn)}`))
     .filter((m) => (hasFilter || archiveYear ? true : m.remainingCents > 0))
     // Recorrentes primeiro; dentro, pendentes antes de quitadas; depois mais recentes.
@@ -202,7 +209,7 @@ export function AcertosPage() {
                     <strong>Ver acertos de {y}</strong>
                     <small>
                       {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
-                      {formatMoney(totalAno)} em despesas rateadas
+                      {formatMoney(totalAno)}, já contados no saldo
                     </small>
                   </span>
                   <span className="fin-year__cta" aria-hidden="true">
@@ -374,13 +381,13 @@ export function AcertosPage() {
               ? 'Resultados da busca'
               : archiveYear
                 ? `Acertos de ${archiveYear}`
-                : `Detalhe por movimentação de ${currentYear}`}
+                : 'Detalhe por movimentação'}
           </h2>
         </div>
         {!archiveYear && !hasFilter && groups.length > 0 && (
           <p className="dash-panel__hint">
-            Como cada despesa de {currentYear} foi rateada e quem já quitou. Para anos anteriores, use
-            os cards de "Anos anteriores" no topo. Para pagar, use o Resumo dos acertos acima.
+            Tudo que ainda está em aberto, de qualquer ano. O que já foi quitado sai daqui e fica
+            nos cards de "Anos anteriores" no topo. Para pagar, use o Resumo dos acertos acima.
           </p>
         )}
         {groups.length === 0 ? (
@@ -388,8 +395,8 @@ export function AcertosPage() {
             <p>
               {hasFilter ? (
                 <>
-                  <strong>Nada encontrado em {currentYear}.</strong> Nenhum acerto de {currentYear}{' '}
-                  bate com "{query}". Para anos anteriores, abra o card do ano no topo.
+                  <strong>Nada encontrado.</strong> Nenhuma movimentação bate com "{query}", em ano
+                  nenhum.
                 </>
               ) : archiveYear ? (
                 <>
@@ -398,8 +405,8 @@ export function AcertosPage() {
                 </>
               ) : (
                 <>
-                  <strong>Nenhuma pendência de {currentYear}.</strong> Quando uma despesa
-                  compartilhada de {currentYear} gerar dívida, o detalhe do rateio aparece aqui.
+                  <strong>Nada em aberto.</strong> Todas as despesas compartilhadas já foram
+                  acertadas entre os sócios. Quando uma nova gerar dívida, ela aparece aqui.
                 </>
               )}
             </p>
