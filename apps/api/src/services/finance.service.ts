@@ -26,7 +26,6 @@ import type { FinanceRepository } from '../repositories/finance.repository';
 import type { RecurringRepository } from '../repositories/recurring.repository';
 import type { CompanyService } from './company.service';
 import { computeSplit } from './rateio';
-import { computeSettlements } from './settlements';
 import { DomainError, NotFoundError } from '../lib/errors';
 
 /**
@@ -811,7 +810,12 @@ export class FinanceService {
     const splitChanged =
       (input.splitMode != null && input.splitMode !== expense.splitMode) || input.customShares != null;
     const payerChanged = input.paidByMemberId != null && input.paidByMemberId !== expense.paidByMemberId;
-    const structural = !isRevenue && (amountChanged || splitChanged || payerChanged);
+    // Editar quem pagou também mexe no esqueleto: quem passa a pagar direto ao
+    // fornecedor deixa de dever "a parte" a alguém, e o acerto automático dela
+    // tem que acompanhar. Sem isso, sobra acerto fantasma no saldo.
+    const paymentsChanged = !isRevenue && (input.payments?.length ?? 0) > 0;
+    const structural =
+      !isRevenue && (amountChanged || splitChanged || payerChanged || paymentsChanged);
 
     /**
      * Acertos MANUAIS ligados a esta movimentação. Manual é dinheiro que mudou
@@ -1099,8 +1103,15 @@ export class FinanceService {
    *
    * Automático nasceu do "fulano já me pagou": é a afirmação de que a pessoa
    * quitou A PARTE dela, não um pagamento de valor próprio. Quando a parte
-   * muda, ele acompanha; quando a parte some (virou 0) ou a pessoa passou a ser
-   * o pagador, ele deixa de existir, porque ninguém deve a si mesmo.
+   * muda, ele acompanha; quando deixa de haver o que quitar, ele deixa de
+   * existir.
+   *
+   * O que ele deve quitar é a parte MENOS o que a própria pessoa pagou direto
+   * ao fornecedor. Foi aqui que nasceu o fantasma do Juridico: a Gabrielli
+   * tinha um "já me pagou" de quando a Rafaelle era a única pagadora, e ao
+   * virar pagadora de metade da conta o acerto dela tinha que morrer. A regra
+   * antiga só matava o acerto de quem virasse O pagador da coluna antiga, e
+   * com dois pagadores ninguém "vira o pagador".
    *
    * Acerto MANUAL nunca é tocado: aquilo é dinheiro que mudou de mão de verdade
    * e reescrever seria falsificar o histórico. Ele continua valendo e o saldo
@@ -1110,21 +1121,35 @@ export class FinanceService {
     expense: Expense,
     linkedPayments: SettlementPayment[],
   ): Promise<void> {
+    const pagoPor = (memberId: string) =>
+      expense.payments
+        .filter((p) => p.memberId === memberId)
+        .reduce((soma, p) => soma + p.amountCents, 0);
+    // O credor do "já me pagou" é quem mais adiantou (pagou além da própria
+    // parte). Com um pagador só, é ele mesmo; com vários, o maior excedente.
+    const excedentes = [...new Set(expense.payments.map((p) => p.memberId))]
+      .map((id) => ({
+        id,
+        cents: pagoPor(id) - (expense.shares.find((s) => s.memberId === id)?.shareCents ?? 0),
+      }))
+      .filter((c) => c.cents > 0)
+      .sort((a, b) => b.cents - a.cents);
+    const principalCredor = excedentes[0]?.id ?? expense.paidByMemberId;
+
     for (const pagamento of linkedPayments) {
       if (!pagamento.isAuto) continue;
-      const novaParte = expense.shares.find((s) => s.memberId === pagamento.fromMemberId);
-      const virouPagador = pagamento.fromMemberId === expense.paidByMemberId;
-      if (virouPagador || !novaParte || novaParte.shareCents <= 0) {
+      const parte = expense.shares.find((s) => s.memberId === pagamento.fromMemberId);
+      // O que essa pessoa ainda tinha a quitar: a parte dela menos o que ela
+      // mesma colocou direto no fornecedor.
+      const devida = Math.max(0, (parte?.shareCents ?? 0) - pagoPor(pagamento.fromMemberId));
+      if (devida <= 0 || pagamento.fromMemberId === principalCredor) {
         await this.repo.deletePayment(pagamento.id);
         continue;
       }
-      if (
-        novaParte.shareCents !== pagamento.amountCents ||
-        expense.paidByMemberId !== pagamento.toMemberId
-      ) {
+      if (devida !== pagamento.amountCents || principalCredor !== pagamento.toMemberId) {
         await this.repo.updatePayment(pagamento.id, {
-          amountCents: novaParte.shareCents,
-          toMemberId: expense.paidByMemberId,
+          amountCents: devida,
+          toMemberId: principalCredor,
         });
       }
     }
@@ -1247,17 +1272,66 @@ export class FinanceService {
    * Acertos líquidos entre sócios (quem paga quem), já simplificados e com os
    * pagamentos descontados. `alreadyPaidCents` traz o histórico do par.
    */
+  /**
+   * Quem paga quem, POR PAR de sócios.
+   *
+   * O valor de cada par é a soma das dívidas em aberto daquele par nas
+   * movimentações, menos o que o outro lado deve de volta e menos pagamentos
+   * já feitos além das dívidas. Ou seja: clicar no acerto e listar as despesas
+   * SEMPRE fecha no mesmo número, porque é a mesma conta.
+   *
+   * Antes o resumo consolidava globalmente (o maior devedor pagava o maior
+   * credor, mesmo sem dívida direta entre eles). O número final até fechava,
+   * mas não correspondia a nenhuma lista de itens, e a Rafaelle olhou a tela e
+   * não reconheceu a própria dívida. Dinheiro que não se explica está errado,
+   * mesmo quando a soma bate.
+   */
   async getSettlements(companyId: string, actingUserId?: string | null): Promise<Settlement[]> {
-    const balances = await this.getBalances(companyId, actingUserId);
-    const settlements = computeSettlements(balances);
-    if (settlements.length === 0) return settlements;
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
+    const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
+    const { movements, sobras } = await this.movementLedger(companyId, actingUserId);
+
+    // Dívidas em aberto por direção (A→B), somadas das movimentações.
+    const deve = new Map<string, number>();
+    const soma = (k: string, cents: number) => deve.set(k, (deve.get(k) ?? 0) + cents);
+    for (const m of movements) {
+      for (const d of m.debts) {
+        if (d.remainingCents > 0) soma(`${d.debtorId}->${m.payerId}`, d.remainingCents);
+      }
+    }
+    // Pagamento além das dívidas é crédito na direção contrária: se A pagou a
+    // B mais do que devia, é B quem fica devendo a diferença.
+    for (const [k, cents] of sobras) {
+      if (cents <= 0) continue;
+      const [de, para] = k.split('->') as [string, string];
+      soma(`${para}->${de}`, cents);
+    }
+
+    // Compensa só DENTRO do par: o que A deve a B menos o que B deve a A.
     const payments = (await this.repo.listPayments(companyId)).filter((p) => p.status === 'confirmed');
-    return settlements.map((s) => ({
-      ...s,
-      alreadyPaidCents: payments
-        .filter((p) => p.fromMemberId === s.fromMemberId && p.toMemberId === s.toMemberId)
-        .reduce((sum, p) => sum + p.amountCents, 0),
-    }));
+    const vistos = new Set<string>();
+    const out: Settlement[] = [];
+    for (const k of deve.keys()) {
+      const [a, b] = k.split('->') as [string, string];
+      const par = [a, b].sort().join('|');
+      if (vistos.has(par)) continue;
+      vistos.add(par);
+      const liquido = (deve.get(`${a}->${b}`) ?? 0) - (deve.get(`${b}->${a}`) ?? 0);
+      if (liquido === 0) continue;
+      const fromMemberId = liquido > 0 ? a : b;
+      const toMemberId = liquido > 0 ? b : a;
+      out.push({
+        fromMemberId,
+        fromName: nameOf(fromMemberId),
+        toMemberId,
+        toName: nameOf(toMemberId),
+        amountCents: Math.abs(liquido),
+        alreadyPaidCents: payments
+          .filter((p) => p.fromMemberId === fromMemberId && p.toMemberId === toMemberId)
+          .reduce((sum, p) => sum + p.amountCents, 0),
+      });
+    }
+    return out.sort((x, y) => y.amountCents - x.amountCents);
   }
 
   /**
@@ -1271,6 +1345,20 @@ export class FinanceService {
     companyId: string,
     actingUserId?: string | null,
   ): Promise<MovementSettlement[]> {
+    const { movements } = await this.movementLedger(companyId, actingUserId);
+    return movements;
+  }
+
+  /**
+   * O livro-razão das movimentações: as dívidas em aberto de cada uma, mais as
+   * SOBRAS (pagamentos registrados além do que havia para quitar, por par).
+   * As sobras existem para o resumo por par fechar com o saldo: dinheiro que
+   * alguém mandou a mais não some, vira crédito.
+   */
+  private async movementLedger(
+    companyId: string,
+    actingUserId?: string | null,
+  ): Promise<{ movements: MovementSettlement[]; sobras: Map<string, number> }> {
     const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
 
@@ -1289,6 +1377,8 @@ export class FinanceService {
 
     const payments = (await this.repo.listPayments(companyId)).filter((p) => p.status === 'confirmed');
 
+    // Sobras por par: pagamentos além do que havia para quitar.
+    const sobras = new Map<string, number>();
     // Pool de pagamentos SEM origem (antigos), por par devedor→credor.
     const legacyPool = new Map<string, number>();
     for (const p of payments) {
@@ -1303,6 +1393,11 @@ export class FinanceService {
       // pagou e a parte que lhe cabia. Com mais de um pagador existe mais de um
       // credor, então a movimentação vira um bloco por credor. Supor "o
       // pagador" seria cobrar todo mundo da pessoa errada.
+      // Pares (devedor→credor) que existem NESTA movimentação: pagamento
+      // ligado a ela fora desses pares não tem dívida para quitar, e vira
+      // sobra (crédito de volta). Sem isso, um acerto órfão some da conta por
+      // par mas continua no saldo, e os dois nunca mais fecham.
+      const paresDaMovimentacao = new Set<string>();
       for (const [payerId, deveres] of credoresDaMovimentacao(m)) {
         const debts: MovementDebt[] = [];
         for (const { debtorId, cents } of deveres) {
@@ -1315,6 +1410,12 @@ export class FinanceService {
             (acc, p) => (acc == null || p.paidOn > acc ? p.paidOn : acc),
             null,
           );
+          paresDaMovimentacao.add(`${debtorId}->${payerId}`);
+          if (directlyPaid > cents) {
+            // Pagou além da dívida desta movimentação: a diferença é sobra.
+            const k = `${debtorId}->${payerId}`;
+            sobras.set(k, (sobras.get(k) ?? 0) + (directlyPaid - cents));
+          }
           let remaining = Math.max(0, cents - directlyPaid);
           if (remaining > 0) {
             const k = `${debtorId}->${payerId}`;
@@ -1348,14 +1449,26 @@ export class FinanceService {
           debts,
         });
       }
+      for (const p of payments) {
+        if (p.expenseId !== m.id) continue;
+        const k = `${p.fromMemberId}->${p.toMemberId}`;
+        if (!paresDaMovimentacao.has(k)) {
+          sobras.set(k, (sobras.get(k) ?? 0) + p.amountCents);
+        }
+      }
+    }
+    // O que restou do pool também é sobra: pagamento avulso que ninguém devia.
+    for (const [k, resto] of legacyPool) {
+      if (resto > 0) sobras.set(k, (sobras.get(k) ?? 0) + resto);
     }
     // Exibição: pendentes primeiro, depois mais recentes.
-    return out.sort((a, b) => {
+    out.sort((a, b) => {
       const ap = a.remainingCents > 0 ? 1 : 0;
       const bp = b.remainingCents > 0 ? 1 : 0;
       if (ap !== bp) return bp - ap;
       return b.spentOn.localeCompare(a.spentOn);
     });
+    return { movements: out, sobras };
   }
 
   /**

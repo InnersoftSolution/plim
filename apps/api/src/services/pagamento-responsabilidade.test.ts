@@ -630,4 +630,195 @@ describe('Pagamento × responsabilidade', () => {
       expect(await finance.getMovementSettlements(companyId, 'u1')).toHaveLength(0);
     });
   });
+  /* ── O fantasma do Juridico e o resumo por par ── */
+
+  describe('acertos sem fantasma', () => {
+    it('editar para dois pagadores mata o "já me pagou" de quem pagou direto', async () => {
+      // Como nasceu o bug em produção: Rafaelle era a única pagadora do
+      // Juridico e a Gabi foi marcada como "já me pagou" (acerto automático).
+      const juridico = await finance.createExpense(
+        companyId,
+        {
+          description: 'Juridico',
+          amountCents: 320000,
+          paidByMemberId: rafaelle,
+          splitMode: 'equal',
+          settledMemberIds: [gabi],
+        },
+        'u1',
+      );
+      const antes = await finance.listSettlementPayments(companyId, 'u1');
+      expect(antes).toHaveLength(1);
+      expect(antes[0]).toMatchObject({ fromMemberId: gabi, toMemberId: rafaelle, isAuto: true });
+
+      // Aí a Rafaelle corrige: na verdade cada uma pagou metade ao fornecedor.
+      await finance.updateExpense(
+        companyId,
+        juridico.id,
+        {
+          payments: [
+            { memberId: rafaelle, amountCents: 160000 },
+            { memberId: gabi, amountCents: 160000 },
+          ],
+        },
+        'u1',
+      );
+
+      // A Gabi pagando direto não deve nada a ninguém: o acerto morre junto.
+      const depois = await finance.listSettlementPayments(companyId, 'u1');
+      expect(depois).toHaveLength(0);
+      expect((await saldo(rafaelle)).netCents).toBe(0);
+      expect((await saldo(gabi)).netCents).toBe(0);
+      expect(await finance.getSettlements(companyId, 'u1')).toHaveLength(0);
+    });
+
+    it('com pagamento desigual, o "já me pagou" encolhe para o que restou', async () => {
+      const despesa = await finance.createExpense(
+        companyId,
+        {
+          description: 'Servidor',
+          amountCents: 100000,
+          paidByMemberId: rafaelle,
+          splitMode: 'equal',
+          settledMemberIds: [gabi],
+        },
+        'u1',
+      );
+      // Gabi pagou 30% direto ao fornecedor; a parte dela é 50%.
+      await finance.updateExpense(
+        companyId,
+        despesa.id,
+        {
+          payments: [
+            { memberId: rafaelle, amountCents: 70000 },
+            { memberId: gabi, amountCents: 30000 },
+          ],
+        },
+        'u1',
+      );
+      const acertos = await finance.listSettlementPayments(companyId, 'u1');
+      expect(acertos).toHaveLength(1);
+      // Devia 50.000, pagou 30.000 direto: o "já me pagou" vale os 20.000.
+      expect(acertos[0]).toMatchObject({
+        fromMemberId: gabi,
+        toMemberId: rafaelle,
+        amountCents: 20000,
+        isAuto: true,
+      });
+      expect(await somaDosSaldos()).toBe(0);
+    });
+
+    it('o resumo é por par: cada dívida aponta para quem realmente adiantou', async () => {
+      await companyService.setMemberEquity(companyId, rafaelle, 40, 'u1');
+      await companyService.setMemberEquity(companyId, gabi, 40, 'u1');
+      vanessa = (
+        await companyService.addMember(
+          companyId,
+          { fullName: 'Vanessa', email: 'vanessa@plim.work', equityPercent: 20 },
+          'u1',
+        )
+      ).id;
+      // Gabi pagou uma conta, Rafaelle pagou outra. Vanessa não pagou nada.
+      await finance.createExpense(
+        companyId,
+        { description: 'Conta da Gabi', amountCents: 100000, paidByMemberId: gabi, splitMode: 'equity' },
+        'u1',
+      );
+      await finance.createExpense(
+        companyId,
+        { description: 'Conta da Rafaelle', amountCents: 50000, paidByMemberId: rafaelle, splitMode: 'equity' },
+        'u1',
+      );
+
+      const acertos = await finance.getSettlements(companyId, 'u1');
+      // Vanessa deve 20% de cada conta A QUEM PAGOU cada conta. Nada de
+      // consolidar tudo num credor só: o número tem que bater com a lista.
+      expect(acertos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ fromMemberId: vanessa, toMemberId: gabi, amountCents: 20000 }),
+          expect.objectContaining({ fromMemberId: vanessa, toMemberId: rafaelle, amountCents: 10000 }),
+        ]),
+      );
+      // Rafaelle deve 40% da conta da Gabi, menos os 40% que a Gabi deve da
+      // dela: compensação SÓ dentro do par.
+      expect(acertos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ fromMemberId: rafaelle, toMemberId: gabi, amountCents: 20000 }),
+        ]),
+      );
+
+      // E a soma dos acertos por pessoa fecha com o saldo dela.
+      const balances = await finance.getBalances(companyId, 'u1');
+      for (const b of balances) {
+        const paga = acertos.filter((a) => a.fromMemberId === b.memberId).reduce((s, a) => s + a.amountCents, 0);
+        const recebe = acertos.filter((a) => a.toMemberId === b.memberId).reduce((s, a) => s + a.amountCents, 0);
+        expect(recebe - paga).toBe(b.netCents);
+      }
+    });
+
+    it('pagamento a mais vira crédito de volta, não some', async () => {
+      await finance.createExpense(
+        companyId,
+        { description: 'Conta', amountCents: 100000, paidByMemberId: rafaelle, splitMode: 'equal' },
+        'u1',
+      );
+      // Pagamento acima do devido, direto no repositório: hoje a API recusa
+      // (SETTLEMENT_OVERPAY), mas o banco tem registros de antes da validação,
+      // como o março/2026 duplicado da OkiDoki. O cálculo não pode deixar esse
+      // dinheiro sumir.
+      await repo.createPayment({
+        companyId,
+        fromMemberId: gabi,
+        toMemberId: rafaelle,
+        amountCents: 70000,
+        paidOn: '2026-08-01',
+        method: null,
+        note: null,
+        status: 'confirmed',
+        expenseId: null,
+        isAuto: false,
+      });
+      const acertos = await finance.getSettlements(companyId, 'u1');
+      expect(acertos).toHaveLength(1);
+      expect(acertos[0]).toMatchObject({
+        fromMemberId: rafaelle,
+        toMemberId: gabi,
+        amountCents: 20000,
+      });
+      expect(await somaDosSaldos()).toBe(0);
+    });
+    it('acerto órfão (ligado a movimentação em que ninguém devia) vira crédito de volta', async () => {
+      const despesa = await finance.createExpense(
+        companyId,
+        { description: 'Conta', amountCents: 100000, paidByMemberId: rafaelle, splitMode: 'equal' },
+        'u1',
+      );
+      // Dado antigo: pagamento da própria Rafaelle amarrado à despesa que ELA
+      // pagou (como o março/2026 duplicado da OkiDoki). Ela não devia nada ali.
+      await repo.createPayment({
+        companyId,
+        fromMemberId: rafaelle,
+        toMemberId: gabi,
+        amountCents: 10000,
+        paidOn: '2026-08-01',
+        method: null,
+        note: null,
+        status: 'confirmed',
+        expenseId: despesa.id,
+        isAuto: false,
+      });
+
+      const acertos = await finance.getSettlements(companyId, 'u1');
+      // Gabi devia 50.000 da despesa e agora deve devolver os 10.000 órfãos.
+      expect(acertos).toHaveLength(1);
+      expect(acertos[0]).toMatchObject({ fromMemberId: gabi, toMemberId: rafaelle, amountCents: 60000 });
+      // E a conta por par continua fechando com o saldo de cada pessoa.
+      const balances = await finance.getBalances(companyId, 'u1');
+      for (const b of balances) {
+        const paga = acertos.filter((a) => a.fromMemberId === b.memberId).reduce((s, a) => s + a.amountCents, 0);
+        const recebe = acertos.filter((a) => a.toMemberId === b.memberId).reduce((s, a) => s + a.amountCents, 0);
+        expect(recebe - paga).toBe(b.netCents);
+      }
+    });
+  });
 });

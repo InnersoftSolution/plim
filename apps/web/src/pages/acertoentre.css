@@ -1,0 +1,205 @@
+/* Página "o que fulano deve a beltrano", item por item.
+   Mesmo contêiner das outras páginas: o .shell-content não dá padding. */
+.ace {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ace-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  padding: 6px 10px 6px 8px;
+  margin-left: -8px;
+  border-radius: var(--radius-pill);
+}
+.ace-back:hover {
+  color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+}
+
+.ace-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+}
+.ace-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-default);
+}
+/* Sem letter-spacing negativo: em fonte mono isso embola os dígitos. */
+.ace-amount {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--rose-600);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── a lista de despesas em aberto ─────────────────────── */
+.ace-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+}
+.ace-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-input);
+}
+/* O nome leva à movimentação: a pergunta seguinte é sempre "que gasto é esse?". */
+.ace-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.ace-item__info:hover .ace-item__nome {
+  color: var(--color-brand-primary);
+}
+.ace-item__nome {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.ace-item__meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.ace-item__direita {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ace-item__valor {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-default);
+}
+.ace-item__acao {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-brand);
+  color: var(--color-brand-primary);
+  background: var(--color-bg-brand-soft);
+  white-space: nowrap;
+}
+.ace-item__acao:hover:not(:disabled) {
+  background: var(--color-brand-primary);
+  color: #fff;
+}
+.ace-item__acao:disabled {
+  opacity: 0.6;
+}
+
+/* Uma frase abaixo do número, dizendo o que ele é. Sem isso o valor sozinho
+   não responde "de quê". */
+.ace-sub {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+/* Rodapé: por que o resumo pode mostrar outro número. Fica no fim e discreto,
+   porque é ressalva, e não a resposta que a pessoa veio buscar. */
+.ace-nota {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+}
+
+/* Link para o sentido contrário da dívida, quando ele é que existe. */
+.ace-inverso {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  text-decoration: none;
+}
+.ace-inverso:hover {
+  text-decoration: underline;
+}
+
+/* O fecho da conta: só aparece quando a lista sozinha não explica o total. */
+.ace-fecho {
+  padding: 14px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ace-fecho__linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-text-subtle);
+}
+.ace-fecho__linha strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-default);
+  white-space: nowrap;
+}
+.ace-fecho__linha a {
+  color: var(--color-brand-primary);
+  text-decoration: none;
+}
+.ace-fecho__linha--final {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-default);
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.ace-fecho__linha--final strong {
+  color: var(--rose-600);
+}
+
+@media (max-width: 640px) {
+  .ace {
+    padding: 16px 16px 56px;
+    gap: 12px;
+  }
+  .ace-head {
+    padding: 16px;
+  }
+  .ace-amount {
+    font-size: 26px;
+  }
+  /* Empilhado: valor e ação lado a lado com o nome estouravam em 375px. */
+  .ace-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .ace-item__direita {
+    justify-content: space-between;
+  }
+}

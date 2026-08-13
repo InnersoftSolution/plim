@@ -11,6 +11,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { FinancePage } from './pages/FinancePage';
 import { MovementDetailPage } from './finance/MovementDetailPage';
 import { MovementEditPage } from './finance/MovementEditPage';
+import { AcertoEntreSociosPage } from './pages/AcertoEntreSociosPage';
 import { AcertosPage } from './pages/AcertosPage';
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage';
 import { HomeRedirect } from './pages/HomeRedirect';
@@ -87,6 +88,8 @@ export function App() {
             <Route path="/financeiro/:ano" element={<FinancePage />} />
             <Route path="/acertos" element={<AcertosPage />} />
             <Route path="/acertos/:ano" element={<AcertosPage />} />
+            {/* "entre" antes dos ids para não confundir com /acertos/2025. */}
+            <Route path="/acertos/entre/:deId/:paraId" element={<AcertoEntreSociosPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
             <Route path="/empresa/dados" element={<ConfiguracoesPage />} />
             <Route path="/configuracoes" element={<Navigate to="/empresa/dados" replace />} />
