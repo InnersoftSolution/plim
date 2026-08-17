@@ -1271,21 +1271,63 @@
   background: var(--color-bg-default);
   border: 1px solid var(--color-border-default);
 }
+/* marcação de nome provisório, embaixo do campo Nome */
+.dash-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.dash-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-brand-primary);
+  cursor: pointer;
+}
+
+/* item pendente que resolve com um toque: a linha inteira é o alvo */
+.dash-pending__item--clickable {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color var(--duration-quick) var(--ease-plim),
+    background-color var(--duration-quick) var(--ease-plim);
+}
+.dash-pending__item--clickable:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-surface);
+}
+.dash-pending__item--clickable:hover .dash-pending__cta {
+  border-color: var(--color-brand-primary);
+}
+.dash-pending__item--clickable:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 3px var(--color-bg-brand-soft);
+}
 .dash-pending__prio {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   flex-shrink: 0;
 }
+/* Escala de urgência: vermelho aperta, terracota avisa, azul informa, névoa
+   espera. O amarelo mostarda do âmbar sujava o card e saiu da escala. */
 .dash-pending__prio--critica {
-  background: var(--rose-600);
-  box-shadow: 0 0 0 3px #ffe4e9;
+  background: var(--color-status-negative);
+  box-shadow: 0 0 0 3px var(--color-status-negative-bg);
 }
 .dash-pending__prio--alta {
-  background: var(--rose-500);
+  background: var(--color-status-warning-accent);
+  box-shadow: 0 0 0 3px var(--color-status-warning-bg);
 }
 .dash-pending__prio--media {
-  background: var(--amber-500);
+  background: var(--color-status-info);
+  box-shadow: 0 0 0 3px var(--color-status-info-bg);
 }
 .dash-pending__prio--baixa {
   background: var(--color-text-subtle);
@@ -1303,18 +1345,25 @@
   gap: 4px;
   flex-shrink: 0;
 }
+/* Segundo botão do par: adiar não é a ação desejada, então fica neutro e sem
+   cor de marca. Violeta é só do "resolver agora", ao lado. */
 .dash-pending__later {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-brand-rose);
+  color: var(--color-text-muted);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-input);
+  transition: background-color var(--duration-quick) var(--ease-plim),
+    color var(--duration-quick) var(--ease-plim),
+    border-color var(--duration-quick) var(--ease-plim);
 }
 .dash-pending__later:hover {
-  color: var(--rose-600);
-  text-decoration: underline;
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-default);
+  color: var(--color-text-default);
 }
 @media (max-width: 620px) {
   .dash-pending__item {

@@ -1,9 +1,19 @@
+@import './fonts.css';
 @import './tokens.css';
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/*
+ * Espaço da barra de rolagem sempre reservado. Sem isso, toda troca de tela
+ * curta (ou o estado de carregamento) fazia a barra sumir, a página alargar
+ * uns 15px e voltar: era a "piscada" ao clicar no menu.
+ */
+html {
+  scrollbar-gutter: stable;
 }
 
 body {

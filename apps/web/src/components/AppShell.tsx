@@ -5,8 +5,12 @@ import { useAdminMe } from '../admin/useAdminMe';
 import { CompanySwitcher } from '../company/CompanySwitcher';
 import { DeletionBanner } from '../company/DeletionBanner';
 import { LogoWhite } from './LogoWhite';
+import { LogoMark } from './LogoMark';
 import { Button } from './ui/Button';
 import './appshell.css';
+
+/** Lembra a preferência de menu recolhido entre sessões (só no desktop). */
+const COLLAPSE_KEY = 'plim.sidebar.collapsed';
 
 interface NavLeaf {
   to: string;
@@ -61,13 +65,36 @@ export function AppShell() {
   const { role: adminRole } = useAdminMe();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem(COLLAPSE_KEY) === '1',
+  );
+  // No mobile o menu é drawer e sempre abre inteiro: o recolhido é preferência
+  // de desktop e não pode vazar para o celular (sumiria a marca e os submenus).
+  const [desktop, setDesktop] = useState(isDesktop);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 721px)');
+    const sync = () => setDesktop(mq.matches);
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  const iconsOnly = collapsed && desktop;
+
   const closeMenu = () => setMenuOpen(false);
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      localStorage.setItem(COLLAPSE_KEY, v ? '0' : '1');
+      return !v;
+    });
 
   // Fecha o drawer ao trocar de rota (mobile).
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
   return (
-    <div className={'shell' + (menuOpen ? ' shell--menu-open' : '')}>
+    <div
+      className={
+        'shell' + (menuOpen ? ' shell--menu-open' : '') + (iconsOnly ? ' shell--collapsed' : '')
+      }
+    >
       {/* barra superior — só aparece no mobile */}
       <header className="shell-mobilebar">
         <button className="shell-burger" aria-label="Abrir menu" onClick={() => setMenuOpen(true)}>
@@ -81,8 +108,21 @@ export function AppShell() {
       <aside className="shell-sidebar">
         <div className="shell-sidebar__head">
           <div className="shell-brand">
-            <LogoWhite height={38} />
+            <span className="shell-brand__mark" aria-hidden="true">
+              <LogoMark size={17} color="#F7F5F2" />
+            </span>
+            {!iconsOnly && <LogoWhite height={18} />}
           </div>
+          <button
+            type="button"
+            className="shell-collapse"
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            aria-expanded={!collapsed}
+            onClick={toggleCollapsed}
+          >
+            <IconCollapse />
+          </button>
           <button className="shell-close" aria-label="Fechar menu" onClick={closeMenu}>
             <IconClose />
           </button>
@@ -91,12 +131,19 @@ export function AppShell() {
         <nav className="shell-nav">
           {NAV.map((entry) =>
             isGroup(entry) ? (
-              <NavGroupItem key={entry.label} group={entry} onNavigate={closeMenu} />
+              <NavGroupItem
+                key={entry.label}
+                group={entry}
+                collapsed={iconsOnly}
+                onExpand={() => setCollapsed(false)}
+                onNavigate={closeMenu}
+              />
             ) : (
               <NavLink
                 key={entry.to}
                 to={entry.to}
                 onClick={closeMenu}
+                title={iconsOnly ? entry.label : undefined}
                 className={({ isActive }) => 'shell-nav__item' + (isActive ? ' is-active' : '')}
               >
                 {entry.icon}
@@ -137,24 +184,46 @@ export function AppShell() {
 const isDesktop = (): boolean =>
   typeof window !== 'undefined' && window.matchMedia('(min-width: 721px)').matches;
 
-function NavGroupItem({ group, onNavigate }: { group: NavGroup; onNavigate: () => void }) {
+function NavGroupItem({
+  group,
+  collapsed,
+  onExpand,
+  onNavigate,
+}: {
+  group: NavGroup;
+  collapsed: boolean;
+  onExpand: () => void;
+  onNavigate: () => void;
+}) {
   const location = useLocation();
   const hasActiveChild = group.children.some((c) => location.pathname.startsWith(c.to));
   const [open, setOpen] = useState(hasActiveChild || isDesktop());
+
+  // Recolhido só cabe o ícone: clicar abre a barra de volta já com o grupo
+  // aberto, em vez de expandir um submenu que não teria onde aparecer.
+  const handleClick = () => {
+    if (collapsed) {
+      setOpen(true);
+      onExpand();
+      return;
+    }
+    setOpen((v) => !v);
+  };
 
   return (
     <div className="shell-nav__group">
       <button
         type="button"
         className={'shell-nav__item shell-nav__item--group' + (hasActiveChild ? ' is-active' : '')}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        onClick={handleClick}
+        title={collapsed ? group.label : undefined}
+        aria-expanded={collapsed ? false : open}
       >
         {group.icon}
         <span>{group.label}</span>
         <IconChevron className={'shell-nav__chev' + (open ? ' is-open' : '')} />
       </button>
-      {open && (
+      {open && !collapsed && (
         <div className="shell-subnav">
           {group.children.map((c) => (
             <NavLink
@@ -222,6 +291,15 @@ function IconMenu() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  );
+}
+/** Seta para o lado da ação: recolhe apontando para a esquerda e, quando a
+ *  barra já está recolhida, o CSS a gira para apontar de volta. */
+function IconCollapse() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m14 6-6 6 6 6" />
     </svg>
   );
 }

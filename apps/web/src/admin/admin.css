@@ -81,10 +81,10 @@
 }
 .adm-sidebar__head .adm-badge {
   margin-left: 0;
-  background: #4548c9;
+  background: var(--color-brand-primary-deep);
 }
 /* logo clara sobre fundo escuro */
-.adm-sidebar svg path[fill='#4548C9'] {
+.adm-sidebar svg path[fill='var(--color-brand-primary-deep)'] {
   fill: #ffffff;
 }
 .adm-sidebar__hint {
@@ -111,7 +111,7 @@
   font-weight: 600;
 }
 .adm-nav__item.is-active {
-  background: #4548c9;
+  background: var(--color-brand-primary-deep);
   color: #fff;
 }
 .adm-nav__item:not(.is-active):not(.adm-nav__item--soon):hover {
@@ -179,7 +179,7 @@
   font-size: 14px;
 }
 .adm-backlink {
-  color: #4548c9;
+  color: var(--color-brand-primary-deep);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
@@ -259,8 +259,8 @@
   cursor: pointer;
 }
 .adm-chip.is-active {
-  background: #4548c9;
-  border-color: #4548c9;
+  background: var(--color-brand-primary-deep);
+  border-color: var(--color-brand-primary-deep);
   color: #fff;
 }
 
@@ -285,7 +285,7 @@
   text-decoration: none;
 }
 a.adm-row:hover {
-  border-color: #4548c9;
+  border-color: var(--color-brand-primary-deep);
 }
 .adm-row > span {
   display: flex;
@@ -327,7 +327,7 @@ a.adm-row:hover {
 }
 .adm-status--plan {
   background: #e0e7ff;
-  color: #4548c9;
+  color: var(--color-brand-primary-deep);
 }
 
 /* detalhes */
@@ -372,7 +372,7 @@ a.adm-row:hover {
   min-height: 44px;
   border: 0;
   border-radius: 10px;
-  background: #4548c9;
+  background: var(--color-brand-primary-deep);
   color: #fff;
   font-size: 14px;
   font-weight: 700;

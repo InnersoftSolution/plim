@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
@@ -145,7 +146,7 @@ export function FinancePage() {
     };
   }, [state.status, searchParams]);
 
-  if (state.status === 'loading') return <p className="fin-muted">carregando movimentações…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando movimentações…" />;
   if (state.status === 'error') return <p className="fin-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="fin-muted">Crie sua empresa primeiro.</p>;
 

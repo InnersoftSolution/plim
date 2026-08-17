@@ -5,14 +5,16 @@
 }
 
 /* ── barra lateral ───────────────────────── */
+/* Barra em Tinta, como a página "UI Dashboard" do branding book: o menu é
+   estrutura escura e o conteúdo respira em Papel. */
 .shell-sidebar {
-  width: 232px;
+  width: 236px;
   flex-shrink: 0;
-  background: var(--color-bg-surface);
-  border-right: 1px solid var(--color-border-default);
+  background: var(--color-bg-dark);
+  color: var(--color-text-inverse);
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  padding: 0 12px 16px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -20,23 +22,62 @@
 .shell-sidebar__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: var(--color-brand-header);
-  /* sangra até as bordas da sidebar: faixa cheia no topo */
-  margin: -20px -16px 16px;
-  padding: 20px 14px;
+  gap: 10px;
+  margin: 0 -12px 14px;
+  padding: 0 12px 0 16px;
+  height: 58px;
+  border-bottom: 1px solid rgba(247, 245, 242, 0.08);
 }
 .shell-brand {
   display: flex;
   align-items: center;
-  padding: 0;
+  gap: 10px;
+  margin-right: auto;
+  min-width: 0;
 }
-/* botão fechar (mobile) sobre a faixa índigo */
-.shell-sidebar__head .shell-close {
+/* o símbolo mora num quadrado violeta: é o que sobra quando a barra recolhe */
+.shell-brand__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--color-brand-primary);
+  box-shadow: var(--shadow-brand);
+}
+/* botões sobre a faixa Tinta */
+.shell-sidebar__head .shell-close,
+.shell-collapse {
+  color: rgba(247, 245, 242, 0.7);
+}
+.shell-sidebar__head .shell-close:hover,
+.shell-collapse:hover {
+  background: rgba(247, 245, 242, 0.12);
   color: var(--color-text-inverse);
 }
-.shell-sidebar__head .shell-close:hover {
-  background: rgba(255, 255, 255, 0.15);
+/* recolher/expandir: só no desktop, onde a barra é fixa */
+.shell-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-plim),
+    color var(--duration-quick) var(--ease-plim);
+}
+.shell-collapse:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-brand-header), 0 0 0 4px var(--color-brand-primary);
+}
+.shell--collapsed .shell-collapse svg {
+  transform: rotate(180deg);
 }
 /* elementos só do mobile — escondidos no desktop */
 .shell-mobilebar,
@@ -76,18 +117,42 @@
   border-radius: var(--radius-nav-item);
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-weight: 500;
+  /* texto em Papel: sobre a Tinta o cinza cansava a leitura */
+  color: var(--color-text-inverse);
   text-decoration: none;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--duration-quick) var(--ease-plim),
+    color var(--duration-quick) var(--ease-plim);
+}
+/* só o ícone fica em tom menor, para o nome liderar a linha */
+.shell-nav__item svg:not(.shell-nav__chev) {
+  color: rgba(247, 245, 242, 0.55);
+  transition: color var(--duration-quick) var(--ease-plim);
+}
+.shell-nav__item:hover svg,
+.shell-nav__item.is-active svg {
+  color: inherit;
 }
 .shell-nav__item:hover {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-text-default);
+  background: rgba(247, 245, 242, 0.07);
+  color: var(--color-text-inverse);
 }
+/* ativo: pílula violeta, o único bloco de cor cheia do menu */
 .shell-nav__item.is-active {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-brand-primary-deep);
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+  box-shadow: var(--shadow-brand);
+}
+/* grupo com filho ativo não é destino: marca discreta, sem roubar a pílula */
+.shell-nav__item--group.is-active {
+  background: var(--color-bg-dark-2);
+  color: var(--color-text-inverse);
+  box-shadow: none;
+}
+.shell-nav__item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-dark), 0 0 0 4px var(--color-brand-primary);
 }
 .shell-nav__item svg {
   flex-shrink: 0;
@@ -130,31 +195,38 @@
   gap: 2px;
   margin: 2px 0 2px 15px;
   padding-left: 12px;
-  border-left: 1px solid var(--color-border-default);
+  border-left: 1px solid rgba(247, 245, 242, 0.12);
 }
 .shell-subnav__item {
   padding: 8px 12px;
   border-radius: var(--radius-nav-item);
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-weight: 400;
+  /* também em Papel; a hierarquia vem do peso e do recuo, não do cinza */
+  color: rgba(247, 245, 242, 0.88);
   text-decoration: none;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--duration-quick) var(--ease-plim),
+    color var(--duration-quick) var(--ease-plim);
 }
 .shell-subnav__item:hover {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-text-default);
+  background: rgba(247, 245, 242, 0.07);
+  color: var(--color-text-inverse);
 }
 .shell-subnav__item.is-active {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-brand-primary-deep);
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+}
+.shell-subnav__item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-dark), 0 0 0 4px var(--color-brand-primary);
 }
 
 .shell-foot {
   margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-default);
+  padding-top: 14px;
+  border-top: 1px solid rgba(247, 245, 242, 0.08);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -163,11 +235,17 @@
 .shell-foot .btn--ghost {
   width: 100%;
   justify-content: center;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid rgba(247, 245, 242, 0.16);
+  color: var(--color-text-inverse);
 }
 .shell-foot .btn--ghost:hover {
   border-color: var(--color-brand-primary);
-  background: var(--color-bg-elevated);
+  background: rgba(247, 245, 242, 0.07);
+  color: var(--color-text-inverse);
+}
+.shell-foot__admin {
+  color: var(--color-brand-accent);
+  border-color: rgba(185, 168, 238, 0.4);
 }
 .shell-foot__profile {
   display: flex;
@@ -175,23 +253,102 @@
   gap: 8px;
   padding: 8px;
   border-radius: var(--radius-nav-item);
-  color: var(--color-text-subtle);
+  color: rgba(247, 245, 242, 0.8);
   text-decoration: none;
   min-width: 0;
 }
 .shell-foot__profile:hover {
-  background: var(--color-bg-elevated);
-  color: var(--color-text-default);
+  background: rgba(247, 245, 242, 0.07);
+  color: var(--color-text-inverse);
 }
 .shell-foot__profile.is-active {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-brand-primary);
+  background: var(--color-bg-dark-2);
+  color: var(--color-text-inverse);
 }
 .shell-foot__user {
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── seletor de empresa sobre a barra escura ──
+   O componente nasceu para fundo claro; aqui só as cores mudam. */
+.shell-sidebar .csw__btn {
+  background: var(--color-bg-dark-2);
+  border-color: rgba(247, 245, 242, 0.12);
+}
+.shell-sidebar .csw__btn:hover:not(:disabled) {
+  border-color: var(--color-brand-primary);
+  box-shadow: none;
+}
+.shell-sidebar .csw__name {
+  color: var(--color-text-inverse);
+}
+.shell-sidebar .csw__eyebrow,
+.shell-sidebar .csw__chev {
+  color: rgba(247, 245, 242, 0.62);
+}
+
+/* ── menu recolhido: só os ícones (desktop) ──
+   A barra encolhe para 72px e todo rótulo some. O que sobra é ícone
+   centralizado com o nome no title, para o ponteiro confirmar o destino. */
+@media (min-width: 721px) {
+  .shell-sidebar {
+    transition: width var(--duration-plim) var(--ease-plim);
+  }
+  .shell--collapsed .shell-sidebar {
+    width: 72px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .shell--collapsed .shell-sidebar__head {
+    padding: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    height: auto;
+    padding-block: 14px 10px;
+  }
+  .shell--collapsed .shell-brand {
+    margin-right: 0;
+  }
+  .shell--collapsed .shell-nav__item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .shell--collapsed .shell-nav__item > span,
+  .shell--collapsed .shell-nav__chev,
+  .shell--collapsed .shell-foot__user,
+  .shell--collapsed .shell-foot__admin,
+  .shell--collapsed .csw__text,
+  .shell--collapsed .csw__chev {
+    display: none;
+  }
+  /* seletor de empresa vira só o avatar */
+  .shell--collapsed .csw__btn {
+    justify-content: center;
+    padding: 8px;
+  }
+  /* o menu não cabe nos 48px úteis: abre para fora, com largura própria */
+  .shell--collapsed .csw__menu {
+    right: auto;
+    left: 0;
+    width: 240px;
+  }
+  .shell--collapsed .shell-foot__profile {
+    justify-content: center;
+  }
+  /* "Sair" vira ícone: o rótulo não cabe em 48px de largura útil */
+  .shell--collapsed .shell-foot .btn--ghost {
+    font-size: 0;
+    padding: 10px 0;
+  }
+  .shell--collapsed .shell-foot .btn--ghost::after {
+    content: '⏻';
+    font-size: 15px;
+    line-height: 1;
+  }
 }
 
 /* ── área de conteúdo ────────────────────── */
@@ -270,6 +427,10 @@
   .shell-close {
     display: flex;
   }
+  /* no mobile o menu é drawer: recolher não faz sentido */
+  .shell-collapse {
+    display: none;
+  }
   .shell-backdrop {
     display: block;
     position: fixed;
@@ -294,7 +455,7 @@
   padding: 0 10px;
   border: 1px dashed rgba(69, 72, 201, 0.5);
   border-radius: 8px;
-  color: #4548c9;
+  color: var(--color-brand-primary-deep);
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;

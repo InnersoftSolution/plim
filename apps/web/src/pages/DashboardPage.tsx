@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
@@ -89,7 +90,7 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando seu painel…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando seu painel…" />;
   if (state.status === 'error') return <DashError message={state.message} onRetry={load} />;
   if (state.status === 'empty') {
     return (

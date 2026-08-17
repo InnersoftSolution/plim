@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Category } from '@plim/shared';
+import { PageLoading } from '../components/PageLoading';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
@@ -18,7 +19,7 @@ export function CategoriasPage() {
   const { company } = useActiveCompany();
   const [state, setState] = useState<State>({ status: 'loading' });
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#5b6cff');
+  const [newColor, setNewColor] = useState('#7C4FE0');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -69,7 +70,7 @@ export function CategoriasPage() {
     }
   }
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando categorias…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando categorias…" />;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
 
   const active = state.categories.filter((c) => !c.archived);

@@ -1,84 +1,125 @@
 /*
- * Tokens do design system Plim — paleta oficial (Figma, Indigo).
+ * Tokens do design system Plim — Branding Book v1.0 (ago 2026, claude.ai/design).
  * Estrutura: primitivas → semânticas. Componentes usam SEMPRE as semânticas
  * (--color-*, --radius-*); nunca hex direto.
+ *
+ * A marca: Violeta Plim pontua ação e presença (~10%), Tinta estrutura (~20%),
+ * Papel e branco dominam (~70%). Neutros sempre quentes, nunca cinza puro.
  */
 :root {
-  /* ── primitivas: cores ─────────────────────────────── */
-  --indigo-50: #eef0ff;
-  --indigo-100: #dee2ff;
-  --indigo-300: #aab4ff;
-  --indigo-500: #5b6cff; /* Plim Indigo */
-  --indigo-600: #4a57f0; /* Indigo 600 (hover) */
-  --indigo-700: #3a46d9;
-  --coral-400: #ff8a70;
-  --coral-500: #ff6b4a; /* Faísca Coral */
-  --rose-500: #f43f5e; /* Rosa Plim */
-  --rose-600: #e11d48;
-  --green-500: #15b377; /* Pago / Recebido */
-  --amber-500: #f5a623; /* Pendente */
-  --ink-900: #0d1124; /* Ink / Neutral 900 */
-  --ink-800: #1e2547; /* Neutral 800 */
-  --ink-700: #3a4067;
-  --ink-600: #5b6079; /* Neutral 600 */
-  --ink-400: #8a8fa6; /* Neutral 400 */
-  --paper-0: #ffffff; /* White */
-  --paper-100: #f6f7fb; /* Neutral 100 */
-  --paper-200: #edeff6; /* Neutral 200 */
-  --paper-300: #e2e6f0;
+  /* ── primitivas: cores de marca ────────────────────── */
+  --violet-500: #7c4fe0; /* Violeta Plim — ação e marca */
+  --violet-700: #5b36b8; /* Violeta Profundo — texto sobre claro, hover */
+  --lilac-100: #e9e2fa; /* Lilás — superfícies de destaque */
+  --lilac-300: #b9a8ee; /* Lilás médio */
+  --ink-900: #17141f; /* Tinta — texto e fundos escuros */
+  --ink-800: #221e2e; /* Grafite — cards sobre Tinta */
+  --ink-600: #5c5766; /* Cinza-violeta — texto de apoio */
+  --ink-400: #b6b2bc; /* Névoa — desabilitado, placeholder */
+  --paper-0: #ffffff; /* Branco — cards */
+  --paper-100: #f7f5f2; /* Papel — fundo geral */
+  --paper-200: #f0ede8; /* Areia — áreas de apoio */
+  --paper-300: #e3e0da; /* Borda — divisores */
+  --green-700: #167a51; /* Sucesso / Pago / Recebido */
+  --green-100: #dcf0e6;
+  /* Pendente / Atenção: amarelo Plim (#F5DA27), escolhido pela Rafaelle.
+     Ele é cor de SUPERFÍCIE (faixa, ponto, barra, fundo): como texto dá 1,4:1
+     no branco e ninguém lê. Onde vira letra, entra o --yellow-800, mesmo
+     matiz e 6,1:1 no branco. */
+  --yellow-400: #f5da27;
+  --yellow-100: #fdf7d6;
+  --yellow-800: #7a5e00;
+  /* Deve / Erro / resultado negativo: vermelho Plim (#F50000), escolhido pela
+     Rafaelle. Lê como vermelho de verdade, ao contrário do #F53B00 que
+     puxava para laranja. 4,3:1 no branco: passa em texto grande (os valores em
+     destaque) e fica no limite em letra miúda, que usa o --red-700. */
+  --red-500: #f50000;
+  --red-700: #b80000; /* letra miúda: 6,9:1 no branco */
+  --red-100: #fdeaea;
+  --teal-700: #147d74; /* Recebe (crédito) */
+  --teal-100: #dbefec;
+  --blue-700: #33549e; /* Informação */
+  --blue-100: #e3eaf9;
+
+  /* ── compat: nomes da paleta antiga ainda citados em CSS de
+     componentes; apontam para a paleta nova até a limpeza final ── */
+  --rose-500: var(--red-500); /* saiu dinheiro / negativo */
+  --rose-600: var(--red-500);
+  --indigo-100: var(--lilac-100);
+  --indigo-300: var(--lilac-300);
+  --indigo-500: var(--violet-500);
+  --indigo-600: var(--violet-700);
+  --amber-500: var(--yellow-400); /* nome antigo, ainda citado em CSS de componentes */
+  --green-500: var(--green-700);
 
   /* ── semânticas: cores ─────────────────────────────── */
-  --color-brand-primary: var(--indigo-500);
-  --color-brand-primary-hover: var(--indigo-600);
-  --color-brand-primary-deep: var(--indigo-700);
-  --color-brand-accent: var(--coral-500);
-  --color-brand-accent-soft: var(--coral-400);
-  --color-brand-rose: var(--rose-500);
-  --gradient-hero: linear-gradient(120deg, var(--rose-500) 0%, var(--rose-600) 42%, var(--indigo-600) 100%);
+  --color-brand-primary: var(--violet-500);
+  --color-brand-primary-hover: var(--violet-700);
+  --color-brand-primary-deep: var(--violet-700);
+  --color-brand-accent: var(--lilac-300);
+  --color-brand-accent-soft: var(--lilac-100);
+  --color-brand-rose: var(--violet-500);
+  --gradient-hero: linear-gradient(120deg, var(--ink-900) 0%, #383246 45%, var(--violet-700) 100%);
   --color-text-default: var(--ink-900);
   --color-text-muted: var(--ink-600);
   --color-text-subtle: var(--ink-400);
-  --color-text-inverse: var(--paper-0);
+  --color-text-inverse: var(--paper-100);
   --color-bg-default: var(--paper-100);
   --color-bg-surface: var(--paper-0);
   --color-bg-elevated: var(--paper-200);
   --color-bg-dark: var(--ink-900);
   --color-bg-dark-2: var(--ink-800);
-  --color-bg-brand: var(--indigo-500);
-  --color-bg-brand-soft: var(--indigo-50);
-  --color-bg-brand-tint: var(--indigo-100);
-  /* fundo do menu lateral (lavanda da marca) */
-  --color-menu-bg: #e1e2fd;
-  /* faixa do cabeçalho da sidebar (índigo da marca, igual ao favicon) */
-  --color-brand-header: #4548c9;
-  --color-border-default: var(--paper-200);
-  --color-border-dark: var(--ink-700);
-  --color-border-brand: var(--indigo-100);
-  --color-status-positive: var(--green-500);
-  --color-status-positive-bg: #e6f8f1;
-  --color-status-warning: var(--amber-500);
-  --color-status-warning-bg: #fef5e4;
-  --color-status-negative: var(--rose-600);
-  --color-status-negative-bg: #fdeef2;
+  --color-bg-brand: var(--violet-500);
+  --color-bg-brand-soft: #f3effc;
+  --color-bg-brand-tint: var(--lilac-100);
+  /* fundo do menu lateral (lilás da marca) */
+  --color-menu-bg: var(--lilac-100);
+  /* faixa do cabeçalho da sidebar (Tinta, com a logo em Papel) */
+  --color-brand-header: var(--ink-900);
+  --color-border-default: var(--paper-300);
+  --color-border-dark: #383246;
+  --color-border-brand: var(--lilac-300);
+  --color-status-positive: var(--green-700);
+  --color-status-positive-bg: var(--green-100);
+  /* texto e ícones de aviso */
+  --color-status-warning: var(--yellow-800);
+  /* o amarelo em si: faixas, pontos, barras e realces */
+  --color-status-warning-accent: var(--yellow-400);
+  --color-status-warning-bg: var(--yellow-100);
+  --color-status-negative: var(--red-500);
+  /* mesma família, escura, para texto pequeno */
+  --color-status-negative-ink: var(--red-700);
+  --color-status-negative-bg: var(--red-100);
+  --color-status-receive: var(--teal-700);
+  --color-status-receive-bg: var(--teal-100);
+  --color-status-info: var(--blue-700);
+  --color-status-info-bg: var(--blue-100);
 
   /* ── tipografia ────────────────────────────────────── */
-  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Open Sauce Two', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+  --font-display: 'Newsreader', Georgia, serif; /* itálico, só acima de 24px */
 
-  /* ── radius ────────────────────────────────────────── */
-  --radius-card: 22px;
+  /* ── radius (escala do brandbook: 8/12/16/24/full) ─── */
+  --radius-card: 16px;
   --radius-card-lg: 24px;
   --radius-modal: 24px;
   --radius-button: 999px;
   --radius-pill: 999px;
-  --radius-input: 11px;
-  --radius-nav-item: 11px;
+  --radius-input: 12px;
+  --radius-nav-item: 12px;
   --radius-avatar: 999px;
 
-  /* ── sombras (base Ink #0d1124) ────────────────────── */
-  --shadow-sm: 0 14px 34px -16px rgba(13, 17, 36, 0.16);
-  --shadow-md: 0 20px 40px -26px rgba(13, 17, 36, 0.22);
-  --shadow-lg: 0 26px 50px -24px rgba(13, 17, 36, 0.28);
-  --shadow-xl: 0 34px 70px -34px rgba(13, 17, 36, 0.2);
-  --shadow-brand: 0 14px 34px -12px rgba(91, 108, 255, 0.55);
+  /* ── sombras (base Tinta #17141F, suaves) ──────────── */
+  --shadow-sm: 0 12px 30px -18px rgba(23, 20, 31, 0.14);
+  --shadow-md: 0 18px 38px -26px rgba(23, 20, 31, 0.2);
+  --shadow-lg: 0 24px 48px -24px rgba(23, 20, 31, 0.26);
+  --shadow-xl: 0 32px 66px -34px rgba(23, 20, 31, 0.18);
+  --shadow-brand: 0 14px 32px -12px rgba(124, 79, 224, 0.45);
+
+  /* ── foco e motion (brandbook: plim curto, nunca em loop) ── */
+  --focus-ring: 0 0 0 2px var(--paper-0), 0 0 0 4px var(--violet-500);
+  --ease-plim: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-quick: 200ms;
+  --duration-plim: 320ms;
 }

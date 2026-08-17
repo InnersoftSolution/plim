@@ -1,11 +1,13 @@
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   businessStageCatalog,
   countryCatalog,
   formatCep,
   formatCnpj,
   formatPhone,
+  industryCatalog,
   isValidCnpj,
   legalStructureCatalog,
   onlyDigits,
@@ -57,6 +59,8 @@ export function ConfiguracoesPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<State>({ status: 'loading' });
   const { company: activeCompany } = useActiveCompany();
+  // Pedido de edição vindo do checklist (campo + carimbo para repetir o mesmo).
+  const [editRequest, setEditRequest] = useState<EditRequest | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -74,7 +78,7 @@ export function ConfiguracoesPage() {
     };
   }, [activeCompany]);
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando configurações…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando configurações…" />;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="dash-muted">Crie sua empresa primeiro.</p>;
 
@@ -82,14 +86,45 @@ export function ConfiguracoesPage() {
   const partners = members.filter((m) => m.role === 'partner');
   const allocated = members.reduce((sum, m) => sum + (m.equityPercent ?? 0), 0);
 
-  const checklist = [
-    { label: 'Nome definitivo', done: !company.isNameTemporary, step: 'basic' },
-    { label: 'Descrição da empresa', done: !!company.description, step: 'basic' },
-    { label: 'Segmento', done: !!company.industry, step: 'basic' },
-    { label: 'País', done: !!company.countryCode, step: 'location' },
-    { label: 'Estágio do negócio', done: !!company.businessStage, step: 'stage' },
-    { label: 'Sócios cadastrados', done: partners.length > 0, step: 'members' },
-    { label: 'Participação em 100%', done: Math.round(allocated) === 100, step: 'members' },
+  /**
+   * Cada item aponta para onde se resolve: um campo do formulário desta mesma
+   * página, ou a tela de sócios. Item que não leva a lugar nenhum vira cobrança
+   * sem saída, que era o caso antes.
+   */
+  const checklist: {
+    label: string;
+    done: boolean;
+    field?: FocusField;
+    to?: string;
+    hint: string;
+  }[] = [
+    {
+      label: 'Nome definitivo',
+      done: !company.isNameTemporary,
+      field: 'name',
+      hint: 'O nome está marcado como provisório. Confirme se já é o definitivo.',
+    },
+    {
+      label: 'Descrição da empresa',
+      done: !!company.description,
+      field: 'description',
+      hint: 'Uma frase sobre o que a empresa faz.',
+    },
+    { label: 'Segmento', done: !!company.industry, field: 'industry', hint: 'Em que mercado a empresa atua.' },
+    { label: 'País', done: !!company.countryCode, field: 'city', hint: 'Onde a empresa opera.' },
+    {
+      label: 'Estágio do negócio',
+      done: !!company.businessStage,
+      field: 'stage',
+      hint: 'Em que ponto a empresa está hoje.',
+    },
+    { label: 'Sócios cadastrados', done: partners.length > 0, to: '/socios', hint: 'Cadastre quem é sócio.' },
+    {
+      label: 'Participação em 100%',
+      done: Math.round(allocated) === 100,
+      to: '/socios',
+      hint: `Hoje somam ${Math.round(allocated)}%. O acerto entre sócios depende disso.`,
+    },
   ];
   const doneCount = checklist.filter((i) => i.done).length;
   const configPct = Math.round((doneCount / checklist.length) * 100);
@@ -109,7 +144,7 @@ export function ConfiguracoesPage() {
 
       <LogoPanel company={company} onSaved={handleSaved} />
 
-      <CompanyDataPanel company={company} onSaved={handleSaved} />
+      <CompanyDataPanel company={company} onSaved={handleSaved} request={editRequest} />
 
       <ContadoresPanel companyId={company.id} />
 
@@ -132,26 +167,45 @@ export function ConfiguracoesPage() {
           />
         </div>
         <div className="dash-pending">
-          {checklist.map((item) => (
-            <div className="dash-pending__item" key={item.label}>
-              <span
-                className="dash-pending__prio"
-                style={{ background: item.done ? 'var(--color-status-positive)' : 'var(--color-border-dark)' }}
-              />
-              <div className="dash-pending__body">
-                <span className="dash-pending__title">{item.label}</span>
-                <span className="dash-pending__desc">{item.done ? 'Concluído' : 'Pendente'}</span>
-              </div>
-              {!item.done && item.step === 'members' && (
-                <button
-                  className="dash-pending__cta"
-                  onClick={() => navigate(`/onboarding?step=${item.step}`)}
-                >
-                  Completar <IconArrowRight />
-                </button>
-              )}
-            </div>
-          ))}
+          {checklist.map((item) => {
+            const resolver = () => {
+              if (item.to) navigate(item.to);
+              else if (item.field) setEditRequest({ field: item.field, nonce: Date.now() });
+            };
+            // Concluído não é botão: não há o que fazer ali, e fingir que há
+            // faz a pessoa clicar à toa.
+            if (item.done) {
+              return (
+                <div className="dash-pending__item" key={item.label}>
+                  <span
+                    className="dash-pending__prio"
+                    style={{ background: 'var(--color-status-positive)' }}
+                  />
+                  <div className="dash-pending__body">
+                    <span className="dash-pending__title">{item.label}</span>
+                    <span className="dash-pending__desc">Concluído</span>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <button
+                type="button"
+                className="dash-pending__item dash-pending__item--clickable"
+                key={item.label}
+                onClick={resolver}
+              >
+                <span className="dash-pending__prio" style={{ background: 'var(--color-status-warning)' }} />
+                <div className="dash-pending__body">
+                  <span className="dash-pending__title">{item.label}</span>
+                  <span className="dash-pending__desc">{item.hint}</span>
+                </div>
+                <span className="dash-pending__cta">
+                  Resolver <IconArrowRight />
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -273,6 +327,8 @@ type FocusField =
   | 'name'
   | 'cnpj'
   | 'description'
+  | 'industry'
+  | 'stage'
   | 'phone'
   | 'email'
   | 'cep'
@@ -282,8 +338,23 @@ type FocusField =
   | 'streetNumber'
   | 'complement';
 
+/** Pedido externo de edição: o campo e um contador, para o mesmo campo poder
+ *  ser pedido duas vezes seguidas e ainda assim disparar o efeito. */
+interface EditRequest {
+  field: FocusField;
+  nonce: number;
+}
+
 /** Painel dos dados da empresa: leitura em blocos → Editar → edição inline → salva. */
-function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c: Company) => void }) {
+function CompanyDataPanel({
+  company,
+  onSaved,
+  request,
+}: {
+  company: Company;
+  onSaved: (c: Company) => void;
+  request: EditRequest | null;
+}) {
   const [editing, setEditing] = useState(false);
   const [focusField, setFocusField] = useState<FocusField | null>(null);
   const [saving, setSaving] = useState(false);
@@ -301,6 +372,11 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
 
   const [legalStructure, setLegalStructure] = useState<string>(company.legalStructure ?? '');
   const [name, setName] = useState(company.name);
+  // Nome provisório: a marcação nascia no onboarding e não tinha como sair
+  // daqui, então "Nome definitivo" ficava pendente para sempre.
+  const [nameTemporary, setNameTemporary] = useState(company.isNameTemporary);
+  const [industry, setIndustry] = useState<string>(company.industry ?? '');
+  const [industryOther, setIndustryOther] = useState(company.industryOther ?? '');
   const [description, setDescription] = useState(company.description ?? '');
   const [businessStage, setBusinessStage] = useState<string>(company.businessStage ?? '');
   const [countryCode, setCountryCode] = useState<string>(company.countryCode ?? '');
@@ -347,6 +423,18 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     }
   }
 
+  // Clique num item pendente do checklist: abre a edição já no campo certo e
+  // rola até o formulário, para a correção ser de um toque só.
+  useEffect(() => {
+    if (!request) return;
+    startEdit(request.field);
+    requestAnimationFrame(() =>
+      document.getElementById('dados-da-empresa')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+    // startEdit é estável dentro do render do painel; só o pedido importa.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
+
   const stage = businessStageCatalog.find((s) => s.id === company.businessStage);
   const country = countryCatalog.find((c) => c.code === company.countryCode);
 
@@ -354,6 +442,9 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     setFocusField(focus ?? null);
     setLegalStructure(company.legalStructure ?? '');
     setName(company.name);
+    setNameTemporary(company.isNameTemporary);
+    setIndustry(company.industry ?? '');
+    setIndustryOther(company.industryOther ?? '');
     setDescription(company.description ?? '');
     setBusinessStage(company.businessStage ?? '');
     setCountryCode(company.countryCode ?? '');
@@ -389,6 +480,9 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
     try {
       const patch: UpdateCompanyInput = {
         name: name.trim(),
+        isNameTemporary: nameTemporary,
+        industry: industry || null,
+        industryOther: industry === 'outro' && industryOther.trim() ? industryOther.trim() : null,
         legalStructure: (legalStructure || null) as UpdateCompanyInput['legalStructure'],
         legalStructureStatus: legalStructure && legalStructure !== 'unknown' ? 'defined' : legalStructure === 'unknown' ? 'undecided' : null,
         description: description.trim() ? description.trim() : null,
@@ -448,7 +542,7 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
 
   if (!editing) {
     return (
-      <section className="dash-panel">
+      <section className="dash-panel" id="dados-da-empresa">
         {infoDrawer}
         <div className="dash-panel__head">
           <h2>Dados da empresa</h2>
@@ -486,7 +580,17 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
             )}
           </div>
           <ReadField label="Descrição" value={company.description || '—'} onAdd={() => startEdit('description')} />
-          <ReadField label="Estágio" value={stage?.label ?? '—'} />
+          <ReadField label="Estágio" value={stage?.label ?? '—'} onAdd={() => startEdit('stage')} />
+          <ReadField
+            label="Segmento"
+            value={
+              company.industry === 'outro'
+                ? company.industryOther || 'Outro'
+                : industryCatalog.find((s) => s.id === company.industry)?.label ?? '—'
+            }
+            emptyHint="Em que mercado a empresa atua."
+            onAdd={() => startEdit('industry')}
+          />
           {/* Moeda não é campo: o Plim trabalha só com Real. Fica visível para
               não deixar dúvida sobre em que moeda estão os números. */}
           <ReadField label="Moeda" value="Real (R$)" />
@@ -526,7 +630,7 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
   }
 
   return (
-    <section className="dash-panel">
+    <section className="dash-panel" id="dados-da-empresa">
       {infoDrawer}
       <div className="dash-panel__head">
         <h2>Editar dados da empresa</h2>
@@ -541,7 +645,17 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
         <div className="dash-group__title">Identificação</div>
         <div className="dash-editform">
           <div className="dash-fields">
-            <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} autoFocus={focusField === 'name'} />
+            <div>
+              <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} autoFocus={focusField === 'name'} />
+              <label className="dash-check">
+                <input
+                  type="checkbox"
+                  checked={nameTemporary}
+                  onChange={(e) => setNameTemporary(e.target.checked)}
+                />
+                <span>Ainda é um nome provisório</span>
+              </label>
+            </div>
             <Input
               label="CNPJ"
               placeholder="00.000.000/0000-00"
@@ -583,7 +697,24 @@ function CompanyDataPanel({ company, onSaved }: { company: Company; onSaved: (c:
               placeholder="Selecione"
               options={businessStageCatalog.map((s) => ({ value: s.id, label: s.label }))}
             />
+            {/* Segmento só existia no onboarding: o checklist cobrava um campo
+                que esta tela não deixava preencher. */}
+            <Select
+              label="Segmento"
+              value={industry}
+              onChange={setIndustry}
+              placeholder="Selecione"
+              options={industryCatalog.map((s) => ({ value: s.id, label: s.label }))}
+            />
           </div>
+          {industry === 'outro' && (
+            <Input
+              label="Qual segmento?"
+              placeholder="Descreva em poucas palavras"
+              value={industryOther}
+              onChange={(e) => setIndustryOther(e.target.value)}
+            />
+          )}
         </div>
       </div>
 

@@ -70,7 +70,7 @@
 }
 .fchart__tip-dot--in { background: var(--color-brand-primary); }
 .fchart__tip-dot--out { background: var(--rose-500); }
-.fchart__tip-dot--pending { background: var(--color-status-warning); }
+.fchart__tip-dot--pending { background: var(--color-status-warning-accent); }
 .fchart__tip-dot--proj { background: var(--indigo-300); }
 .fchart__value {
   font-family: var(--font-mono);
@@ -144,8 +144,8 @@
     -45deg,
     var(--color-status-warning-bg, #fff4e5),
     var(--color-status-warning-bg, #fff4e5) 5px,
-    var(--color-status-warning, #d97a1a) 5px,
-    var(--color-status-warning, #d97a1a) 10px
+    var(--color-status-warning-accent, #f5da27) 5px,
+    var(--color-status-warning-accent, #f5da27) 10px
   );
   opacity: 0.85;
   border-radius: 8px 8px 0 0;
@@ -297,7 +297,7 @@
 .fchart-legend__swatch--pending {
   background: repeating-linear-gradient(-45deg,
     var(--color-status-warning-bg, #fff4e5), var(--color-status-warning-bg, #fff4e5) 3px,
-    var(--color-status-warning, #d97a1a) 3px, var(--color-status-warning, #d97a1a) 6px);
+    var(--color-status-warning-accent, #f5da27) 3px, var(--color-status-warning-accent, #f5da27) 6px);
 }
 .fchart-legend__swatch--proj {
   background: repeating-linear-gradient(-45deg,

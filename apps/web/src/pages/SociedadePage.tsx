@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   functionalRoleCatalog,
   type Company,
@@ -96,7 +97,7 @@ export function SociedadePage() {
     void load();
   }, [load]);
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando sociedade…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando sociedade…" />;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="dash-muted">Crie sua empresa primeiro.</p>;
 

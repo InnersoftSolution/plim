@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   paymentMethodCatalog,
   type Company,
@@ -128,7 +129,7 @@ export function AcertosPage() {
     void load();
   }, [load]);
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando acertos…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando acertos…" />;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
   if (state.status === 'empty') return <p className="dash-muted">Crie sua empresa primeiro.</p>;
 
@@ -461,9 +462,9 @@ export function AcertosPage() {
           </div>
         ) : (
           <div className="ac-groups">
-            {groups.map((m) => (
-              <DividaCard key={m.movementId} movement={m} />
-            ))}
+            {agrupadasPorMovimentacao(groups).map((g) => (
+                <DividaCard key={g.cabeca.movementId} grupo={g} />
+              ))}
           </div>
         )}
       </section>
@@ -525,19 +526,42 @@ export function AcertosPage() {
 }
 
 /**
+ * Junta os blocos da MESMA movimentação (a API manda um por credor quando mais
+ * de um sócio pagou). Um card por despesa, na ordem em que já vieram.
+ */
+interface MovimentacaoAgrupada {
+  /** O primeiro bloco: descrição, data e valor são os mesmos em todos. */
+  cabeca: MovementSettlement;
+  /** Um bloco por credor (quase sempre só um). */
+  blocos: MovementSettlement[];
+}
+
+function agrupadasPorMovimentacao(lista: MovementSettlement[]): MovimentacaoAgrupada[] {
+  const porId = new Map<string, MovimentacaoAgrupada>();
+  for (const m of lista) {
+    const atual = porId.get(m.movementId);
+    if (atual) atual.blocos.push(m);
+    else porId.set(m.movementId, { cabeca: m, blocos: [m] });
+  }
+  return [...porId.values()];
+}
+
+/**
  * Card de uma dívida (movimentação de origem) com todos os participantes.
  * Recorrentes ganham o selo "Recorrente"; o status geral vira "Quitada" quando
  * ninguém deve mais.
+ *
+ * Com dois pagadores, a despesa é uma só e os credores são dois: o card fica
+ * único e as dívidas aparecem separadas por quem adiantou. Dois cards com o
+ * mesmo título faziam a mesma despesa parecer duas.
  */
-function DividaCard({
-  movement,
-}: {
-  movement: MovementSettlement;
-}) {
-  const m = movement;
-  const quitada = m.remainingCents === 0;
+function DividaCard({ grupo }: { grupo: MovimentacaoAgrupada }) {
+  const { cabeca: m, blocos } = grupo;
+  const variosCredores = blocos.length > 1;
+  const remaining = blocos.reduce((s, b) => s + b.remainingCents, 0);
+  const quitada = remaining === 0;
   return (
-    <article className="ac-group" key={m.movementId}>
+    <article className="ac-group">
       <header className="ac-group__head">
         <div className="ac-group__id">
           <div className="ac-group__badges">
@@ -551,22 +575,30 @@ function DividaCard({
           </div>
           <strong className="ac-group__title">{m.description}</strong>
           <span className="ac-group__meta">
-            {m.kind === 'contribution' ? 'adiantado' : 'pago'} por {m.payerName} · {formatDateBr(m.spentOn)}
+            {m.kind === 'contribution' ? 'adiantado' : 'pago'} por{' '}
+            {blocos.map((b) => b.payerName).join(' e ')} · {formatDateBr(m.spentOn)}
           </span>
         </div>
         {!quitada && (
           <span className="ac-group__total" data-financial>
-            {formatMoney(m.remainingCents)}
+            {formatMoney(remaining)}
             <small>em aberto</small>
           </span>
         )}
       </header>
 
-      <div className="ac-group__debts">
-        {m.debts.map((d) => (
-          <ParticipanteRow key={d.debtorId} debt={d} payerName={m.payerName} />
-        ))}
-      </div>
+      {blocos.map((b) => (
+        <div className="ac-group__debts" key={b.payerId}>
+          {variosCredores && (
+            // Só o nome do credor: o quanto cada um adiantou não vem neste
+            // payload, e inventar o número seria pior que omitir.
+            <span className="ac-group__credor">quem deve a {b.payerName}</span>
+          )}
+          {b.debts.map((d) => (
+            <ParticipanteRow key={d.debtorId} debt={d} payerName={b.payerName} />
+          ))}
+        </div>
+      ))}
 
       <footer className="ac-group__foot">
         <span>
@@ -579,7 +611,7 @@ function DividaCard({
             <>
               Em aberto{' '}
               <strong className="ac-debt__amount" data-financial>
-                {formatMoney(m.remainingCents)}
+                {formatMoney(remaining)}
               </strong>
             </>
           )}

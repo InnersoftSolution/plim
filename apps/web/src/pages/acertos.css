@@ -475,6 +475,15 @@
   display: flex;
   flex-direction: column;
 }
+/* rótulo do credor: só aparece quando a despesa teve mais de um pagador */
+.ac-group__credor {
+  padding: 10px 16px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
 .ac-debt {
   display: flex;
   align-items: center;

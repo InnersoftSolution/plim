@@ -447,8 +447,16 @@ export const movementDebtSchema = z.object({
 });
 export type MovementDebt = z.infer<typeof movementDebtSchema>;
 
+/**
+ * Um bloco de dívidas de uma movimentação, POR CREDOR.
+ *
+ * ATENÇÃO: movementId NÃO é único na lista. Quando dois sócios pagam a mesma
+ * despesa, ela aparece uma vez para cada credor, porque cada devedor deve a
+ * quem de fato adiantou. A identidade de um bloco é o par
+ * (movementId, payerId) — use os dois como chave em listas.
+ */
 export const movementSettlementSchema = z.object({
-  /** Id da movimentacao (despesa ou aporte reembolsavel). */
+  /** Id da movimentacao (despesa ou aporte reembolsavel). Repete entre credores. */
   movementId: z.string().uuid(),
   kind: movementKindSchema,
   description: z.string(),

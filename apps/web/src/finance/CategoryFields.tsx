@@ -27,7 +27,7 @@ export function CategoriaSelect({
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#5b6cff');
+  const [color, setColor] = useState('#7C4FE0');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 

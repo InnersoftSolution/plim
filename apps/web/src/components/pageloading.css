@@ -1,0 +1,64 @@
+/* Esqueleto de página: mantém a altura enquanto os dados chegam. */
+.pgload {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 24px;
+  max-width: 1180px;
+  min-height: 70vh;
+}
+.pgload > * {
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    100deg,
+    var(--color-bg-elevated) 30%,
+    var(--color-bg-surface) 50%,
+    var(--color-bg-elevated) 70%
+  );
+  background-size: 300% 100%;
+  animation: pgload-brilho 1.4s var(--ease-plim) infinite;
+}
+.pgload__title {
+  width: 260px;
+  height: 30px;
+  border-radius: 10px;
+}
+.pgload__sub {
+  width: 420px;
+  max-width: 80%;
+  height: 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.pgload__card {
+  height: 190px;
+}
+.pgload__card--short {
+  height: 120px;
+}
+
+@keyframes pgload-brilho {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* Quem prefere menos movimento vê o bloco parado, sem brilho correndo. */
+@media (prefers-reduced-motion: reduce) {
+  .pgload > * {
+    animation: none;
+    background: var(--color-bg-elevated);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

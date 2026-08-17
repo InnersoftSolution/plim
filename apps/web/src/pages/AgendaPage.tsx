@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PageLoading } from '../components/PageLoading';
 import {
   eventKindCatalog,
   eventSyncStatusCatalog,
@@ -250,7 +251,7 @@ export function AgendaPage() {
     return `${s.getDate()} ${MONTHS[s.getMonth()]!.slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()]!.slice(0, 3)}`;
   }, [view, anchor]);
 
-  if (state.status === 'loading') return <p className="dash-muted">carregando agenda…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando agenda…" />;
   if (state.status === 'error') return <p className="dash-muted">{state.message}</p>;
 
   const events = state.events;

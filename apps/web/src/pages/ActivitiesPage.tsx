@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import {
   activityAreaCatalog,
   activityPriorityCatalog,
@@ -66,7 +67,7 @@ export function ActivitiesPage() {
     if (searchParams.get('nova') === '1') setFormOpen(true);
   }, [searchParams]);
 
-  if (state.status === 'loading') return <p className="fin-muted">carregando atividades…</p>;
+  if (state.status === 'loading') return <PageLoading label="carregando atividades…" />;
   if (state.status === 'error')
     return (
       <div className="act-error">

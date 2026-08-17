@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PageLoading } from '../components/PageLoading';
 import type { CompanyMember, MovementSettlement, Settlement } from '@plim/shared';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { companyApi, messageForError } from '../company/companyApi';
@@ -57,7 +58,7 @@ export function AcertoEntreSociosPage() {
     void load();
   }, [load]);
 
-  if (loading) return <p className="dash-muted">carregando…</p>;
+  if (loading) return <PageLoading />;
   if (!deId || !paraId) return <ErroDaPagina message="Endereço inválido." />;
 
   const nomeDe = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
@@ -142,7 +143,7 @@ export function AcertoEntreSociosPage() {
       {emAberto.length > 0 && (
         <ul className="ace-lista">
           {emAberto.map(({ mov, cents }) => (
-            <li className="ace-item" key={mov.movementId}>
+            <li className="ace-item" key={`${mov.movementId}:${mov.payerId}`}>
               <Link to={`/financeiro/movimentacao/${mov.movementId}`} className="ace-item__info">
                 <span className="ace-item__nome">{mov.description}</span>
                 <span className="ace-item__meta">
