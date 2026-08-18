@@ -12,12 +12,19 @@ import type {
   Settlement,
   SettlementPayment,
   UpdateMovementInput,
+  AuditEvent,
 } from '@plim/shared';
 import { apiFetch } from '../lib/api';
 
 export const financeApi = {
   listExpenses(companyId: string): Promise<Expense[]> {
     return apiFetch<Expense[]>(`/companies/${companyId}/expenses`);
+  },
+  /** Histórico de auditoria de uma movimentação (quem fez o quê). */
+  listMovementAudit(companyId: string, expenseId: string): Promise<AuditEvent[]> {
+    return apiFetch<AuditEvent[]>(
+      `/companies/${companyId}/audit?entityType=movement&entityId=${expenseId}`,
+    );
   },
 
   getBalances(companyId: string): Promise<MemberBalance[]> {
@@ -117,10 +124,18 @@ export const financeApi = {
     return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}/refuse`, { method: 'POST' });
   },
 
-  payExpense(companyId: string, expenseId: string, paidOn?: string): Promise<Expense> {
+  payExpense(
+    companyId: string,
+    expenseId: string,
+    paidOn?: string,
+    paidByMemberId?: string,
+  ): Promise<Expense> {
     return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}/pay`, {
       method: 'POST',
-      body: JSON.stringify(paidOn ? { paidOn } : {}),
+      body: JSON.stringify({
+        ...(paidOn ? { paidOn } : {}),
+        ...(paidByMemberId ? { paidByMemberId } : {}),
+      }),
     });
   },
 

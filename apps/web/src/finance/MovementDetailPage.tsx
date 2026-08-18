@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { CompanyMember, Expense, SettlementPayment } from '@plim/shared';
+import type { AuditEvent, CompanyMember, Expense, SettlementPayment } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { companyApi, messageForError } from '../company/companyApi';
@@ -29,6 +29,7 @@ export function MovementDetailPage() {
   const [movement, setMovement] = useState<Expense | null>(null);
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [payments, setPayments] = useState<SettlementPayment[]>([]);
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyMember, setBusyMember] = useState<string | null>(null);
@@ -38,14 +39,17 @@ export function MovementDetailPage() {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [mov, mem, pays] = await Promise.all([
+      const [mov, mem, pays, trail] = await Promise.all([
         financeApi.getMovement(company.id, id),
         companyApi.listMembers(company.id),
         financeApi.listSettlementPayments(company.id),
+        // Auditoria é acessório: se falhar, a página vive sem o histórico.
+        financeApi.listMovementAudit(company.id, id).catch(() => []),
       ]);
       setMovement(mov);
       setMembers(mem);
       setPayments(pays.filter((p) => p.expenseId === id && p.status === 'confirmed'));
+      setAudit(trail);
       setError('');
     } catch (err) {
       setError(messageForError(err));
@@ -399,9 +403,17 @@ export function MovementDetailPage() {
                 : payerName
             }
           />
-          {movement.createdByMemberId && movement.createdByMemberId !== movement.paidByMemberId && (
-            <Linha k="Registrado por" v={nameOf(movement.createdByMemberId)} />
-          )}
+          {/* Sempre visível: é a trilha de "quem colocou isso aqui". Sem
+              criador registrado = veio de importação/script, e dizer isso
+              evita a dúvida "será que o outro sócio duplicou?". */}
+          <Linha
+            k="Registrado por"
+            v={
+              movement.createdByMemberId
+                ? nameOf(movement.createdByMemberId)
+                : 'Importação da planilha'
+            }
+          />
           {isExpense && (
             <Linha
               k="Forma de divisão"
@@ -418,6 +430,26 @@ export function MovementDetailPage() {
           {movement.note && <Linha k="Observação" v={movement.note} />}
         </dl>
       </section>
+
+      {/* Trilha de auditoria: cada ação sobre esta movimentação, com autor e
+          hora. Movimentações antigas (de antes da trilha) só têm o
+          "Registrado por" acima. */}
+      {audit.length > 0 && (
+        <section className="movp-card">
+          <h2 className="movp-card__title">Histórico</h2>
+          <ul className="movp-trail">
+            {audit.map((ev) => (
+              <li className="movp-trail__item" key={ev.id}>
+                <span className={`movp-trail__dot movp-trail__dot--${ev.action}`} aria-hidden="true" />
+                <span className="movp-trail__text">{ev.summary}</span>
+                <time className="movp-trail__when" dateTime={ev.createdAt}>
+                  {formatDateTime(ev.createdAt)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 6) ações, no fim: destino da leitura, não competição com ela */}
       <div className="movp-actions">
@@ -494,4 +526,11 @@ function ErroDaPagina({ message }: { message: string }) {
 function formatDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
+}
+
+/** Data e hora LOCAIS do evento de auditoria ("17/08/2026 14:32"). */
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }

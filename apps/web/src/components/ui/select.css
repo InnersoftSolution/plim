@@ -1,0 +1,112 @@
+/* Seleção própria do Plim (substitui o <select> nativo). */
+.sel {
+  position: relative;
+}
+.sel__btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-sans);
+  color: var(--color-text-default);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  cursor: pointer;
+  text-align: left;
+}
+.sel__btn:hover {
+  border-color: var(--color-brand-primary);
+}
+.sel__btn:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 3px var(--color-bg-brand-soft);
+}
+.sel__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sel__chev {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+/* campo de formulário: mesma caixa dos outros campos */
+.sel--field .sel__btn {
+  min-height: 48px;
+  padding: 12px 15px;
+  border-radius: var(--radius-input);
+  font-size: 16px;
+}
+/* controle compacto da tela (ano, período) */
+.sel--pill .sel__btn {
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sel__list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  /* Acompanha o campo, mas cresce até caber o rótulo mais longo: numa pílula
+     curta como "Este ano", 100% da largura quebraria toda opção em três
+     linhas. O teto evita que uma opção comprida estoure a tela. */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 32px));
+  overflow-y: auto;
+  list-style: none;
+  padding: 6px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(23, 20, 31, 0.16);
+}
+/* Campo perto do rodapé: a lista sobe em vez de nascer cortada. */
+.sel__list--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.sel__list:focus {
+  outline: none;
+}
+.sel__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--color-text-default);
+  cursor: pointer;
+}
+/* Realce da navegação por teclado e do mouse é o mesmo: quem alterna entre
+   os dois não perde de vista onde está. */
+.sel__opt.is-active {
+  background: var(--color-bg-default);
+}
+.sel__opt.is-on {
+  font-weight: 600;
+}
+.sel__check {
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
+  line-height: 0;
+  margin-top: 3px;
+}
+.sel__txt {
+  min-width: 0;
+}
+.sel__txt small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}

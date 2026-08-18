@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { formatMoney } from './financeApi';
+import { Widget } from './FinanceView';
 import './gastosCategoria.css';
 
 export interface GastoCategoriaRow {
@@ -14,8 +15,12 @@ export interface GastoCategoriaRow {
 }
 
 /**
- * "Gastos por categoria" do período: donut + lista. Cada linha é clicável para
- * filtrar as movimentações daquela categoria. Só despesas pagas e confirmadas.
+ * "Gastos por categoria" do período: barras horizontais, uma por categoria,
+ * clicáveis para filtrar as movimentações. Só despesas pagas e confirmadas.
+ *
+ * Era um donut. Donut é bonito e péssimo para a pergunta que este bloco
+ * responde: comparar categorias de tamanho parecido. Duas fatias de 42% e 38%
+ * são indistinguíveis num anel e óbvias em barras alinhadas na mesma base.
  */
 export function GastosPorCategoriaCard({
   rows,
@@ -31,107 +36,68 @@ export function GastosPorCategoriaCard({
 }) {
   if (rows.length === 0) {
     return (
-      <section className="gpc">
-        <div className="gpc__head">
-          <h2>Gastos por categoria</h2>
-        </div>
-        <p className="gpc__empty">
-          Sem despesas pagas no período. Categorize seus gastos ao registrar uma despesa para ver aqui
-          onde o dinheiro está indo.
+      <Widget id="categorias" title="Gastos por categoria">
+        <p className="fw__empty">
+          Sem despesas pagas no período. Categorize seus gastos ao registrar uma despesa para ver
+          aqui onde o dinheiro está indo.
         </p>
-      </section>
+      </Widget>
     );
   }
 
-  // Arcos do donut (stroke-dasharray). Circunferência do círculo de r=54.
-  const R = 54;
-  const C = 2 * Math.PI * R;
-  let acc = 0;
-  const arcs = rows.map((r) => {
-    const dash = r.pct * C;
-    const seg = { row: r, dash, offset: C - acc };
-    acc += dash;
-    return seg;
-  });
-
   const keyOf = (id: string | null) => id ?? '__none__';
+  const maior = rows[0]?.totalCents ?? 1;
   // Nada categorizado ainda: o card vira orientação (jornada guiada).
   const onlyUncategorized = rows.length === 1 && rows[0]!.id === null;
-  const categorizedCount = rows.filter((r) => r.id != null).length;
 
   return (
-    <section className="gpc">
-      <div className="gpc__head">
-        <h2>Gastos por categoria</h2>
+    <Widget
+      id="categorias"
+      title="Gastos por categoria"
+      subtitle="Onde o dinheiro está indo no período"
+      action={
         <span className="gpc__total" data-financial>
           {formatMoney(totalCents)}
         </span>
-      </div>
-      <div className="gpc__body">
-        <div className="gpc__chart" aria-hidden="true">
-          <svg viewBox="0 0 140 140" width="140" height="140">
-            <g transform="rotate(-90 70 70)">
-              <circle cx="70" cy="70" r={R} fill="none" stroke="var(--color-border-default)" strokeWidth="16" />
-              {arcs.map((a) => {
-                const key = keyOf(a.row.id);
-                return (
-                  <circle
-                    key={key}
-                    className="gpc__arc"
-                    cx="70"
-                    cy="70"
-                    r={R}
-                    fill="none"
-                    stroke={a.row.color}
-                    strokeWidth="16"
-                    strokeDasharray={`${a.dash} ${C - a.dash}`}
-                    strokeDashoffset={a.offset}
-                    onClick={() => onSelect(selected === key ? '' : key)}
-                  >
-                    {/* Tooltip nativo: nome, valor e % da fatia. */}
-                    <title>
-                      {`${a.row.name}: ${formatMoney(a.row.totalCents)} (${Math.round(a.row.pct * 100)}% · ${a.row.count} mov.)`}
-                    </title>
-                  </circle>
-                );
-              })}
-            </g>
-            <text x="70" y="66" textAnchor="middle" className="gpc__chart-label">
-              {categorizedCount}
-            </text>
-            <text x="70" y="82" textAnchor="middle" className="gpc__chart-sub">
-              {categorizedCount === 1 ? 'categoria' : 'categorias'}
-            </text>
-          </svg>
-        </div>
-        <ul className="gpc__list">
-          {rows.map((r) => {
-            const key = keyOf(r.id);
-            const active = selected === key;
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  className={'gpc__row' + (active ? ' gpc__row--active' : '')}
-                  onClick={() => onSelect(active ? '' : key)}
-                >
-                  <span className="gpc__dot" style={{ background: r.color }} aria-hidden="true" />
+      }
+    >
+      <ul className="gpc__list">
+        {rows.map((r) => {
+          const key = keyOf(r.id);
+          const active = selected === key;
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                className={'gpc__row' + (active ? ' gpc__row--active' : '')}
+                onClick={() => onSelect(active ? '' : key)}
+                aria-pressed={active}
+              >
+                <span className="gpc__top">
                   <span className="gpc__name">{r.name}</span>
                   <span className="gpc__meta">
-                    {/* Valor na cor da fatia: liga a lista ao gráfico de relance. */}
-                    <strong data-financial style={{ color: r.color }}>
-                      {formatMoney(r.totalCents)}
-                    </strong>
+                    <strong data-financial>{formatMoney(r.totalCents)}</strong>
                     <small>
-                      {Math.round(r.pct * 100)}% · {r.count} mov.
+                      {Math.round(r.pct * 100)}%
+                      <em className="gpc__count"> · {r.count} mov.</em>
                     </small>
                   </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+                </span>
+                {/* Proporcional à maior categoria: a diferença entre a primeira
+                    e a segunda é o que a pessoa está tentando enxergar. */}
+                <span className="gpc__track" aria-hidden="true">
+                  <i
+                    style={{
+                      width: `${Math.max(3, Math.round((r.totalCents / maior) * 100))}%`,
+                      background: r.color,
+                    }}
+                  />
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
       {onlyUncategorized && (
         <p className="gpc__hint">
           Suas despesas ainda não têm categoria. Abra uma movimentação, toque em{' '}
@@ -139,6 +105,6 @@ export function GastosPorCategoriaCard({
           dinheiro está indo. <Link to="/empresa/categorias">Gerenciar categorias</Link>
         </p>
       )}
-    </section>
+    </Widget>
   );
 }

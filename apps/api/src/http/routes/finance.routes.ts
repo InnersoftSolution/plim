@@ -82,8 +82,8 @@ export async function financeRoutes(app: FastifyInstance, opts: { service: Finan
   // Marcar conta a pagar como paga.
   app.post('/companies/:companyId/expenses/:expenseId/pay', async (request) => {
     const { companyId, expenseId } = movParamsSchema.parse(request.params);
-    const { paidOn } = payExpenseSchema.parse(request.body ?? {});
-    return service.payExpense(companyId, expenseId, paidOn, request.user?.id ?? null);
+    const { paidOn, paidByMemberId } = payExpenseSchema.parse(request.body ?? {});
+    return service.payExpense(companyId, expenseId, paidOn, request.user?.id ?? null, paidByMemberId ?? null);
   });
 
   // Edição de uma movimentação já registrada.

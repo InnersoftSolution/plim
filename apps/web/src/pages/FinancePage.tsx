@@ -14,18 +14,30 @@ import {
 } from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { Select } from '../components/ui/Select';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { FinChart, type ChartPoint } from '../finance/FinChart';
 import { MovementWizard } from '../finance/MovementWizard';
 import { MovementEditForm } from '../finance/MovementEditForm';
 import { GastosPorCategoriaCard } from '../finance/GastosPorCategoriaCard';
+import {
+  CashFlowWidget,
+  ContributionsWidget,
+  CustomizeView,
+  OverdueWidget,
+  PaidByWidget,
+  UpcomingWidget,
+  useFinanceView,
+  type FlowPoint,
+  type PartnerRow,
+} from '../finance/FinanceView';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
 import { contactApi } from '../finance/contactApi';
 import { recurringApi } from '../finance/recurringApi';
-import { dueBucket, dueLabel, isPayable, payableExpenses } from '../finance/due';
+import { DUE_SOON_DAYS, daysUntil, dueBucket, dueLabel, isPayable, payableExpenses, todayIso } from '../finance/due';
 import {
   IconArrowIn,
   IconArrowOut,
@@ -62,7 +74,37 @@ type State =
       contacts: Contact[];
     };
 
-type Filter = 'todos' | 'receitas' | 'despesas' | 'aportes' | 'recorrentes' | 'a-pagar';
+type Filter =
+  | 'todos'
+  | 'receitas'
+  | 'despesas'
+  | 'aportes'
+  | 'recorrentes'
+  | 'a-pagar'
+  | 'vencidas'
+  | 'pagas';
+
+/** Recorte de período da tela (o seletor global controla tudo). */
+type PeriodSel = 'month' | 'last-month' | 'last-3' | 'year';
+
+const PERIOD_LABEL: Record<PeriodSel, string> = {
+  month: 'Este mês',
+  'last-month': 'Mês passado',
+  'last-3': 'Últimos 3 meses',
+  year: 'Este ano',
+};
+
+/** Primeiro dia do mês (deslocado em `shift` meses) em YYYY-MM-DD. */
+function monthStartIso(shift: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + shift, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/** Minúsculas sem acento, para a busca tolerar "credito" e "crédito". */
+function norm(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 /** Item unificado da lista (despesa/aporte datados ou custo recorrente). */
 type MovItem =
@@ -77,10 +119,14 @@ export function FinancePage() {
   const { ano } = useParams();
   const archiveYear = ano && /^\d{4}$/.test(ano) ? ano : null;
   const currentYear = String(new Date().getFullYear());
-  /** Período da tela principal: ano corrente (padrão) ou 'month' (este mês). */
-  const [period, setPeriod] = useState(currentYear);
-  /** Período efetivo: a página de arquivo trava no ano dela. */
-  const effPeriod = archiveYear ?? period;
+  /**
+   * Período da tela principal (o arquivo por ano trava no ano dele).
+   * Abre no ano: um mês sem lançamento deixaria a tela zerada, e tela zerada
+   * assusta quem tem movimento no ano inteiro. O ano sempre mostra a empresa.
+   */
+  const [periodSel, setPeriodSel] = useState<PeriodSel>('year');
+  /** Busca livre dentro das movimentações. */
+  const [query, setQuery] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detail, setDetail] = useState<MovItem | null>(null);
   const [editingCost, setEditingCost] = useState<RecurringCost | null>(null);
@@ -96,6 +142,19 @@ export function FinancePage() {
   const [searchParams] = useSearchParams();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Conta sendo marcada como paga (abre o diálogo "quem pagou?"). */
+  const [paying, setPaying] = useState<Expense | null>(null);
+  const [payWho, setPayWho] = useState('');
+  const [payDate, setPayDate] = useState(todayIso());
+  /** Fluxo financeiro: barras do mês ou saldo acumulado. */
+  const [fluxMode, setFluxMode] = useState<'mensal' | 'acumulado'>('mensal');
+  /** Painel de filtros avançados (os pouco usados saem da faixa de chips). */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  /** Filtro por sócio pagador ('' = todos). */
+  const [memberFilter, setMemberFilter] = useState('');
+  /** "Personalizar visão": quais blocos analíticos a pessoa acompanha. */
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const view = useFinanceView(activeCompany.id);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -128,7 +187,7 @@ export function FinancePage() {
   // Trocou de filtro/período/visão: volta a tabela para a primeira página.
   useEffect(() => {
     setTablePage(1);
-  }, [filter, categoryFilter, effPeriod, viewMode]);
+  }, [filter, categoryFilter, periodSel, archiveYear, viewMode]);
 
   // Chegou da Home clicando numa movimentação (?mov=id): rola até ela e destaca.
   useEffect(() => {
@@ -157,10 +216,27 @@ export function FinancePage() {
   const contactNameOf = (id: string | null) =>
     id ? contacts.find((c) => c.id === id)?.name ?? null : null;
 
-  /* ── período: ano corrente (padrão), este mês, ou o ano do arquivo ── */
-  const monthKey = new Date().toISOString().slice(0, 7);
-  const inPeriod = (e: Expense) =>
-    effPeriod === 'month' ? e.spentOn.startsWith(monthKey) : e.spentOn.startsWith(effPeriod);
+  /* ── período global: um intervalo [início, fim) que TODA a página respeita ── */
+  const range = archiveYear
+    ? {
+        start: `${archiveYear}-01-01`,
+        end: `${Number(archiveYear) + 1}-01-01`,
+        label: `Ano de ${archiveYear}`,
+      }
+    : periodSel === 'month'
+      ? { start: monthStartIso(0), end: monthStartIso(1), label: PERIOD_LABEL[periodSel] }
+      : periodSel === 'last-month'
+        ? { start: monthStartIso(-1), end: monthStartIso(0), label: PERIOD_LABEL[periodSel] }
+        : periodSel === 'last-3'
+          ? { start: monthStartIso(-2), end: monthStartIso(1), label: PERIOD_LABEL[periodSel] }
+          : {
+              start: `${currentYear}-01-01`,
+              end: `${Number(currentYear) + 1}-01-01`,
+              label: PERIOD_LABEL[periodSel],
+            };
+  const inPeriod = (e: Expense) => e.spentOn >= range.start && e.spentOn < range.end;
+  /** Etiqueta curta do período, para nomes de arquivo e rótulos. */
+  const effPeriod = archiveYear ?? periodSel;
   // Anos anteriores com movimentação: viram cards de arquivo ("Visualizar
   // movimentações de 2025"). A tela principal fica só com o ano corrente.
   const pastYears = [...new Set(expenses.map((e) => e.spentOn.slice(0, 4)))]
@@ -182,10 +258,109 @@ export function FinancePage() {
   const resultadoCents = receitaCents - gastoCents;
   // Movimentações aguardando MINHA confirmação (backend marca canConfirm).
   const toConfirm = expenses.filter((e) => e.canConfirm);
-  // Contas a pagar (jornada de vencimento): vencidas + a vencer.
+  // Contas a pagar (jornada de vencimento): vencidas + a vencer. De propósito
+  // NÃO respeitam o período: dívida em aberto não deixa de existir porque o
+  // recorte é "este mês" — some da tela e vira surpresa com juros.
   const payable = payableExpenses(expenses);
   const overduePayable = payable.filter((e) => dueBucket(e) === 'overdue');
   const payableCents = payable.reduce((s, e) => s + e.amountCents, 0);
+
+  /* ── contagens e recortes do resumo novo ── */
+  const entradasCount = expenses.filter((e) => e.kind === 'revenue' && confirmed(e) && inPeriod(e)).length;
+  const despesasCount = expenses.filter(
+    (e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid' && inPeriod(e),
+  ).length;
+  const aportesPeriodo = expenses.filter((e) => e.kind === 'contribution' && confirmed(e) && inPeriod(e));
+  const aportesPeriodoCents = aportesPeriodo.reduce((s, e) => s + e.amountCents, 0);
+
+  /* Criticidade das pendências: vencidas (mais antigas primeiro), vence hoje,
+     próximos 7 dias, e o resto. Vencida = vencimento passado E não paga. */
+  const dueOverdue = overduePayable.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+  const dueToday = payable.filter((e) => e.dueDate != null && daysUntil(e.dueDate) === 0);
+  const dueSoon = payable.filter((e) => {
+    if (!e.dueDate) return false;
+    const d = daysUntil(e.dueDate);
+    return d > 0 && d <= DUE_SOON_DAYS;
+  });
+  const dueLater = payable.filter(
+    (e) => !e.dueDate || daysUntil(e.dueDate) > DUE_SOON_DAYS,
+  );
+  const overdueCents = dueOverdue.reduce((s, e) => s + e.amountCents, 0);
+  const weekCents = [...dueToday, ...dueSoon].reduce((s, e) => s + e.amountCents, 0);
+
+  /* Dinheiro dos sócios: capital acumulado desde o início (aporte é estoque,
+     não fluxo do período; o rótulo na tela diz isso). */
+  const aportesPorSocio = (() => {
+    const map = new Map<string, number>();
+    for (const e of expenses) {
+      if (e.kind !== 'contribution' || !confirmed(e)) continue;
+      map.set(e.paidByMemberId, (map.get(e.paidByMemberId) ?? 0) + e.amountCents);
+    }
+    return [...map.entries()]
+      .map(([memberId, cents]) => ({ memberId, cents }))
+      .sort((a, b) => b.cents - a.cents);
+  })();
+  const totalAportado = aportesPorSocio.reduce((s, a) => s + a.cents, 0);
+  const aporteRows: PartnerRow[] = aportesPorSocio.map((a) => ({
+    memberId: a.memberId,
+    name: nameOf(a.memberId),
+    cents: a.cents,
+  }));
+
+  /* Quem bancou as despesas do período. É outra pergunta, e outro número:
+     aporte é capital colocado na empresa, isto aqui é despesa que a pessoa
+     pagou do próprio bolso. Misturar os dois esconde desequilíbrio. */
+  const pagamentosPorSocio = (() => {
+    const map = new Map<string, number>();
+    for (const e of expenses) {
+      if (e.kind !== 'expense' || !confirmed(e) || e.paymentStatus !== 'paid' || !inPeriod(e)) continue;
+      map.set(e.paidByMemberId, (map.get(e.paidByMemberId) ?? 0) + e.amountCents);
+    }
+    return [...map.entries()]
+      .map(([memberId, cents]) => ({ memberId, name: nameOf(memberId), cents }))
+      .sort((a, b) => b.cents - a.cents);
+  })();
+  const totalPagoSocios = pagamentosPorSocio.reduce((s, p) => s + p.cents, 0);
+
+  /* Próximos pagamentos: só o que ainda vai vencer (o que já venceu tem
+     widget e área próprios), da data mais próxima para a mais distante. */
+  const upcoming = payable
+    .filter((e) => dueBucket(e) !== 'overdue')
+    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+
+  /* Fluxo de caixa: trajetória dos últimos 12 meses com movimento. Este
+     widget ignora o recorte de período de propósito: tendência com um mês só
+     não é tendência, é um ponto. */
+  const flowPoints: FlowPoint[] = (() => {
+    const map = new Map<string, { inCents: number; outCents: number }>();
+    for (const e of expenses) {
+      if (!confirmed(e)) continue;
+      const entrada = e.kind === 'revenue';
+      const saida = e.kind === 'expense' && e.paymentStatus === 'paid';
+      if (!entrada && !saida) continue;
+      const key = e.spentOn.slice(0, 7);
+      const cur = map.get(key) ?? { inCents: 0, outCents: 0 };
+      if (entrada) cur.inCents += e.amountCents;
+      else cur.outCents += e.amountCents;
+      map.set(key, cur);
+    }
+    const chaves = [...map.keys()].sort();
+    if (chaves.length === 0) return [];
+    // Preenche os meses sem movimento entre o primeiro e o último: um buraco
+    // no meio da linha faria a queda parecer mais curta do que foi.
+    const todas: string[] = [];
+    const [y0, m0] = chaves[0]!.split('-').map(Number);
+    const [y1, m1] = chaves[chaves.length - 1]!.split('-').map(Number);
+    for (let y = y0!, m = m0!; y < y1! || (y === y1! && m <= m1!); m === 12 ? ((y += 1), (m = 1)) : (m += 1)) {
+      todas.push(`${y}-${String(m).padStart(2, '0')}`);
+    }
+    return todas.slice(-12).map((key) => ({
+      key,
+      label: monthLabelOf(key),
+      inCents: map.get(key)?.inCents ?? 0,
+      outCents: map.get(key)?.outCents ?? 0,
+    }));
+  })();
 
   /* ── lista filtrada ── */
   const dated: MovItem[] = expenses
@@ -195,7 +370,23 @@ export function FinancePage() {
       if (filter === 'receitas' && e.kind !== 'revenue') return false;
       if (filter === 'recorrentes') return false;
       if (filter === 'a-pagar' && !isPayable(e)) return false;
-      if (!inPeriod(e)) return false;
+      if (filter === 'vencidas' && dueBucket(e) !== 'overdue') return false;
+      if (
+        filter === 'pagas' &&
+        !(e.kind === 'expense' && e.paymentStatus === 'paid' && e.confirmationStatus === 'confirmed')
+      )
+        return false;
+      // Pendência não tem período: nas abas de contas em aberto a lista mostra
+      // tudo que falta pagar, de qualquer mês (mesma regra da área Atenção).
+      if (!inPeriod(e) && filter !== 'a-pagar' && filter !== 'vencidas') return false;
+      if (query.trim()) {
+        const alvo = norm(
+          `${e.description} ${nameOf(e.paidByMemberId)} ${categoryOf(e.categoryId)?.name ?? ''}`,
+        );
+        const tokens = norm(query).split(/\s+/).filter(Boolean);
+        if (!tokens.every((t) => alvo.includes(t))) return false;
+      }
+      if (memberFilter && e.paidByMemberId !== memberFilter) return false;
       if (categoryFilter === '__none__' && e.categoryId != null) return false;
       if (categoryFilter && categoryFilter !== '__none__' && e.categoryId !== categoryFilter) return false;
       return true;
@@ -208,6 +399,8 @@ export function FinancePage() {
       ? recurring.costs.map((c) => ({ kind: 'recurring', cost: c }) as MovItem)
       : [];
   const items = [...recurringItems, ...dated];
+  /** Quantas movimentações o recorte atual devolve (rótulo do botão Aplicar). */
+  const resultadosFiltrados = items.length;
   const nothingYet = expenses.length === 0 && recurring.costs.length === 0;
 
   // Visão em tabela (anual): linhas planas ordenadas por data, 10 por página.
@@ -257,7 +450,7 @@ export function FinancePage() {
     const a = document.createElement('a');
     a.href = url;
     a.rel = 'noopener';
-    const periodTag = archiveYear ?? (effPeriod === 'month' ? 'mes-atual' : effPeriod);
+    const periodTag = archiveYear ?? periodSel;
     a.download = `movimentacoes-${periodTag}.csv`;
     document.body.appendChild(a);
     a.click();
@@ -319,6 +512,41 @@ export function FinancePage() {
   })();
   // Card só faz sentido nas abas gerais de despesa.
   const showGastoCat = (filter === 'todos' || filter === 'despesas') && gastoCat.rows.length > 0;
+  /* ── recortes da lista, todos dentro do painel "Filtros" ──
+   * Contagem em cada opção: a pessoa decide o que abrir vendo o tamanho de
+   * cada recorte, em vez de clicar e descobrir que está vazio. As duas
+   * pendências contam fora do período (dívida não tem mês). */
+  const contaTipo = (f: Filter): number => {
+    if (f === 'todos') return expenses.filter(inPeriod).length;
+    if (f === 'a-pagar') return payable.length;
+    if (f === 'vencidas') return dueOverdue.length;
+    if (f === 'recorrentes') return recurring.costs.length;
+    if (f === 'receitas') return expenses.filter((e) => e.kind === 'revenue' && inPeriod(e)).length;
+    if (f === 'aportes') return expenses.filter((e) => e.kind === 'contribution' && inPeriod(e)).length;
+    if (f === 'despesas') return expenses.filter((e) => e.kind === 'expense' && inPeriod(e)).length;
+    return expenses.filter(
+      (e) => e.kind === 'expense' && e.paymentStatus === 'paid' && confirmed(e) && inPeriod(e),
+    ).length;
+  };
+  const TIPOS: { id: Filter; label: string }[] = [
+    { id: 'todos', label: 'Todas' },
+    { id: 'receitas', label: 'Entradas' },
+    { id: 'despesas', label: 'Despesas' },
+    { id: 'aportes', label: 'Aportes' },
+    { id: 'a-pagar', label: 'A pagar' },
+    { id: 'vencidas', label: 'Vencidas' },
+    { id: 'pagas', label: 'Pagas' },
+    { id: 'recorrentes', label: 'Custos recorrentes' },
+  ];
+  const tipoLabel = (f: Filter) => TIPOS.find((t) => t.id === f)?.label ?? 'Todas';
+  /** Quantos recortes estão ligados (aparece no botão "Filtros"). */
+  const filtrosAtivos =
+    (filter !== 'todos' ? 1 : 0) + (categoryFilter ? 1 : 0) + (memberFilter ? 1 : 0);
+  function limparFiltros() {
+    setFilter('todos');
+    setCategoryFilter('');
+    setMemberFilter('');
+  }
 
   /** Despesa gera acerto quando outra pessoa (além de quem pagou) tem parte nela. */
   function generatesSettlement(e: Expense): boolean {
@@ -336,10 +564,19 @@ export function FinancePage() {
     }
   }
 
-  async function markPaid(expenseId: string) {
-    setBusyId(expenseId);
+  /** Abre o diálogo "quem pagou?": pagar não é só trocar um status. */
+  function markPaid(expense: Expense) {
+    setPayWho(expense.paidByMemberId);
+    setPayDate(todayIso());
+    setPaying(expense);
+  }
+
+  async function confirmPay() {
+    if (!paying) return;
+    setBusyId(paying.id);
     try {
-      await financeApi.payExpense(company.id, expenseId);
+      await financeApi.payExpense(company.id, paying.id, payDate, payWho);
+      setPaying(null);
       await load();
     } finally {
       setBusyId(null);
@@ -361,6 +598,27 @@ export function FinancePage() {
   const hasProjection = chart.points.some((p) => p.projected);
   const nextLabel = chart.points.find((p) => p.projected)?.label ?? 'próximo mês';
 
+  /* Acumulado: soma corrente de (entrou − saiu); positivo vira barra de
+     entrada (violeta), negativo vira barra de saída (vermelho). */
+  const chartAcc = (() => {
+    let acc = 0;
+    return {
+      points: chart.points
+        .filter((pt) => !pt.projected)
+        .map((pt) => {
+          acc += (pt.inCents ?? 0) - (pt.outCents ?? 0);
+          return {
+            key: pt.key,
+            label: pt.label,
+            inCents: acc > 0 ? acc : 0,
+            outCents: acc < 0 ? -acc : 0,
+            current: pt.current,
+          };
+        }),
+    };
+  })();
+  const showAcc = isFlowChart && fluxMode === 'acumulado';
+
   const chartTitle = isFlowChart
     ? isYearView
       ? `Entradas e saídas de ${chartPeriod}`
@@ -368,8 +626,8 @@ export function FinancePage() {
     : 'Aportes por mês';
   const chartSubtitle = isFlowChart
     ? isYearView
-      ? `Resumo do ano: o que entrou (azul) e o que saiu (vermelho) mês a mês em ${chartPeriod}.`
-      : 'O que entrou (azul) e o que saiu (vermelho) por mês, com uma estimativa de gastos do próximo mês.'
+      ? `Resumo do ano: o que entrou (violeta) e o que saiu (vermelho) mês a mês em ${chartPeriod}.`
+      : 'O que entrou (violeta) e o que saiu (vermelho) por mês. Clique numa barra para ver as movimentações do mês.'
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
   const chartCaption = isFlowChart
     ? hasProjection
@@ -377,7 +635,7 @@ export function FinancePage() {
       : `Ano fechado: sem projeção, o histórico completo de ${archiveYear}.`
     : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
   const chartHelp = isFlowChart
-    ? 'Azul é o que entrou (receitas), vermelho é o que saiu (despesas); a parte tracejada é o que ainda falta pagar no mês. A última barra é a projeção de gastos do próximo mês: média dos gastos registrados mais os custos recorrentes ativos. Passe o mouse em cada barra para ver o valor.'
+    ? 'Violeta é o que entrou (receitas), vermelho é o que saiu (despesas); a parte tracejada é o que ainda falta pagar no mês. A última barra é a projeção de gastos do próximo mês: média dos gastos registrados mais os custos recorrentes ativos. Clique numa barra para ver as movimentações daquele mês.'
     : undefined;
   const chartEmpty = isFlowChart
     ? 'Sem dados suficientes ainda. Registre entradas e despesas para o Plim mostrar o fluxo do negócio.'
@@ -394,91 +652,128 @@ export function FinancePage() {
             </Link>
           )}
           <h1>{archiveYear ? `Movimentações de ${archiveYear}` : 'Movimentações'}</h1>
-          <p>
-            {archiveYear
-              ? `Ano fechado: tudo que entrou e saiu em ${archiveYear}.`
-              : 'Acompanhe tudo que entrou, saiu ou foi investido na empresa.'}
-          </p>
+          <p>Visão financeira da empresa</p>
         </div>
         {/* O botão vale também no ano fechado: "fechado" descreve o período, não
             proíbe lançar. Quem está organizando a contabilidade para trás
             precisa justamente registrar o que aconteceu lá. O rótulo diz o ano
             para ninguém achar que está lançando no ano corrente. */}
+        {/* No mobile o rótulo encolhe para "Registrar": o botão inteiro não
+            cabe ao lado do título sem quebrar em duas linhas. */}
         <Button onClick={() => setWizardOpen(true)}>
-          <IconPlus /> {archiveYear ? `Registrar em ${archiveYear}` : 'Registrar movimentação'}
+          <IconPlus /> Registrar{' '}
+          <span className="fin-hide-sm">{archiveYear ? `em ${archiveYear}` : 'movimentação'}</span>
         </Button>
       </div>
 
-      {/* ── cards de resumo: saúde do negócio (recebido − gasto) ── */}
-      <div className="dash-cards">
-        <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--green"><IconArrowIn /></div>
-          <span className="dash-stat__label">Recebido</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(receitaCents)}</span>
-          <span className="dash-stat__hint">Dinheiro que entrou na empresa (receitas).</span>
-        </div>
-        <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--rose"><IconArrowOut /></div>
-          <span className="dash-stat__label">Total gasto</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(gastoCents)}</span>
-          <span className="dash-stat__hint">Só despesas, aportes não entram aqui.</span>
-        </div>
-        {/* Resultado negativo é estado comum no início: o número em vermelho já
-            diz isso. O ícone fica no índigo da marca de propósito — repetir o
-            rosa do "Total gasto" ao lado apagaria a diferença entre os dois. */}
-        <div className="dash-stat">
-          <div className="dash-stat__icon dash-stat__icon--indigo">
-            <IconPulse />
-          </div>
-          <span className="dash-stat__label">Resultado</span>
-          <span
-            className="dash-stat__value"
-            data-financial
-            style={{ color: resultadoCents < 0 ? 'var(--rose-600)' : 'var(--color-status-positive)' }}
-          >
-            {resultadoCents < 0 ? '−' : '+'}
-            {formatMoney(Math.abs(resultadoCents))}
-          </span>
-          <span className="dash-stat__hint">
-            {resultadoCents < 0
-              ? 'A empresa gastou mais do que recebeu no período.'
-              : receitaCents === 0
-                ? 'Registre entradas para ver a saúde do negócio.'
-                : 'Recebido menos gasto, a saúde do negócio.'}
-          </span>
-        </div>
+      {/* ── período global: um seletor que manda na página inteira ── */}
+      <div className="fin2-period">
+        <Select
+          label="Ano"
+          variant="pill"
+          value={archiveYear ?? currentYear}
+          onChange={(y) => navigate(y === currentYear ? '/financeiro' : `/financeiro/${y}`)}
+          options={[
+            { value: currentYear, label: currentYear },
+            ...pastYears.map((y) => ({ value: y, label: y })),
+          ]}
+        />
         {!archiveYear && (
-        <button
-          type="button"
-          className={'dash-stat dash-stat--btn' + (overduePayable.length > 0 ? ' dash-stat--warn' : '')}
-          onClick={() => setFilter('a-pagar')}
-        >
-          {/* Três estados, três cores: vencida grita em rosa, aberta avisa em
-              âmbar, e sem nada em aberto o card fica quieto em cinza. */}
-          <div
-            className={
-              'dash-stat__icon ' +
-              (overduePayable.length > 0
-                ? 'dash-stat__icon--warn'
-                : payable.length > 0
-                  ? 'dash-stat__icon--amber'
-                  : 'dash-stat__icon--muted')
-            }
+          <Select
+            label="Período"
+            variant="pill"
+            value={periodSel}
+            onChange={(p) => setPeriodSel(p as PeriodSel)}
+            options={(Object.keys(PERIOD_LABEL) as PeriodSel[]).map((pKey) => ({
+              value: pKey,
+              label: PERIOD_LABEL[pKey],
+            }))}
+          />
+        )}
+        <span className="fin2-period__hint">O período controla tudo nesta página</span>
+        {/* Trocar de visualização é ajuste de leitura, não ação principal:
+            mora junto do período, não competindo com os filtros da lista. */}
+        {!nothingYet && items.length > 0 && filter !== 'recorrentes' && (
+          <button
+            type="button"
+            className="fin2-viewswap"
+            onClick={() => setViewMode((v) => (v === 'table' ? 'cards' : 'table'))}
           >
-            <IconClock />
-          </div>
-          <span className="dash-stat__label">A vencer</span>
-          <span className="dash-stat__value" data-financial>{formatMoney(payableCents)}</span>
-          <span className="dash-stat__hint">
-            {payable.length === 0
-              ? 'Nenhuma conta a pagar em aberto.'
-              : overduePayable.length > 0
-                ? `${payable.length} em aberto · ${overduePayable.length} vencida${overduePayable.length === 1 ? '' : 's'}.`
-                : `${payable.length} conta${payable.length === 1 ? '' : 's'} a pagar em aberto.`}
-          </span>
-        </button>
+            {viewMode === 'table' ? 'Ver em cartões' : 'Ver em tabela'}
+          </button>
         )}
       </div>
+
+      {/* ── resumo: quatro números, o saldo lidera ── */}
+      <section className="fin2-sum" aria-label="Resumo financeiro do período">
+        <div>
+          <span className="fin2-sum__lab">Entrou</span>
+          <span className="fin2-sum__val" data-financial>{formatMoney(receitaCents)}</span>
+          <span className="fin2-sum__note">
+            {entradasCount === 0 ? 'nenhuma entrada' : `${entradasCount} ${entradasCount === 1 ? 'entrada' : 'entradas'}`}
+          </span>
+        </div>
+        <div>
+          <span className="fin2-sum__lab">Saiu</span>
+          <span className="fin2-sum__val" data-financial>{formatMoney(gastoCents)}</span>
+          <span className="fin2-sum__note">
+            {despesasCount === 0 ? 'nenhuma despesa paga' : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`}
+          </span>
+        </div>
+        <div>
+          <span className="fin2-sum__lab">Saldo do período</span>
+          <span
+            className={'fin2-sum__val fin2-sum__val--big' + (resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')}
+            data-financial
+          >
+            {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
+          </span>
+          <span className="fin2-sum__note">entrou − saiu</span>
+        </div>
+        <div>
+          <span className="fin2-sum__lab">A pagar</span>
+          <span className="fin2-sum__val" data-financial>{formatMoney(payableCents)}</span>
+          <span className="fin2-sum__note">
+            {payable.length === 0 ? (
+              'nenhum pagamento pendente'
+            ) : overdueCents > 0 ? (
+              <>
+                <strong>{formatMoney(overdueCents)} vencidos</strong>
+                {weekCents > 0 && <> · {formatMoney(weekCents)} vencem esta semana</>}
+              </>
+            ) : weekCents > 0 ? (
+              `${formatMoney(weekCents)} vencem esta semana`
+            ) : (
+              'nenhum pagamento vencido'
+            )}
+          </span>
+        </div>
+      </section>
+      {(receitaCents > 0 || gastoCents > 0) && (
+        <p className="fin2-phrase">
+          {/* Interpretar o dado, não repetir o número: quase equilibrado é
+              equilibrado para quem lê (menos de 1% do que entrou). */}
+          {resultadoCents < 0 && -resultadoCents > receitaCents * 0.01 ? (
+            <>As saídas superaram as entradas em <b data-financial>{formatMoney(-resultadoCents)}</b> neste período.</>
+          ) : resultadoCents > 0 && resultadoCents > receitaCents * 0.01 ? (
+            <>As entradas superaram as saídas em <b data-financial>{formatMoney(resultadoCents)}</b> neste período.</>
+          ) : (
+            <>Entradas e saídas ficaram praticamente equilibradas neste período.</>
+          )}
+        </p>
+      )}
+      {(receitaCents > 0 || aportesPeriodoCents > 0) && (
+        <div className="fin2-origins">
+          <span className="fin2-origins__lab">Origem das entradas</span>
+          <span>Receitas <b data-financial>{formatMoney(receitaCents)}</b></span>
+          <span>Aportes dos sócios <b data-financial>{formatMoney(aportesPeriodoCents)}</b></span>
+          {/* Entrada total ≠ faturamento: aporte é capital dos sócios, e o
+              rótulo diz isso para ninguém confundir com receita. */}
+          <span className="fin2-origins__tot">
+            Entrou no total <b data-financial>{formatMoney(receitaCents + aportesPeriodoCents)}</b>
+          </span>
+        </div>
+      )}
 
       {/* ── aguardando MINHA confirmação (operacional: só na tela principal) ── */}
       {!archiveYear && toConfirm.length > 0 && (
@@ -505,132 +800,117 @@ export function FinancePage() {
         </section>
       )}
 
-      {/* ── alerta: contas a pagar (vencidas + a vencer), só na tela principal ── */}
-      {!archiveYear && payable.length > 0 && (
-        <section className={'fin-due' + (overduePayable.length > 0 ? ' fin-due--alert' : '')}>
-          <div className="fin-due__head">
-            <span className="fin-due__title">
-              {overduePayable.length > 0
-                ? `${overduePayable.length} conta${overduePayable.length === 1 ? '' : 's'} vencida${overduePayable.length === 1 ? '' : 's'}`
-                : 'Contas a pagar'}
-            </span>
-            <span className="fin-due__sub">
-              {overduePayable.length > 0
-                ? 'Marque como paga assim que quitar, contas vencidas podem gerar juros.'
-                : 'Acompanhe os vencimentos para não deixar nada atrasar.'}
-            </span>
-          </div>
-          <div className="fin-due__list">
-            {payable.slice(0, 6).map((e) => {
-              const overdue = dueBucket(e) === 'overdue';
-              return (
-                <div className={'fin-due__item' + (overdue ? ' is-overdue' : '')} key={e.id}>
-                  <button type="button" className="fin-due__info" onClick={() => navigate(`/financeiro/movimentacao/${e.id}`)}>
-                    <span className="fin-due__desc">{e.description}</span>
-                    <span className="fin-due__meta">
-                      {e.dueDate ? dueLabel(e.dueDate) : 'a pagar'} · {nameOf(e.paidByMemberId)}
-                    </span>
-                  </button>
-                  <span className="fin-due__value" data-financial>{formatMoney(e.amountCents)}</span>
-                  <Button onClick={() => markPaid(e.id)} disabled={busyId === e.id}>
-                    Marcar como paga
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-          {payable.length > 6 && (
-            <button type="button" className="fin-due__all" onClick={() => setFilter('a-pagar')}>
-              Ver todas as {payable.length} contas a pagar
-            </button>
-          )}
-        </section>
+      {/* ── Atenção: pendências por criticidade (vencidas → hoje → 7 dias) ── */}
+      {!archiveYear && (
+        payable.length === 0 ? (
+          <section className="fin2-ok">
+            <span className="fin2-ok__badge" aria-hidden="true">✓</span>
+            <div>
+              <strong>Tudo em dia</strong>
+              <p>Nenhum pagamento pendente.</p>
+            </div>
+          </section>
+        ) : (
+          <section aria-label="Pagamentos que precisam de atenção" className="fin2-att">
+            <div className="fin2-att__head">
+              <h2>Atenção</h2>
+              {dueOverdue.length > 0 && (
+                <span className="fin2-att__count">
+                  {dueOverdue.length} {dueOverdue.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}
+                </span>
+              )}
+            </div>
+            {dueOverdue.length > 0 && (
+              <AttGroup tone="overdue" title="Em atraso">
+                {dueOverdue.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueToday.length > 0 && (
+              <AttGroup tone="today" title="Vence hoje">
+                {dueToday.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueSoon.length > 0 && (
+              <AttGroup tone="soon" title={`Próximos ${DUE_SOON_DAYS} dias`}>
+                {dueSoon.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueLater.length > 0 && (
+              <button type="button" className="fin2-att__later" onClick={() => setFilter('a-pagar')}>
+                {dueLater.length} {dueLater.length === 1 ? 'outra conta a vencer' : 'outras contas a vencer'} ·{' '}
+                <span data-financial>{formatMoney(dueLater.reduce((sum, e) => sum + e.amountCents, 0))}</span> → ver na lista
+              </button>
+            )}
+          </section>
+        )
       )}
 
-      {/* ── filtros ── */}
-      <div className="fin-filters">
-        {(
-          [
-            ['todos', 'Todos'],
-            ['a-pagar', 'A pagar'],
-            ['receitas', 'Entradas'],
-            ['despesas', 'Despesas'],
-            ['aportes', 'Aportes'],
-            ['recorrentes', 'Custos recorrentes'],
-          ] as [Filter, string][]
-        ).map(([id, label]) => (
+      {/* ── movimentações: o conteúdo principal da página ── */}
+      <div className="fin2-movhead">
+        <h2>Movimentações</h2>
+        <div className="fin2-movhead__tools">
+          <label className="fin2-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+            <input
+              type="search"
+              placeholder="Buscar movimentação"
+              value={query}
+              onChange={(ev) => setQuery(ev.target.value)}
+            />
+          </label>
+          {/* Um botão só no lugar da fileira de pílulas: a pessoa abre, escolhe
+              o recorte e volta para a lista, que é o que ela veio ver. */}
           <button
-            key={id}
             type="button"
-            className={'fin-chip' + (filter === id ? ' fin-chip--active' : '')}
-            onClick={() => setFilter(id)}
+            className={'fin2-filterbtn' + (filtrosAtivos > 0 ? ' is-on' : '')}
+            onClick={() => setFiltersOpen(true)}
+            aria-haspopup="dialog"
           >
-            {label}
-          </button>
-        ))}
-        {!archiveYear && (
-          <button
-            type="button"
-            className={'fin-chip fin-chip--month' + (period === 'month' ? ' fin-chip--active' : '')}
-            onClick={() => setPeriod((p) => (p === 'month' ? currentYear : 'month'))}
-          >
-            Este mês
-          </button>
-        )}
-      </div>
-
-      {/* ── evolução mensal + projeção ── */}
-      {showChart && (
-        <>
-          <FinChart
-            points={chart.points}
-            title={chartTitle}
-            subtitle={chartSubtitle}
-            caption={chartCaption}
-            emptyText={chartEmpty}
-            helpText={chartHelp}
-          />
-        </>
-      )}
-
-      {/* ── gastos por categoria (análise + filtro) ── */}
-      {showGastoCat && (
-        <GastosPorCategoriaCard
-          rows={gastoCat.rows}
-          totalCents={gastoCat.total}
-          selected={categoryFilter}
-          onSelect={(key) => setCategoryFilter(key)}
-        />
-      )}
-
-      {/* filtro por categoria ativo */}
-      {categoryFilter && (
-        <div className="fin-catfilter">
-          <span>
-            Mostrando:{' '}
-            <strong>
-              {categoryFilter === '__none__'
-                ? 'Sem categoria'
-                : categoryOf(categoryFilter)?.name ?? 'Categoria'}
-            </strong>
-          </span>
-          <button type="button" onClick={() => setCategoryFilter('')}>
-            Limpar filtro
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2" /></svg>
+            Filtros
+            {filtrosAtivos > 0 && <span className="fin2-filterbtn__n">{filtrosAtivos}</span>}
           </button>
         </div>
-      )}
-
-      {/* ── alternância cartões / tabela (não vale para recorrentes) ── */}
-      {!nothingYet && items.length > 0 && filter !== 'recorrentes' && (
-        <div className="fin-viewtoggle">
-          <button
-            type="button"
-            className="fin-viewbtn"
-            onClick={() => setViewMode((v) => (v === 'table' ? 'cards' : 'table'))}
-          >
-            {viewMode === 'table'
-              ? 'Ver em cartões'
-              : `Ver ${effPeriod === 'month' ? 'este mês' : effPeriod} em tabela`}
+      </div>
+      {/* O que está filtrando fica à vista e sai com um toque: filtro
+          escondido é a origem do "cadê minha movimentação?". */}
+      {filtrosAtivos > 0 && (
+        <div className="fin2-activef">
+          {filter !== 'todos' && (
+            <button
+              type="button"
+              aria-label={`Remover filtro ${tipoLabel(filter)}`}
+              onClick={() => setFilter('todos')}
+            >
+              {tipoLabel(filter)} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {categoryFilter && (
+            <button type="button" aria-label="Remover filtro de categoria" onClick={() => setCategoryFilter('')}>
+              {categoryFilter === '__none__' ? 'Sem categoria' : categoryOf(categoryFilter)?.name ?? 'Categoria'}{' '}
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {memberFilter && (
+            <button
+              type="button"
+              aria-label={`Remover filtro do sócio ${nameOf(memberFilter)}`}
+              onClick={() => setMemberFilter('')}
+            >
+              {nameOf(memberFilter)} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          <button type="button" className="fin2-activef__clear" onClick={limparFiltros}>
+            Limpar tudo
           </button>
         </div>
       )}
@@ -694,7 +974,7 @@ export function FinancePage() {
               .filter((g) => g.kind !== 'recurring' && g.expense.kind === 'expense')
               .reduce((s, g) => s + (g.kind !== 'recurring' ? g.expense.amountCents : 0), 0);
             return (
-              <section className={'fin-group' + (open ? ' fin-group--open' : '')} key={key}>
+              <section className={'fin-group' + (open ? ' fin-group--open' : '')} key={key} id={`mes-${key}`}>
                 <button
                   type="button"
                   className="fin-group__head"
@@ -738,35 +1018,172 @@ export function FinancePage() {
         </div>
       )}
 
-      {/* ── arquivo: anos anteriores viram cards, a tela fica só com o corrente ── */}
-      {!archiveYear && pastYears.length > 0 && (
-        <section className="fin-years">
-          <span className="fin-years__title">Anos anteriores</span>
-          <div className="fin-years__grid">
-            {pastYears.map((y) => {
-              const doAno = expenses.filter((e) => e.spentOn.startsWith(y));
-              const gastoAno = doAno
-                .filter((e) => e.kind === 'expense' && confirmed(e) && e.paymentStatus === 'paid')
-                .reduce((s, e) => s + e.amountCents, 0);
-              return (
-                <Link className="fin-year" to={`/financeiro/${y}`} key={y}>
-                  <span className="fin-year__badge">{y}</span>
-                  <span className="fin-year__info">
-                    <strong>Visualizar movimentações de {y}</strong>
-                    <small>
-                      {doAno.length} {doAno.length === 1 ? 'movimentação' : 'movimentações'} ·{' '}
-                      {formatMoney(gastoAno)} em despesas
-                    </small>
-                  </span>
-                  <span className="fin-year__cta" aria-hidden="true">
-                    <IconArrowRight />
-                  </span>
-                </Link>
-              );
-            })}
+      {/* ── Visão financeira: análise modular, complementa a lista ── */}
+      {!nothingYet && (
+        <section className="fin2-view" aria-label="Visão financeira">
+          <div className="fin2-view__head">
+            <h2>Visão financeira</h2>
+            <button type="button" className="fin2-ghostbtn" onClick={() => setCustomizeOpen(true)}>
+              Personalizar visão
+            </button>
+          </div>
+          <div className="fw-grid">
+            {view.isOn('fluxo') && <CashFlowWidget points={flowPoints} />}
+            {view.isOn('proximos') && (
+              <UpcomingWidget
+                items={upcoming}
+                onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
+                onSeeAll={() => setFilter('a-pagar')}
+              />
+            )}
+            {view.isOn('categorias') && showGastoCat && (
+              <GastosPorCategoriaCard
+                rows={gastoCat.rows}
+                totalCents={gastoCat.total}
+                selected={categoryFilter}
+                onSelect={(key) => setCategoryFilter(key)}
+              />
+            )}
+            {view.isOn('aportes') && <ContributionsWidget rows={aporteRows} total={totalAportado} />}
+            {view.isOn('entradas-saidas') && showChart && (
+              <div className="fw fw--8 fin2-flux">
+                <div className="fin2-flux__seg" role="tablist" aria-label="Modo do gráfico">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={fluxMode === 'mensal'}
+                    className={fluxMode === 'mensal' ? 'is-on' : ''}
+                    onClick={() => setFluxMode('mensal')}
+                  >
+                    Mensal
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={fluxMode === 'acumulado'}
+                    className={fluxMode === 'acumulado' ? 'is-on' : ''}
+                    onClick={() => setFluxMode('acumulado')}
+                  >
+                    Acumulado
+                  </button>
+                </div>
+                <FinChart
+                  points={showAcc ? chartAcc.points : chart.points}
+                  title={chartTitle}
+                  subtitle={showAcc ? 'Saldo acumulado mês a mês: violeta quando positivo, vermelho quando negativo.' : chartSubtitle}
+                  caption={chartCaption}
+                  emptyText={chartEmpty}
+                  helpText={chartHelp}
+                  onSelectMonth={(key) => {
+                    // Do "quanto" para o "o quê": abre o mês na lista e rola até ele.
+                    setOpenMonths((m) => ({ ...m, [key]: true }));
+                    requestAnimationFrame(() =>
+                      document
+                        .getElementById(`mes-${key}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+                    );
+                  }}
+                />
+              </div>
+            )}
+            {view.isOn('atrasos') && (
+              <OverdueWidget
+                items={dueOverdue}
+                onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
+                onSeeAll={() => setFilter('vencidas')}
+              />
+            )}
+            {view.isOn('pagamentos-socio') && (
+              <PaidByWidget rows={pagamentosPorSocio} total={totalPagoSocios} />
+            )}
           </div>
         </section>
       )}
+
+      {/* ── personalizar a visão financeira ── */}
+      <Modal
+        open={customizeOpen}
+        title="O que você quer acompanhar?"
+        subtitle="Os blocos são prontos, você escolhe quais aparecem. A escolha fica guardada neste navegador."
+        onClose={() => setCustomizeOpen(false)}
+      >
+        <CustomizeView
+          isOn={view.isOn}
+          toggle={view.toggle}
+          reset={view.reset}
+          isDefault={view.isDefault}
+          ligados={view.enabled.length}
+          onClose={() => setCustomizeOpen(false)}
+        />
+      </Modal>
+
+      {/* ── filtros: tipo, categoria e sócio num lugar só ── */}
+      <Modal
+        open={filtersOpen}
+        title="Filtros"
+        subtitle="Escolha o recorte da lista de movimentações."
+        onClose={() => setFiltersOpen(false)}
+      >
+        <div className="fin2-fdlg">
+          <div role="radiogroup" aria-label="Tipo de movimentação" className="fin2-fdlg__group">
+            <span className="fin2-fdlg__lab">Tipo</span>
+            <div className="fin2-fdlg__chips">
+              {TIPOS.map((t) => {
+                const n = contaTipo(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={filter === t.id}
+                    className={'fin-chip' + (filter === t.id ? ' fin-chip--active' : '')}
+                    onClick={() => setFilter(t.id)}
+                  >
+                    {t.label}
+                    {n > 0 && <span className="fin-chip__n">{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="fin2-fdlg__group">
+            <Select
+              label="Categoria"
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              options={[
+                { value: '', label: 'Todas as categorias' },
+                { value: '__none__', label: 'Sem categoria' },
+                ...categories.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+          </div>
+          <div className="fin2-fdlg__group">
+            <Select
+              label="Sócio"
+              value={memberFilter}
+              onChange={setMemberFilter}
+              options={[
+                { value: '', label: 'Todos os sócios' },
+                ...members.map((m) => ({ value: m.id, label: m.fullName })),
+              ]}
+            />
+          </div>
+          <div className="fin2-fdlg__acts">
+            <button
+              type="button"
+              className="fw-cust__reset"
+              disabled={filtrosAtivos === 0}
+              onClick={limparFiltros}
+            >
+              Limpar filtros
+            </button>
+            <Button onClick={() => setFiltersOpen(false)}>
+              Ver {resultadosFiltrados} {resultadosFiltrados === 1 ? 'movimentação' : 'movimentações'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── wizard (mesmo da Home) ── */}
       <Modal
@@ -793,7 +1210,7 @@ export function FinancePage() {
         )}
       </Modal>
 
-      {/* ── detalhe ── */}
+      {/* ── detalhe (custo recorrente; movimentação tem página própria) ── */}
       <Modal
         open={detail != null}
         title="Detalhe da movimentação"
@@ -812,8 +1229,9 @@ export function FinancePage() {
               setDetail(null);
             }}
             onPay={async (id) => {
-              await markPaid(id);
+              const exp = expenses.find((x) => x.id === id);
               setDetail(null);
+              if (exp) markPaid(exp);
             }}
             onRemove={async (id) => {
               await financeApi.removeExpense(company.id, id);
@@ -834,6 +1252,51 @@ export function FinancePage() {
               setEditingMovement(exp);
             }}
           />
+        )}
+      </Modal>
+
+      {/* ── marcar como paga: quem pagou + quando ── */}
+      <Modal
+        open={paying != null}
+        title="Registrar pagamento"
+        subtitle={paying ? `${paying.description} · ${formatMoney(paying.amountCents)}` : undefined}
+        onClose={() => setPaying(null)}
+      >
+        {paying && (
+          <div className="fin2-paydialog">
+            <Select
+              label="Quem pagou esta despesa?"
+              value={payWho}
+              onChange={setPayWho}
+              options={members.map((m) => ({
+                value: m.id,
+                label: m.fullName,
+                hint: m.id === paying.paidByMemberId ? 'pagador previsto' : undefined,
+              }))}
+            />
+            <label className="field">
+              <span className="field__label">Data do pagamento</span>
+              <input
+                className="field__input"
+                type="date"
+                value={payDate}
+                max={todayIso()}
+                onChange={(ev) => setPayDate(ev.target.value)}
+              />
+            </label>
+            <p className="fin2-paydialog__hint">
+              Quem pagou entra no acerto entre os sócios: as partes dos outros passam a ser
+              devidas a essa pessoa.
+            </p>
+            <div className="fin2-paydialog__acts">
+              <Button onClick={() => void confirmPay()} disabled={busyId === paying.id || !payDate}>
+                Registrar pagamento
+              </Button>
+              <button type="button" className="fin2-ghostbtn" onClick={() => setPaying(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -873,6 +1336,86 @@ export function FinancePage() {
         )}
       </Modal>
     </div>
+  );
+}
+
+/* ── Atenção: grupo por criticidade, com fio lateral ── */
+function AttGroup({
+  tone,
+  title,
+  children,
+}: {
+  tone: 'overdue' | 'today' | 'soon';
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`fin2-attg fin2-attg--${tone}`}>
+      <span className="fin2-attg__cap">{title}</span>
+      {children}
+    </div>
+  );
+}
+
+function AttRow({
+  e,
+  nameOf,
+  categoryOf,
+  busy,
+  onOpen,
+  onPay,
+}: {
+  e: Expense;
+  nameOf: (id: string) => string;
+  categoryOf: (id: string | null) => Category | null;
+  busy: boolean;
+  onOpen: () => void;
+  onPay: () => void;
+}) {
+  return (
+    <div className="fin2-attrow">
+      <button type="button" className="fin2-attrow__info" onClick={onOpen}>
+        <span className="fin2-attrow__t">{e.description}</span>
+        <span className="fin2-attrow__c">
+          {categoryOf(e.categoryId)?.name ?? 'Sem categoria'} · pagador previsto {nameOf(e.paidByMemberId)}
+        </span>
+      </button>
+      {e.dueDate && <StChip dueDate={e.dueDate} />}
+      <span className="fin2-attrow__v" data-financial>{formatMoney(e.amountCents)}</span>
+      <button type="button" className="fin2-ghostbtn" onClick={onPay} disabled={busy}>
+        Marcar como paga
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Chip de status de vencimento: sempre texto + ícone + cor de apoio, nunca só
+ * cor (quem não distingue vermelho de verde lê a palavra).
+ */
+function StChip({ dueDate }: { dueDate: string }) {
+  const d = daysUntil(dueDate);
+  if (d < 0) {
+    return (
+      <span className="fin2-st fin2-st--overdue">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 8v5M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+        {-d} {-d === 1 ? 'dia' : 'dias'} em atraso
+      </span>
+    );
+  }
+  if (d === 0) {
+    return (
+      <span className="fin2-st fin2-st--today">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="6" /></svg>
+        Vence hoje
+      </span>
+    );
+  }
+  return (
+    <span className="fin2-st fin2-st--soon">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+      {d === 1 ? 'Vence amanhã' : `Vence em ${d} dias`}
+    </span>
   );
 }
 

@@ -20,7 +20,14 @@ import { MovementWizard } from '../finance/MovementWizard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
 import { financeApi, formatMoney } from '../finance/financeApi';
-import { buildPendencias, dismissPendencia, isDismissed, type Pendencia } from './pendencias';
+import {
+  buildPendencias,
+  dismissPendencia,
+  isDismissed,
+  isHiddenOnHome,
+  setHiddenOnHome,
+  type Pendencia,
+} from './pendencias';
 import { dueBucket, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
 import { checklistApi } from '../company/checklistApi';
@@ -882,8 +889,14 @@ function MoreActions({ onNavigate }: { onNavigate: (to: string) => void }) {
 function ChecklistNextSteps({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const [view, setView] = useState<ChecklistView | null>(null);
-  // Mesmo comportamento diário das pendências: fecha por hoje, volta amanhã.
-  const [closed, setClosed] = useState(() => isDismissed(companyId, 'checklist-nextsteps'));
+  // Duas saídas, com intenções diferentes: "Fazer depois" fecha por hoje e
+  // volta amanhã; "Não mostrar aqui" tira o bloco da Home até a pessoa pedir
+  // de volta no checklist. Guia que insiste todo dia vira estorvo.
+  const [closed, setClosed] = useState(
+    () =>
+      isDismissed(companyId, 'checklist-nextsteps') ||
+      isHiddenOnHome(companyId, 'checklist-nextsteps'),
+  );
 
   useEffect(() => {
     let alive = true;
@@ -940,6 +953,16 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
           onClick={closeForToday}
         >
           Fazer depois
+        </button>
+        <button
+          className="dash-pending__later"
+          title="Tira o bloco da Home. Você liga de novo no Checklist da empresa."
+          onClick={() => {
+            setHiddenOnHome(companyId, 'checklist-nextsteps', true);
+            setClosed(true);
+          }}
+        >
+          Não mostrar aqui
         </button>
       </div>
     </section>

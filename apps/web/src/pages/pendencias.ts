@@ -49,6 +49,31 @@ export function dismissPendencia(companyId: string, id: string): void {
   }
 }
 
+/* ── "Não mostrar na Home": escolha permanente, diferente do adiar ──
+ * "Fazer depois" some por um dia; isto some até a pessoa pedir de volta. São
+ * intenções diferentes: quem não quer o guia na Home não deve ter que fechar
+ * a mesma coisa todo dia. A escolha fica no navegador (como a Visão
+ * financeira); levar para o banco é uma fatia própria, com coluna de
+ * preferência por usuário. */
+const homeOffKey = (companyId: string, id: string) => `plim:home:oculto:${companyId}:${id}`;
+
+export function isHiddenOnHome(companyId: string, id: string): boolean {
+  try {
+    return localStorage.getItem(homeOffKey(companyId, id)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setHiddenOnHome(companyId: string, id: string, hidden: boolean): void {
+  try {
+    if (hidden) localStorage.setItem(homeOffKey(companyId, id), '1');
+    else localStorage.removeItem(homeOffKey(companyId, id));
+  } catch {
+    /* sem storage: apenas não persiste */
+  }
+}
+
 function formatPct(value: number): string {
   const rounded = Math.round(value * 100) / 100;
   return `${rounded.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;

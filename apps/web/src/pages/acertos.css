@@ -442,9 +442,10 @@
   background: var(--color-status-positive-bg);
   color: var(--color-status-positive);
 }
+/* "recorrente" classifica a origem da dívida, não avisa nada. */
 .ac-group__badge--rec {
-  background: var(--color-status-warning-bg);
-  color: var(--color-status-warning);
+  background: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
 }
 .ac-group__title {
   font-size: 15px;

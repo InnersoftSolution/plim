@@ -15,7 +15,15 @@ import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { checklistApi } from '../company/checklistApi';
-import { formFor, hrefFor, type ChecklistForm } from '../company/checklistGuides';
+import { isHiddenOnHome, setHiddenOnHome } from './pendencias';
+import {
+  MAX_ENTRIES,
+  countEntries,
+  fieldKeyAt,
+  formFor,
+  hrefFor,
+  type ChecklistForm,
+} from '../company/checklistGuides';
 import './dashboard.css';
 import './checklist.css';
 
@@ -36,6 +44,10 @@ export function ChecklistPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { company: activeCompany } = useActiveCompany();
+  /** O bloco de próximos passos está desligado na Home? */
+  const [homeOff, setHomeOff] = useState(() =>
+    isHiddenOnHome(activeCompany.id, 'checklist-nextsteps'),
+  );
 
   const load = useCallback(async () => {
     try {
@@ -135,6 +147,27 @@ export function ChecklistPage() {
       </header>
 
       <ProgressBlock view={view} />
+
+      {/* A pessoa decide se quer ser lembrada na Home. O controle mora aqui,
+          onde ela já está pensando no checklist, e não escondido em ajustes. */}
+      <label className="chk-homepref">
+        <input
+          type="checkbox"
+          checked={!homeOff}
+          onChange={(e) => {
+            setHiddenOnHome(companyId, 'checklist-nextsteps', !e.target.checked);
+            setHomeOff(!e.target.checked);
+          }}
+        />
+        <span>
+          <strong>Mostrar os próximos passos na Home</strong>
+          <small>
+            {homeOff
+              ? 'Hoje o checklist só aparece aqui. Ligue se quiser o lembrete na tela inicial.'
+              : 'Desligue se preferir acompanhar o checklist só por esta tela.'}
+          </small>
+        </span>
+      </label>
 
       {checklistPhaseCatalog.map((phase) => {
         const items = view.items.filter((i) => i.phase === phase.id);
@@ -607,24 +640,59 @@ function ItemPanel({
   const [text, setText] = useState(item.note ?? '');
   const [saving, setSaving] = useState(false);
   const fields = form?.fields;
+  const repeatable = form?.repeatable;
+  /** Quantos blocos de campos aparecem (itens repetíveis crescem sob demanda). */
+  const [entries, setEntries] = useState(() =>
+    repeatable ? countEntries(item.data, fields) : 1,
+  );
 
   const savedData = item.data ?? {};
+  /** Todas as chaves em uso hoje na tela (um bloco, ou vários). */
+  const chaves = fields
+    ? Array.from({ length: entries }, (_, i) => fields.map((f) => fieldKeyAt(f.key, i))).flat()
+    : [];
   const dirty = fields
-    ? fields.some((f) => (values[f.key] ?? '').trim() !== (savedData[f.key] ?? ''))
+    ? chaves.some((k) => (values[k] ?? '').trim() !== (savedData[k] ?? ''))
     : text !== (item.note ?? '');
   const hasContent = fields ? Object.keys(savedData).length > 0 : !!item.note;
   const savedState = !dirty && hasContent;
+
+  /** Remove um bloco e puxa os de baixo para cima, sem deixar buraco. */
+  function removeEntry(index: number) {
+    setValues((cur) => {
+      const novo = { ...cur };
+      for (let i = index; i < entries - 1; i += 1) {
+        for (const f of fields ?? []) {
+          novo[fieldKeyAt(f.key, i)] = cur[fieldKeyAt(f.key, i + 1)] ?? '';
+        }
+      }
+      for (const f of fields ?? []) delete novo[fieldKeyAt(f.key, entries - 1)];
+      return novo;
+    });
+    setEntries((n) => Math.max(1, n - 1));
+  }
 
   async function handleSave() {
     setSaving(true);
     try {
       if (fields) {
+        // Blocos vazios no meio somem na gravação: o que volta do banco é
+        // sempre uma sequência sem furos.
         const data: Record<string, string> = {};
-        for (const f of fields) {
-          const v = (values[f.key] ?? '').trim();
-          if (v) data[f.key] = v;
+        let destino = 0;
+        for (let i = 0; i < entries; i += 1) {
+          const bloco: Record<string, string> = {};
+          for (const f of fields) {
+            const v = (values[fieldKeyAt(f.key, i)] ?? '').trim();
+            if (v) bloco[f.key] = v;
+          }
+          if (Object.keys(bloco).length === 0) continue;
+          for (const [k, v] of Object.entries(bloco)) data[fieldKeyAt(k, destino)] = v;
+          destino += 1;
         }
         await onSave(item, { note: item.note, data: Object.keys(data).length > 0 ? data : null });
+        setValues(data);
+        setEntries(Math.max(1, destino));
       } else {
         const trimmed = text.trim();
         await onSave(item, { note: trimmed ? trimmed : null, data: null });
@@ -650,31 +718,59 @@ function ItemPanel({
       )}
 
       {fields ? (
-        <div className="chk-fields">
-          {fields.map((f) => {
-            const value = values[f.key] ?? '';
-            return (
-              <label className="chk-field" key={f.key}>
-                <span className="chk-field__label">
-                  {f.label}
-                  {f.type === 'url' && value.trim() && (
-                    <a href={hrefFor(value)} target="_blank" rel="noreferrer" className="chk-field__open">
-                      abrir
-                    </a>
-                  )}
-                </span>
-                <input
-                  className="chk-field__input"
-                  type="text"
-                  value={value}
-                  placeholder={f.placeholder}
-                  onChange={(e) => setValues((cur) => ({ ...cur, [f.key]: e.target.value }))}
-                  inputMode={f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : undefined}
-                />
-              </label>
-            );
-          })}
-        </div>
+        <>
+          {Array.from({ length: entries }, (_, i) => (
+            <div className={'chk-fields' + (repeatable ? ' chk-fields--entry' : '')} key={i}>
+              {repeatable && entries > 1 && (
+                <div className="chk-entryhead">
+                  <span className="chk-entryhead__t">
+                    {repeatable.itemLabel} {i + 1}
+                  </span>
+                  <button
+                    type="button"
+                    className="chk-entryhead__rm"
+                    onClick={() => removeEntry(i)}
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+              {fields.map((f) => {
+                const chave = fieldKeyAt(f.key, i);
+                const value = values[chave] ?? '';
+                return (
+                  <label className="chk-field" key={chave}>
+                    <span className="chk-field__label">
+                      {f.label}
+                      {f.type === 'url' && value.trim() && (
+                        <a href={hrefFor(value)} target="_blank" rel="noreferrer" className="chk-field__open">
+                          abrir
+                        </a>
+                      )}
+                    </span>
+                    <input
+                      className="chk-field__input"
+                      type="text"
+                      value={value}
+                      placeholder={f.placeholder}
+                      onChange={(e) => setValues((cur) => ({ ...cur, [chave]: e.target.value }))}
+                      inputMode={f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : undefined}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+          {repeatable && entries < MAX_ENTRIES && (
+            <button
+              type="button"
+              className="chk-addentry"
+              onClick={() => setEntries((n) => n + 1)}
+            >
+              <span aria-hidden="true">+</span> {repeatable.addLabel}
+            </button>
+          )}
+        </>
       ) : (
         <textarea
           className="chk-note"

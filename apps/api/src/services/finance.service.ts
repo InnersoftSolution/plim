@@ -25,8 +25,15 @@ import type { RecurringCost } from '../domain/recurring';
 import type { FinanceRepository } from '../repositories/finance.repository';
 import type { RecurringRepository } from '../repositories/recurring.repository';
 import type { CompanyService } from './company.service';
+import type { AuditService } from './audit.service';
+import type { AuditAction, AuditEntityType } from '@plim/shared';
+
 import { computeSplit } from './rateio';
 import { DomainError, NotFoundError } from '../lib/errors';
+
+/** Valor em reais para as frases da auditoria. */
+const brl = (c: number): string =>
+  (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /**
  * Avança a data da cobrança conforme a frequência (YYYY-MM-DD, sem fuso).
@@ -271,7 +278,36 @@ export class FinanceService {
     private readonly repo: FinanceRepository,
     /** Quando presente, liga a materialização de custos recorrentes. */
     private readonly recurringRepo?: RecurringRepository,
+    /** Quando presente, grava a trilha de auditoria das ações. */
+    private readonly audit?: AuditService,
   ) {}
+
+  /**
+   * Grava "quem fez o quê" sem nunca derrubar a ação principal.
+   * A frase nasce aqui, com o nome de agora: se o sócio sair depois,
+   * a história continua contada.
+   */
+  private async trilha(
+    companyId: string,
+    members: CompanyMember[],
+    actingUserId: string | null | undefined,
+    action: AuditAction,
+    entityType: AuditEntityType,
+    entityId: string | null,
+    frase: string,
+  ): Promise<void> {
+    if (!this.audit) return;
+    const actor = actingUserId ? members.find((m) => m.userId === actingUserId) ?? null : null;
+    await this.audit.record({
+      companyId,
+      actorMemberId: actor?.id ?? null,
+      actorName: actor?.fullName ?? null,
+      action,
+      entityType,
+      entityId,
+      summary: `${actor?.fullName ?? 'Sistema'} ${frase}`,
+    });
+  }
 
   /**
    * Materializa cobranças vencidas dos custos recorrentes ativos: para cada
@@ -442,6 +478,18 @@ export class FinanceService {
         });
       }
     }
+
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'created',
+      'movement',
+      expense.id,
+      isUnpaid
+        ? `registrou a conta a pagar "${expense.description}" de ${brl(expense.amountCents)}`
+        : `registrou a despesa "${expense.description}" de ${brl(expense.amountCents)}`,
+    );
 
     return expense;
   }
@@ -650,6 +698,16 @@ export class FinanceService {
       }
     }
 
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'created',
+      'movement',
+      contribution.id,
+      `registrou o aporte "${contribution.description}" de ${brl(contribution.amountCents)}`,
+    );
+
     return contribution;
   }
 
@@ -674,7 +732,7 @@ export class FinanceService {
       (actingUserId ? members.find((m) => m.userId === actingUserId) : undefined) ??
       members[0]!;
     const conf = resolveConfirmation(members, receiver, actingUserId);
-    return this.repo.createExpense({
+    const revenue = await this.repo.createExpense({
       companyId,
       kind: 'revenue',
       description: input.description,
@@ -699,6 +757,16 @@ export class FinanceService {
       tags: input.tags ?? [],
       contactId: input.contactId ?? null,
     });
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'created',
+      'movement',
+      revenue.id,
+      `registrou a entrada "${revenue.description}" de ${brl(revenue.amountCents)}`,
+    );
+    return revenue;
   }
 
   /**
@@ -725,7 +793,17 @@ export class FinanceService {
     if (actingUserId != null && payer?.userId !== actingUserId) {
       throw new DomainError('NOT_THE_PAYER', 'Só o sócio informado como pagador pode confirmar.', 403);
     }
-    return this.repo.updateConfirmation(expenseId, decision);
+    const updated = await this.repo.updateConfirmation(expenseId, decision);
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      decision,
+      'movement',
+      expenseId,
+      `${decision === 'confirmed' ? 'confirmou' : 'recusou'} a movimentação "${expense.description}"`,
+    );
+    return updated;
   }
 
   /**
@@ -737,8 +815,9 @@ export class FinanceService {
     expenseId: string,
     paidOn: string | undefined,
     actingUserId?: string | null,
+    paidByMemberId?: string | null,
   ): Promise<Expense> {
-    await this.companyService.getOverview(companyId, actingUserId);
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const expense = await this.repo.findExpenseById(companyId, expenseId);
     if (!expense) {
       throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
@@ -749,13 +828,32 @@ export class FinanceService {
     if (expense.paymentStatus !== 'unpaid') {
       throw new DomainError('ALREADY_PAID', 'Esta despesa já está paga.');
     }
+    // Quem pagou de verdade pode não ser o pagador previsto: a pergunta é
+    // feita na hora de pagar, e a resposta manda no acerto entre sócios.
+    const pagador = paidByMemberId ?? expense.paidByMemberId;
+    if (!members.some((m) => m.id === pagador)) {
+      throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
+    }
     const dia = paidOn ?? new Date().toISOString().slice(0, 10);
-    const paga = await this.repo.markExpensePaid(expenseId, dia);
+    let paga = await this.repo.markExpensePaid(expenseId, dia);
+    if (pagador !== paga.paidByMemberId) {
+      paga = await this.repo.updateExpense(expenseId, { paidByMemberId: pagador });
+    }
     // A conta a pagar não tinha pagamento nenhum; agora tem. Sem esta linha o
     // dinheiro sairia do bolso de alguém sem ninguém ficar credor.
     const payments = await this.repo.replaceExpensePayments(
       expenseId,
-      pagamentoIntegral(paga.paidByMemberId, paga.amountCents, dia),
+      pagamentoIntegral(pagador, paga.amountCents, dia),
+    );
+    const nomePagador = members.find((m) => m.id === pagador)?.fullName ?? 'Sócio';
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'paid',
+      'movement',
+      expenseId,
+      `marcou como paga a conta "${expense.description}" (${brl(expense.amountCents)}, pagou ${nomePagador})`,
     );
     return { ...paga, payments };
   }
@@ -770,12 +868,21 @@ export class FinanceService {
     expenseId: string,
     actingUserId?: string | null,
   ): Promise<void> {
-    await this.companyService.getOverview(companyId, actingUserId);
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const expense = await this.repo.findExpenseById(companyId, expenseId);
     if (!expense) {
       throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
     }
     await this.repo.deleteExpense(expenseId);
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'deleted',
+      'movement',
+      expenseId,
+      `excluiu a movimentação "${expense.description}" de ${brl(expense.amountCents)}`,
+    );
   }
 
   /**
@@ -913,6 +1020,19 @@ export class FinanceService {
     if (structural && linkedPayments.length > 0) {
       await this.syncAutoSettlements(atualizada, linkedPayments);
     }
+
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'updated',
+      'movement',
+      expenseId,
+      `editou a movimentação "${atualizada.description}"` +
+        (atualizada.amountCents !== expense.amountCents
+          ? ` (valor: ${brl(expense.amountCents)} → ${brl(atualizada.amountCents)})`
+          : ''),
+    );
 
     return atualizada;
   }
@@ -1535,6 +1655,18 @@ export class FinanceService {
       // próprio. Nunca é reescrito quando a movimentação de origem muda.
       isAuto: false,
     });
+    const nomeDe = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'created',
+      // Amarrado à movimentação de origem quando existe: assim o histórico
+      // DELA conta também os acertos que a quitaram.
+      input.expenseId ? 'movement' : 'settlement_payment',
+      input.expenseId ?? payment.id,
+      `registrou um acerto de ${brl(input.amountCents)} de ${nomeDe(input.fromMemberId)} para ${nomeDe(input.toMemberId)}`,
+    );
     return toPaymentDto(payment);
   }
 
@@ -1585,7 +1717,7 @@ export class FinanceService {
     paymentId: string,
     actingUserId?: string | null,
   ): Promise<void> {
-    await this.companyService.getOverview(companyId, actingUserId);
+    const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const payments = await this.repo.listPayments(companyId);
     const payment = payments.find((p) => p.id === paymentId);
     // Confere a empresa antes de apagar: id de outra empresa não pode passar.
@@ -1593,6 +1725,16 @@ export class FinanceService {
       throw new NotFoundError('PAYMENT_NOT_FOUND', 'Acerto não encontrado.');
     }
     await this.repo.deletePayment(paymentId);
+    const nomeDe = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'deleted',
+      payment.expenseId ? 'movement' : 'settlement_payment',
+      payment.expenseId ?? paymentId,
+      `desfez um acerto de ${brl(payment.amountCents)} de ${nomeDe(payment.fromMemberId)} para ${nomeDe(payment.toMemberId)}`,
+    );
   }
 
   /** Calcula a parte de cada sócio conforme o modo de rateio. */

@@ -73,9 +73,12 @@
   background: var(--color-bg-brand-soft);
   color: var(--color-brand-primary);
 }
+/* "Em aberto", "Parcial" e "Aguardando confirmação" são estados de espera,
+   não avisos: cinza. O amarelo fica para o que vence hoje e o vermelho para
+   o que já venceu. */
 .movp-chip--warn {
-  background: var(--color-status-warning-bg);
-  color: var(--color-status-warning);
+  background: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
 }
 .movp-title {
   font-size: 20px;
@@ -195,8 +198,8 @@
   color: var(--color-status-positive);
 }
 .movp-person__tag.is-due {
-  color: var(--color-status-warning);
-  background: var(--color-status-warning-bg);
+  color: var(--color-status-pending);
+  background: var(--color-status-pending-bg);
 }
 /* Linha do total: fecha a lista de pagamentos sem parecer mais um sócio. */
 .movp-person--total {
@@ -277,10 +280,12 @@
   font-weight: 700;
   color: var(--color-text-default);
 }
+/* Diferença a acertar é saldo em aberto entre sócios, não alerta: cor de
+   texto firme, e o verde entra quando a conta zera. */
 .movp-acerto__total {
   font-size: 13px;
   font-weight: 700;
-  color: var(--color-status-warning);
+  color: var(--color-text-default);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -415,5 +420,58 @@
   .movp-actions .btn,
   .movp-danger {
     width: 100%;
+  }
+}
+
+/* ── Histórico (trilha de auditoria) ── */
+.movp-trail {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.movp-trail__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 13.5px;
+  color: var(--color-text-default);
+}
+.movp-trail__item:first-child {
+  border-top: none;
+}
+.movp-trail__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  align-self: center;
+  background: var(--color-text-subtle);
+}
+.movp-trail__dot--created { background: var(--color-status-positive); }
+.movp-trail__dot--updated { background: var(--color-status-info); }
+.movp-trail__dot--deleted { background: var(--color-status-negative); }
+.movp-trail__dot--confirmed { background: var(--color-status-positive); }
+.movp-trail__dot--refused { background: var(--color-status-negative); }
+.movp-trail__dot--paid { background: var(--color-status-positive); }
+.movp-trail__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+.movp-trail__when {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) {
+  .movp-trail__item {
+    flex-wrap: wrap;
+  }
+  .movp-trail__when {
+    width: 100%;
+    padding-left: 18px;
   }
 }

@@ -30,6 +30,7 @@ export function FinChart({
   caption,
   emptyText,
   helpText,
+  onSelectMonth,
 }: {
   points: ChartPoint[];
   title: string;
@@ -40,6 +41,12 @@ export function FinChart({
   emptyText: string;
   /** Explicação educativa mostrada no "?" do canto (hover). */
   helpText?: string;
+  /**
+   * Clique numa barra de mês real (não projeção): a tela mostra as
+   * movimentações daquele mês. O gráfico responde "quanto"; o clique leva
+   * ao "o quê".
+   */
+  onSelectMonth?: (key: string) => void;
 }) {
   const flow = points.some((p) => p.inCents !== undefined || p.outCents !== undefined);
   const totalOf = (p: ChartPoint) =>
@@ -105,8 +112,20 @@ export function FinChart({
             const outC = p.outCents ?? 0;
             const pend = p.pendingCents ?? 0;
             const single = p.cents ?? 0;
+            const clicavel = !!onSelectMonth && !p.projected && totalOf(p) > 0;
+            const Col = clicavel ? 'button' : 'div';
             return (
-              <div className="fchart__col" key={p.key}>
+              <Col
+                className={'fchart__col' + (clicavel ? ' fchart__col--click' : '')}
+                key={p.key}
+                {...(clicavel
+                  ? {
+                      type: 'button' as const,
+                      onClick: () => onSelectMonth(p.key),
+                      'aria-label': `Ver as movimentações de ${p.label}`,
+                    }
+                  : {})}
+              >
                 <div className="fchart__tip" role="tooltip">
                   <span className="fchart__tip-label">
                     {p.label}
@@ -145,6 +164,7 @@ export function FinChart({
                       )}
                     </>
                   )}
+                  {clicavel && <span className="fchart__tip-go">clique para ver as movimentações</span>}
                 </div>
                 <span className={'fchart__value' + (p.current || p.projected ? ' is-strong' : '')}>
                   {p.projected ? compact(flow ? outC : single) : ''}
@@ -191,7 +211,7 @@ export function FinChart({
                   {p.label}
                   {p.projected ? '*' : ''}
                 </span>
-              </div>
+              </Col>
             );
           })}
         </div>

@@ -232,8 +232,9 @@
   color: var(--color-brand-primary);
   font-weight: 600;
 }
+/* Quem fica devendo é resultado do rateio, não alerta. */
 .mw-owing {
-  color: var(--color-status-warning);
+  color: var(--color-status-pending);
   font-weight: 600;
 }
 /* conta que recebeu: select + quadradinho "+" do mesmo tamanho */

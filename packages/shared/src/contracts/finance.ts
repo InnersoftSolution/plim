@@ -276,6 +276,8 @@ export type CreateRepeatedExpenseInput = z.infer<typeof createRepeatedExpenseSch
 /** Marcar uma conta a pagar como paga (jornada "contas a pagar"). */
 export const payExpenseSchema = z.object({
   paidOn: z.string().date().optional(), // data do pagamento; back usa hoje se ausente
+  /** Quem de fato pagou. Ausente = o pagador previsto da conta. */
+  paidByMemberId: z.string().uuid().optional(),
 });
 export type PayExpenseInput = z.infer<typeof payExpenseSchema>;
 

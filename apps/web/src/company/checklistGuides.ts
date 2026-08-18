@@ -29,9 +29,46 @@ export interface ChecklistForm {
   example?: string;
   /** Campos estruturados (itens de registro). */
   fields?: ChecklistField[];
+  /**
+   * Item que aceita mais de um registro (a empresa tem dois domínios, três
+   * contas...). O painel repete o mesmo conjunto de campos e guarda cada
+   * registro com sufixo na chave: o primeiro fica em `url`, o segundo em
+   * `url__2`, e assim por diante. Assim o que já estava salvo continua
+   * valendo e o backend não precisa saber de nada.
+   */
+  repeatable?: {
+    /** Rótulo de cada bloco, numerado na tela ("Domínio 1"). */
+    itemLabel: string;
+    /** Texto do botão que acrescenta um registro. */
+    addLabel: string;
+  };
   /** Placeholder do campo de texto livre (quando nao ha campos). */
   notePlaceholder?: string;
 }
+
+/** Chave de um campo dentro do registro `index` (0 = o primeiro, sem sufixo). */
+export function fieldKeyAt(key: string, index: number): string {
+  return index === 0 ? key : `${key}__${index + 1}`;
+}
+
+/** Quantos registros existem nos dados salvos (mínimo 1, para o formulário vazio). */
+export function countEntries(
+  data: Record<string, string> | null,
+  fields: ChecklistField[] | undefined,
+): number {
+  if (!data || !fields || fields.length === 0) return 1;
+  let total = 1;
+  // Cresce enquanto houver qualquer campo preenchido no próximo bloco.
+  for (let i = 1; i < MAX_ENTRIES; i += 1) {
+    const existe = fields.some((f) => (data[fieldKeyAt(f.key, i)] ?? '').trim() !== '');
+    if (!existe) break;
+    total = i + 1;
+  }
+  return total;
+}
+
+/** Teto de registros por item: acima disso a lista deixa de ser consultável. */
+export const MAX_ENTRIES = 10;
 
 export const checklistForms: Record<string, ChecklistForm> = {
   // ── Ideia e posicionamento (pensamento guiado) ─────────────────────
@@ -100,6 +137,7 @@ export const checklistForms: Record<string, ChecklistForm> = {
   // ── Marca e presenca (registro estruturado) ────────────────────────
   domain: {
     intro: 'Registre onde está o domínio para ninguém esquecer onde renovar.',
+    repeatable: { itemLabel: 'Domínio', addLabel: 'Adicionar outro domínio' },
     fields: [
       { key: 'url', label: 'Endereço do domínio', placeholder: 'ex: minhaempresa.com.br', type: 'url' },
       { key: 'registrar', label: 'Onde foi registrado', placeholder: 'ex: GoDaddy, Registro.br, Hostinger' },

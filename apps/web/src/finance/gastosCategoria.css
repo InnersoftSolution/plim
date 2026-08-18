@@ -1,73 +1,25 @@
-/* "Gastos por categoria": donut + lista clicável. */
-.gpc {
-  border: 1px solid var(--color-border-default);
-  border-radius: 16px;
-  background: var(--color-bg-surface);
-  padding: 18px;
-}
-.gpc__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.gpc__head h2 {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text-default);
-}
+/* "Gastos por categoria": barras horizontais clicáveis (dentro do widget). */
 .gpc__total {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   /* É um total informativo, não um alerta: cor de texto padrão. */
   color: var(--color-text-default);
-}
-.gpc__empty {
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-.gpc__body {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.gpc__chart {
-  flex-shrink: 0;
-}
-.gpc__arc {
-  cursor: pointer;
-  transition: opacity 120ms ease;
-}
-.gpc__arc:hover {
-  opacity: 0.75;
-}
-.gpc__chart-label {
-  font-size: 22px;
-  font-weight: 700;
-  fill: var(--color-text-default);
-}
-.gpc__chart-sub {
-  font-size: 9px;
-  fill: var(--color-text-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .gpc__list {
-  flex: 1;
-  min-width: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .gpc__row {
-  width: 100%;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
   border: none;
   border-radius: 10px;
   background: none;
@@ -80,16 +32,15 @@
 .gpc__row--active {
   background: var(--color-bg-brand-soft);
 }
-.gpc__dot {
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.gpc__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 .gpc__name {
-  flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--color-text-default);
   overflow: hidden;
@@ -99,22 +50,40 @@
 .gpc__meta {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.3;
+  align-items: baseline;
+  gap: 8px;
 }
 .gpc__meta strong {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--color-text-default);
 }
 .gpc__meta small {
-  font-size: 11px;
-  color: var(--color-text-subtle);
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+.gpc__count {
+  font-style: normal;
+}
+.gpc__track {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-bg-default);
+  overflow: hidden;
+}
+.gpc__row--active .gpc__track {
+  background: var(--color-bg-surface);
+}
+.gpc__track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
 }
 
 .gpc__hint {
-  margin-top: 12px;
+  margin-top: 4px;
   padding-top: 12px;
   border-top: 1px solid var(--color-border-default);
   font-size: 13px;
@@ -126,13 +95,10 @@
   color: var(--color-brand-primary);
 }
 
-@media (max-width: 640px) {
-  .gpc__body {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .gpc__chart {
-    align-self: center;
+@media (max-width: 699px) {
+  /* Nome da categoria vale mais que a contagem de movimentações: em tela
+     estreita a contagem sai para o nome não ser cortado. */
+  .gpc__count {
+    display: none;
   }
 }

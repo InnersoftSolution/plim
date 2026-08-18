@@ -44,7 +44,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-status-warning-bg);
-  color: var(--color-status-warning);
+  color: var(--color-status-warning-icon);
   margin-bottom: 4px;
 }
 .dash-error__title {
@@ -666,9 +666,11 @@
 /* Uma cor por significado, nunca duas iguais lado a lado: verde entra, rosa
    sai, índigo é o resultado (o número já carrega o sinal), âmbar é prazo e
    cinza é "não há nada aqui". Sem bloco preto sólido. */
+/* Mesmo padrão dos outros cards (fundo tonal + ícone colorido), com o
+   dourado no lugar do amarelo escurecido, que sujava o quadrado. */
 .dash-stat__icon--amber {
   background: var(--color-status-warning-bg);
-  color: var(--color-status-warning);
+  color: var(--color-status-warning-icon);
 }
 .dash-stat__icon--muted {
   background: var(--color-bg-elevated);
@@ -1660,6 +1662,8 @@
 .dash-nextsteps__foot {
   display: flex;
   justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
   margin-top: 12px;
 }
 

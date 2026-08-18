@@ -8,6 +8,7 @@ import type {
 import type { RecurringCost } from '../domain/recurring';
 import type { RecurringRepository } from '../repositories/recurring.repository';
 import type { CompanyService } from './company.service';
+import type { AuditService } from './audit.service';
 import { DomainError, NotFoundError } from '../lib/errors';
 
 /**
@@ -73,7 +74,31 @@ export class RecurringService {
   constructor(
     private readonly companyService: CompanyService,
     private readonly repo: RecurringRepository,
+    /** Quando presente, grava a trilha de auditoria. */
+    private readonly audit?: AuditService,
   ) {}
+
+  /** Grava o evento sem nunca derrubar a ação principal. */
+  private async trilha(
+    companyId: string,
+    members: { id: string; userId: string | null; fullName: string }[],
+    actingUserId: string | null | undefined,
+    action: 'created' | 'updated',
+    costId: string,
+    frase: string,
+  ): Promise<void> {
+    if (!this.audit) return;
+    const actor = actingUserId ? members.find((m) => m.userId === actingUserId) ?? null : null;
+    await this.audit.record({
+      companyId,
+      actorMemberId: actor?.id ?? null,
+      actorName: actor?.fullName ?? null,
+      action,
+      entityType: 'recurring_cost',
+      entityId: costId,
+      summary: `${actor?.fullName ?? 'Sistema'} ${frase}`,
+    });
+  }
 
   async create(
     companyId: string,
@@ -104,6 +129,18 @@ export class RecurringService {
       note: input.note ?? null,
       active: true,
     });
+    const valor = (cost.amountCents / 100).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'created',
+      cost.id,
+      `cadastrou o custo recorrente "${cost.name}" de ${valor}`,
+    );
     return toDto(cost);
   }
 
@@ -146,6 +183,14 @@ export class RecurringService {
       input.endsOn !== undefined ? input.endsOn : existing.endsOn,
     );
     const updated = await this.repo.update(costId, input);
+    await this.trilha(
+      companyId,
+      members,
+      actingUserId,
+      'updated',
+      costId,
+      `editou o custo recorrente "${updated.name}"`,
+    );
     return toDto(updated);
   }
 }

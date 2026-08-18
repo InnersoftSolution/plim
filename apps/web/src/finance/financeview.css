@@ -1,0 +1,422 @@
+/* ── Visão financeira: grid de widgets prontos (sem dashboard livre) ──
+ * O grid é de 12 colunas e o tamanho de cada bloco vem do catálogo, não do
+ * usuário: a informação define a largura, não o gosto do dia.
+ */
+.fw-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+  /* O que decide a quebra é o espaço que sobra ao lado do menu, não o tamanho
+     da janela: num tablet de 768px o conteúdo tem menos de 500px, e dois
+     gráficos lado a lado ali ficam ilegíveis. */
+  container-type: inline-size;
+}
+.fw {
+  grid-column: span 12;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: var(--color-bg-surface);
+  min-width: 0;
+}
+/* Faixa intermediária: dois blocos por linha, e o gráfico grande sozinho. */
+@container (min-width: 560px) {
+  .fw--4,
+  .fw--6 { grid-column: span 6; }
+}
+/* Espaço cheio: cada bloco na largura que o catálogo pede. */
+@container (min-width: 880px) {
+  .fw--4 { grid-column: span 4; }
+  .fw--6 { grid-column: span 6; }
+  .fw--8 { grid-column: span 8; }
+}
+/* Navegador sem container queries cai aqui e continua legível. */
+@supports not (container-type: inline-size) {
+  @media (min-width: 1200px) {
+    .fw--4 { grid-column: span 4; }
+    .fw--6 { grid-column: span 6; }
+    .fw--8 { grid-column: span 8; }
+  }
+}
+
+.fw__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fw__titles h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-default);
+}
+.fw__titles p {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.fw__empty {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.fw__note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.fw__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.fw__foot b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.fw__link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.fw__link:hover {
+  text-decoration: underline;
+}
+
+/* ── fluxo de caixa: linha + área do saldo acumulado ── */
+.fw-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fw-flow__now {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fw-flow__val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-default);
+}
+.fw-flow__val.is-neg { color: var(--color-status-negative); }
+.fw-flow__val.is-pos { color: var(--color-status-positive); }
+.fw-flow__delta {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.fw-flow__plot {
+  position: relative;
+  height: 168px;
+  margin-top: 4px;
+}
+.fw-flow__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.fw-flow__pt {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--color-bg-surface);
+  border: 2.5px solid var(--color-brand-primary);
+  cursor: help;
+}
+.fw-flow__pt.is-neg {
+  border-color: var(--color-status-negative);
+}
+.fw-flow__pt:hover {
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+}
+.fw-flow__zero {
+  stroke: var(--color-border-default);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.fw-flow__area {
+  fill: color-mix(in srgb, var(--color-brand-primary) 14%, transparent);
+}
+.fw-flow__area.is-neg {
+  fill: color-mix(in srgb, var(--color-status-negative) 12%, transparent);
+}
+.fw-flow__line {
+  fill: none;
+  stroke: var(--color-brand-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fw-flow__line.is-neg {
+  stroke: var(--color-status-negative);
+}
+.fw-flow__axis {
+  position: relative;
+  height: 15px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.fw-flow__axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+/* Extremos encostam na borda do card: puxa para dentro. */
+.fw-flow__axis span:first-child {
+  transform: none;
+}
+.fw-flow__axis span:last-child {
+  transform: translateX(-100%);
+}
+
+/* ── listas de contas (próximos pagamentos / atraso) ── */
+.fw-next {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.fw-next li + li {
+  border-top: 1px solid var(--color-border-default);
+}
+.fw-next button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.fw-next button:hover {
+  background: var(--color-bg-default);
+}
+.fw-next__when {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+.fw-next--late .fw-next__when {
+  color: var(--color-status-negative-ink);
+}
+.fw-next__what {
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-next__v {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.fw-clear {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-status-positive);
+}
+.fw-late__sum {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fw-late__v {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-status-negative);
+}
+.fw-late__n {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-status-negative-ink);
+}
+
+/* ── barras horizontais de sócio ── */
+.fw-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.fw-bars__row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) minmax(60px, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.fw-bars__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-bars__track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-bg-default);
+  overflow: hidden;
+}
+.fw-bars__track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+}
+.fw-bars__track--pago i {
+  background: var(--color-text-muted);
+}
+.fw-bars__v {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+
+/* ── personalizar visão ── */
+.fw-cust__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 16px;
+}
+.fw-cust__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.fw-cust__item:hover {
+  background: var(--color-bg-default);
+}
+/* Último bloco ligado: não dá para desmarcar, e o texto explica por quê. */
+.fw-cust__item.is-locked {
+  cursor: default;
+}
+.fw-cust__item.is-locked:hover {
+  background: none;
+}
+.fw-cust__item.is-locked strong {
+  color: var(--color-text-muted);
+}
+.fw-cust__item input {
+  margin-top: 2px;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--color-brand-primary);
+  flex-shrink: 0;
+}
+.fw-cust__item strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.fw-cust__item small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.fw-cust__acts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fw-cust__reset {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.fw-cust__reset:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+.fw-cust__done {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand, #fff);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Bloco estreito (não importa o tamanho da janela): aliviar o conteúdo. */
+@container (max-width: 620px) {
+  /* 12 rótulos não cabem: fica um a cada três, mais o último, que é a
+     leitura que importa (o mês mais recente). */
+  .fw-flow__axis span {
+    display: none;
+  }
+  .fw-flow__axis span:nth-child(3n + 1),
+  .fw-flow__axis span:last-child {
+    display: block;
+  }
+  /* A barra pode encolher, o nome do sócio não pode virar "Dyely Ca..". */
+  .fw-bars__row {
+    grid-template-columns: minmax(0, 1.4fr) minmax(40px, 1fr) auto;
+    gap: 8px;
+  }
+  .fw-next button {
+    grid-template-columns: 52px 1fr auto;
+  }
+}
+
+@media (max-width: 699px) {
+  .fw {
+    padding: 14px 15px;
+  }
+  .fw-flow__plot {
+    height: 138px;
+  }
+}

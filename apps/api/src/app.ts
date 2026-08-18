@@ -26,6 +26,11 @@ import { CompanyService } from './services/company.service';
 import { AdvisorService } from './services/advisor.service';
 import { JourneyService } from './services/journey.service';
 import { FinanceService } from './services/finance.service';
+import { AuditService } from './services/audit.service';
+import type { AuditRepository } from './repositories/audit.repository';
+import { InMemoryAuditRepository } from './repositories/in-memory/audit.repository.memory';
+import { SupabaseAuditRepository } from './repositories/supabase/audit.repository.supabase';
+import { auditRoutes } from './http/routes/audit.routes';
 import { PartnerService } from './services/partner.service';
 import { RecurringService } from './services/recurring.service';
 import { ActivityService } from './services/activity.service';
@@ -166,10 +171,21 @@ export function buildApp(): FastifyInstance {
   const recurringRepository: RecurringRepository = isSupabaseConfigured
     ? new SupabaseRecurringRepository(getSupabaseAdmin())
     : new InMemoryRecurringRepository();
-  const recurringService = new RecurringService(companyService, recurringRepository);
+  // Trilha de auditoria: quem fez o quê. Os serviços gravam; a rota só lê.
+  const auditRepository: AuditRepository = isSupabaseConfigured
+    ? new SupabaseAuditRepository(getSupabaseAdmin())
+    : new InMemoryAuditRepository();
+  const auditService = new AuditService(companyService, auditRepository);
+
+  const recurringService = new RecurringService(companyService, recurringRepository, auditService);
 
   // O financeiro conhece os recorrentes para materializar as cobranças do mês.
-  const financeService = new FinanceService(companyService, financeRepository, recurringRepository);
+  const financeService = new FinanceService(
+    companyService,
+    financeRepository,
+    recurringRepository,
+    auditService,
+  );
 
   const activityRepository: ActivityRepository = isSupabaseConfigured
     ? new SupabaseActivityRepository(getSupabaseAdmin())
@@ -256,6 +272,7 @@ export function buildApp(): FastifyInstance {
   app.register(advisorRoutes, { service: advisorService });
   app.register(journeyRoutes, { service: journeyService });
   app.register(financeRoutes, { service: financeService });
+  app.register(auditRoutes, { service: auditService });
   app.register(guideRoutes, { repo: guideRepository });
   app.register(partnerRoutes, { service: partnerService });
   app.register(recurringRoutes, { service: recurringService });

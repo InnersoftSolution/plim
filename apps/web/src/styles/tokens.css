@@ -26,9 +26,13 @@
      Ele é cor de SUPERFÍCIE (faixa, ponto, barra, fundo): como texto dá 1,4:1
      no branco e ninguém lê. Onde vira letra, entra o --yellow-800, mesmo
      matiz e 6,1:1 no branco. */
-  --yellow-400: #f5da27;
-  --yellow-100: #fdf7d6;
-  --yellow-800: #7a5e00;
+  --yellow-400: #f5da27; /* o amarelo da marca: faixas, pontos, realces */
+  /* O tonal NASCE do amarelo acima (mistura com branco), então quadradinho de
+     ícone, chip e faixa são o mesmo amarelo em intensidades diferentes. Antes
+     o tonal era um creme escolhido à parte e os dois brigavam lado a lado. */
+  --yellow-100: color-mix(in srgb, var(--yellow-400) 32%, var(--paper-0));
+  --yellow-600: #9c7a00; /* dourado dos ícones: 3,6:1 no tonal, como o verde e o vermelho */
+  --yellow-800: #7a5e00; /* texto miúdo: 5,4:1 no tonal */
   /* Deve / Erro / resultado negativo: vermelho Plim (#F50000), escolhido pela
      Rafaelle. Lê como vermelho de verdade, ao contrário do #F53B00 que
      puxava para laranja. 4,3:1 no branco: passa em texto grande (os valores em
@@ -85,11 +89,19 @@
   --color-status-warning: var(--yellow-800);
   /* o amarelo em si: faixas, pontos, barras e realces */
   --color-status-warning-accent: var(--yellow-400);
+  /* dourado dos ícones sobre o tonal, no mesmo padrão do verde e do vermelho */
+  --color-status-warning-icon: var(--yellow-600);
   --color-status-warning-bg: var(--yellow-100);
   --color-status-negative: var(--red-500);
   /* mesma família, escura, para texto pequeno */
   --color-status-negative-ink: var(--red-700);
   --color-status-negative-bg: var(--red-100);
+  /* Pendente ≠ aviso. Valor a acertar, conta ainda em aberto e etiqueta de
+     "deve" são informação neutra: só viram amarelo quando vence hoje, e
+     vermelho quando atrasam. Pintar toda pendência de amarelo deixa a tela
+     com cara de erro e gasta o alerta antes da hora. */
+  --color-status-pending: var(--ink-600);
+  --color-status-pending-bg: var(--paper-200);
   --color-status-receive: var(--teal-700);
   --color-status-receive-bg: var(--teal-100);
   --color-status-info: var(--blue-700);
