@@ -416,9 +416,19 @@ export class FinanceService {
         'Conta a pagar não tem pagamento: nada saiu ainda.',
       );
     }
-    const payments = isUnpaid
-      ? []
-      : informados ?? pagamentoIntegral(input.paidByMemberId, input.amountCents, dia);
+    if (input.paidByCompany && informados) {
+      throw new DomainError(
+        'COMPANY_WITH_PAYMENTS',
+        'Ou a empresa pagou, ou os sócios pagaram: escolha um dos dois.',
+      );
+    }
+    // Empresa pagou: despesa quitada e sem pagamento de sócio. Como a
+    // responsabilidade de cada um é proporcional ao que saiu de bolso de
+    // sócio, ninguém fica devendo nada, que é o certo.
+    const payments =
+      isUnpaid || input.paidByCompany
+        ? []
+        : informados ?? pagamentoIntegral(input.paidByMemberId, input.amountCents, dia);
 
     const expense = await this.repo.createExpense({
       companyId,

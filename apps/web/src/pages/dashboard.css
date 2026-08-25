@@ -1,10 +1,11 @@
 .dash {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 28px 24px 72px;
+  /* Grade de 8: 32 no topo, 24 nas laterais, 72 embaixo. */
+  padding: 32px 24px 72px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .dash-muted {
@@ -64,9 +65,16 @@
 
 .dash-home-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.dash-home-head__id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
 }
 .dash-greeting {
   font-size: 13px;
@@ -98,15 +106,17 @@
 }
 
 /* ── navegador de mês ────────────────────── */
+/* Faixa de período: sai do canto do título e passa a abrir o resumo, que é
+   o que ela comanda. */
 .dash-monthnav {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: -8px;
   background: var(--color-bg-elevated);
   border-radius: 12px;
   padding: 3px;
-  box-shadow: inset 0 0 0 1px rgba(13, 17, 36, 0.04);
 }
 .dash-monthnav__arrow {
   width: 30px;
@@ -166,10 +176,14 @@
   font-weight: 700;
   padding: 7px 14px;
   border-radius: var(--radius-input);
-  border: 1px dashed var(--color-border-dark);
+  border: 1px dashed var(--color-border-brand);
   background: transparent;
-  color: var(--color-text-muted);
-  cursor: not-allowed;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+.dash-stat__cta:hover {
+  border-style: solid;
+  background: var(--color-bg-brand-soft);
 }
 .dash-page__title {
   font-size: 30px;
@@ -212,10 +226,12 @@
 /* nota de contexto no rodapé de um painel */
 .dash-panel__note {
   font-size: 12px;
-  color: var(--color-text-subtle);
+  /* Névoa sobre branco reprova em contraste: a nota é curta, mas precisa ser
+     legível para quem quiser conferir de onde saiu o número. */
+  color: var(--color-text-muted);
   line-height: 1.5;
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--color-border-default);
 }
 /* dica de contexto no topo do conteúdo de um painel */
@@ -642,13 +658,16 @@
 .dash-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 .dash-stat {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
-  padding: 18px;
+  padding: 16px;
+  /* O número de cada card cai na mesma altura: a comparação entre eles é
+     visual, e desalinhar obriga o olho a procurar. */
+  justify-content: space-between;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -728,25 +747,33 @@
   background: var(--color-bg-elevated);
   color: var(--color-text-subtle);
 }
+/* O número encolhe junto com o card: em 375px, dois cards por linha deixam
+   pouco mais de 150px úteis, e um valor na casa dos milhares estourava a
+   borda. `nowrap` evita o outro defeito: o sinal negativo caindo sozinho
+   numa linha, longe do número. */
 .dash-stat__value {
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: clamp(17px, 4.6vw, 22px);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--color-text-default);
+  white-space: nowrap;
 }
+/* Névoa sobre branco dava 2:1 e o texto sumia: a linha de apoio usa o
+   Cinza-violeta, que é legível sem competir com o número. */
 .dash-stat__hint {
   font-size: 12px;
-  color: var(--color-text-subtle);
+  color: var(--color-text-muted);
   line-height: 1.35;
 }
 
 /* ── ações rápidas ───────────────────────── */
 .dash-quick {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 .dash-quick__btn {
   position: relative;
@@ -978,6 +1005,28 @@
   border-radius: 12px;
   background: var(--color-bg-default);
   border: 1px solid var(--color-border-default);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--duration-quick) var(--ease-plim),
+    background var(--duration-quick) var(--ease-plim);
+}
+.dash-settlement:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-bg-surface);
+}
+.dash-settlement:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 3px var(--color-bg-brand-soft);
+}
+.dash-settlement__go {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  color: var(--color-text-muted);
+}
+.dash-settlement:hover .dash-settlement__go {
+  color: var(--color-brand-primary);
 }
 .dash-settlement__avatar {
   width: 30px;
@@ -1050,8 +1099,14 @@
   font-family: var(--font-sans);
   text-align: left;
   cursor: pointer;
-  border-radius: 10px;
+  /* Sem canto arredondado: a linha divide com um fio reto, e arredondar as
+     pontas fazia o fio "virar" no canto, o que deixava a lista torta. */
+  border-radius: 0;
   transition: background-color 120ms ease;
+}
+.dash-row--link:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-brand-primary);
 }
 .dash-row--link:hover {
   background: var(--color-bg-default);
@@ -1070,11 +1125,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Despesa é saída de dinheiro, e saída é vermelha em todo o Plim (é a cor do
+   "saiu" no gráfico e no resumo). O violeta é cor de ação da marca e não
+   diz nada sobre o dinheiro. */
 .dash-row__type {
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-brand-primary);
-  background: var(--color-bg-brand-soft);
+  color: var(--color-status-negative-ink);
+  background: var(--color-status-negative-bg);
   padding: 3px 8px;
   border-radius: 999px;
   justify-self: start;
@@ -1082,6 +1140,19 @@
 .dash-row__type--aporte {
   color: var(--color-status-positive);
   background: var(--color-status-positive-bg);
+}
+/* Entrada: mesma família do verde de "entrou" usada em Movimentações. */
+.dash-row__type--entrada {
+  color: var(--color-status-positive);
+  background: var(--color-status-positive-bg);
+}
+.dash-row__value--in {
+  color: var(--color-status-positive);
+}
+/* Conta paga pelo caixa da empresa: sem avatar, porque não foi ninguém. */
+.dash-row__company {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
 }
 /* ── custos recorrentes (linha própria, com meta rotulado) ── */
 .dash-costs {
@@ -1210,6 +1281,7 @@
 
 /* ── próximo passo recomendado (Jornada 1) ── */
 .dash-recommend {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1218,6 +1290,32 @@
   border-radius: var(--radius-card);
   background: var(--color-bg-brand-soft);
   border: 1px solid var(--color-border-brand);
+}
+/* Fechar a sugestão de vez: canto do card, discreto, alvo de 28px. */
+.dash-recommend__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--duration-quick) var(--ease-plim),
+    color var(--duration-quick) var(--ease-plim);
+}
+.dash-recommend__close:hover {
+  background: var(--color-bg-surface);
+  color: var(--color-text-default);
+}
+.dash-recommend__close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-brand-primary);
 }
 .dash-recommend__kicker {
   display: block;
@@ -1349,6 +1447,29 @@
 }
 /* Segundo botão do par: adiar não é a ação desejada, então fica neutro e sem
    cor de marca. Violeta é só do "resolver agora", ao lado. */
+.dash-pending__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-default);
+}
+.dash-pending__hide {
+  border: none;
+  background: none;
+  padding: 4px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+.dash-pending__hide:hover {
+  color: var(--color-text-muted);
+  text-decoration: underline;
+}
 .dash-pending__later {
   border: 1px solid transparent;
   background: transparent;
@@ -1448,14 +1569,17 @@
   .dash-hero__actions {
     width: 100%;
   }
+  /* Dois por linha também no celular: quatro cards empilhados viravam meia
+     tela de rolagem antes de chegar no que interessa. */
   .dash-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
   .dash-stat {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 16px;
   }
   .dash-stat__icon {
     margin-bottom: 0;
@@ -1466,6 +1590,9 @@
   }
   .dash-stat__value {
     order: 3;
+    width: 100%;
+  }
+  .dash-stat__label {
     width: 100%;
   }
   .dash-stat__hint {
@@ -1627,23 +1754,25 @@
 }
 .dash-nextsteps__list {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 16px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
+/* Linhas separadas por um fio, não caixa dentro de caixa: o painel já é a
+   caixa, e repetir a borda em cada item só adiciona ruído. */
 .dash-nextsteps__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 11px 14px;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-input);
-  background: var(--color-bg-surface);
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border-default);
   font-size: 14px;
   color: var(--color-text-default);
+}
+.dash-nextsteps__item:first-child {
+  border-top: none;
 }
 .dash-nextsteps__go {
   flex-shrink: 0;

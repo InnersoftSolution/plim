@@ -37,7 +37,16 @@ import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeA
 import { categoryApi } from '../finance/categoryApi';
 import { contactApi } from '../finance/contactApi';
 import { recurringApi } from '../finance/recurringApi';
-import { DUE_SOON_DAYS, daysUntil, dueBucket, dueLabel, isPayable, payableExpenses, todayIso } from '../finance/due';
+import {
+  DUE_SOON_DAYS,
+  daysUntil,
+  dueBucket,
+  dueLabel,
+  isPayable,
+  paidByCompany,
+  payableExpenses,
+  todayIso,
+} from '../finance/due';
 import {
   IconArrowIn,
   IconArrowOut,
@@ -550,6 +559,9 @@ export function FinancePage() {
 
   /** Despesa gera acerto quando outra pessoa (além de quem pagou) tem parte nela. */
   function generatesSettlement(e: Expense): boolean {
+    // Conta paga pelo caixa da empresa não gera acerto: ninguém adiantou nada
+    // pelos outros, então não há o que devolver.
+    if (paidByCompany(e)) return false;
     return e.shares.some((s) => s.memberId !== e.paidByMemberId && s.shareCents > 0);
   }
 
@@ -1528,7 +1540,9 @@ function MovRow({
             ? `Vence ${formatDate(e.dueDate)} · ${nameOf(e.paidByMemberId)} vai pagar`
             : isRevenue
               ? `${formatDate(e.spentOn)}${e.source ? ` · via ${e.source}` : ''}${e.account ? ` · em ${e.account}` : !e.source ? ` · recebido por ${nameOf(e.paidByMemberId)}` : ''}`
-              : `${formatDate(e.spentOn)} · ${isAporte ? 'feito por' : 'pago por'} ${nameOf(e.paidByMemberId)}`}
+              : paidByCompany(e)
+                ? `${formatDate(e.spentOn)} · pago pela empresa`
+                : `${formatDate(e.spentOn)} · ${isAporte ? 'feito por' : 'pago por'} ${nameOf(e.paidByMemberId)}`}
         </span>
       </div>
       <div className="fin-mov__right">
@@ -1543,7 +1557,15 @@ function MovRow({
           // "gerou acerto" é informação, não alerta: cor neutra (vermelho só
           // para vencida/recusada).
           <span className={'fin-mov__impact' + (isRevenue ? ' is-ok' : ' is-neutral')}>
-            {isRevenue ? 'entrou no caixa' : isAporte ? 'não é gasto' : gerou ? 'gerou acerto' : 'sem acerto'}
+            {isRevenue
+              ? 'entrou no caixa'
+              : isAporte
+                ? 'não é gasto'
+                : paidByCompany(e)
+                  ? 'caixa da empresa'
+                  : gerou
+                    ? 'gerou acerto'
+                    : 'sem acerto'}
           </span>
         ) : (
           <span className={'fin-mov__impact ' + conf.cls}>{conf.short}</span>

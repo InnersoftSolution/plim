@@ -44,9 +44,11 @@ export function ChecklistPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { company: activeCompany } = useActiveCompany();
-  /** O bloco de próximos passos está desligado na Home? */
-  const [homeOff, setHomeOff] = useState(() =>
-    isHiddenOnHome(activeCompany.id, 'checklist-nextsteps'),
+  /** A orientação da Home está desligada? (bloco de passos ou a chave geral) */
+  const [homeOff, setHomeOff] = useState(
+    () =>
+      isHiddenOnHome(activeCompany.id, 'checklist-nextsteps') ||
+      isHiddenOnHome(activeCompany.id, 'sugestoes'),
   );
 
   const load = useCallback(async () => {
@@ -155,16 +157,21 @@ export function ChecklistPage() {
           type="checkbox"
           checked={!homeOff}
           onChange={(e) => {
-            setHiddenOnHome(companyId, 'checklist-nextsteps', !e.target.checked);
-            setHomeOff(!e.target.checked);
+            const desligar = !e.target.checked;
+            // Religar aqui volta a orientação inteira: é o único interruptor,
+            // e desfaz tanto o "não mostrar aqui" quanto o "não mostrar
+            // sugestões na Home".
+            setHiddenOnHome(companyId, 'checklist-nextsteps', desligar);
+            setHiddenOnHome(companyId, 'sugestoes', desligar);
+            setHomeOff(desligar);
           }}
         />
         <span>
-          <strong>Mostrar os próximos passos na Home</strong>
+          <strong>Mostrar sugestões e próximos passos na Home</strong>
           <small>
             {homeOff
-              ? 'Hoje o checklist só aparece aqui. Ligue se quiser o lembrete na tela inicial.'
-              : 'Desligue se preferir acompanhar o checklist só por esta tela.'}
+              ? 'Hoje a Home não sugere nada. Ligue se quiser os lembretes de volta na tela inicial.'
+              : 'Desligue se preferir acompanhar tudo só por esta tela, sem lembretes na Home.'}
           </small>
         </span>
       </label>

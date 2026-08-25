@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageLoading } from '../components/PageLoading';
 import {
   recurringCategoryCatalog,
@@ -28,17 +28,20 @@ import {
   setHiddenOnHome,
   type Pendencia,
 } from './pendencias';
-import { dueBucket, payableExpenses } from '../finance/due';
+import { dueBucket, paidByCompany, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
 import { checklistApi } from '../company/checklistApi';
 import type { ChecklistView } from '@plim/shared';
 import {
+  IconArrowIn,
   IconArrowOut,
   IconArrowRight,
   IconBuilding,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
+  IconClock,
+  IconClose,
   IconPlus,
   IconRepeat,
   IconUsers,
@@ -177,17 +180,64 @@ function DashboardReady({
   };
   const acertosCents = settlements.reduce((sum, s) => sum + s.amountCents, 0);
 
+  /* ── números dos quatro cards do topo ──────────────────────────────────
+   * Confirmado é o que conta: pendente de confirmação não é dinheiro ainda.
+   * Entrada é receita; saída é despesa efetivamente paga (conta a pagar em
+   * aberto fica no card de compromissos, não no que já saiu). */
+  const confirmada = (e: Expense) => e.confirmationStatus === 'confirmed';
+  const ehEntrada = (e: Expense) => e.kind === 'revenue' && confirmada(e);
+  const ehSaidaPaga = (e: Expense) =>
+    e.kind === 'expense' && confirmada(e) && e.paymentStatus === 'paid';
+  const soma = (lista: Expense[]) => lista.reduce((t, e) => t + e.amountCents, 0);
+
+  const entradasMes = filteredExpenses.filter(ehEntrada);
+  const saidasMes = filteredExpenses.filter(ehSaidaPaga);
+  const entradasCents = soma(entradasMes);
+  const saidasCents = soma(saidasMes);
+
+  /** Saldo acumulado da empresa: tudo que entrou menos tudo que saiu. */
+  const saldoAtualCents = soma(expenses.filter(ehEntrada)) - soma(expenses.filter(ehSaidaPaga));
+  /** Mesma conta no mês anterior, para dizer se melhorou ou piorou. */
+  const mesAnterior = (() => {
+    const d = new Date(view.year, view.month - 1, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const noMesAnterior = expenses.filter((e) => e.spentOn.startsWith(mesAnterior));
+  const resultadoMes = entradasCents - saidasCents;
+  const resultadoAnterior =
+    soma(noMesAnterior.filter(ehEntrada)) - soma(noMesAnterior.filter(ehSaidaPaga));
+  const variacaoMes = resultadoMes - resultadoAnterior;
+
+  /** Compromissos: contas a pagar em aberto, e o que vence em até 7 dias. */
+  const compromissosCents = payable.reduce((t, e) => t + e.amountCents, 0);
+  const venceEmBreveCents = [...overdueBills, ...dueSoonBills].reduce((t, e) => t + e.amountCents, 0);
+
   const isInProgress = company.onboardingStatus === 'in_progress';
 
   // Jornada 1 — pendências inteligentes: o Plim observa, explica e sugere.
   // "Fazer depois" esconde temporariamente (localStorage); o tick força re-render.
   const [dismissTick, setDismissTick] = useState(0);
-  const pendencias = buildPendencias(company, members, expenses, activeCosts.length, activities).filter(
-    (p) => !isDismissed(company.id, p.id),
-  );
+  /**
+   * Orientação da Home, com uma chave só para desligar tudo.
+   *
+   * Antes a mesma sugestão aparecia em três lugares na mesma tela: o card de
+   * próximo passo, o bloco de próximos passos e o painel de pendências. Quem
+   * não ia fazer aquilo agora tinha que dispensar três vezes, e reencontrava
+   * no dia seguinte. Aqui vale uma regra: uma sugestão por vez no topo, e o
+   * resto sem repetir.
+   */
+  const orientacaoDesligada = isHiddenOnHome(company.id, 'sugestoes');
+  const todasPendencias = orientacaoDesligada
+    ? []
+    : buildPendencias(company, members, expenses, activeCosts.length, activities).filter(
+        (p) => !isDismissed(company.id, p.id) && !isHiddenOnHome(company.id, p.id),
+      );
   void dismissTick;
   // Um único próximo passo recomendado por vez: a pendência mais prioritária.
-  const recommended = pendencias[0] ?? null;
+  const recommended = todasPendencias[0] ?? null;
+  // O painel não repete o que já está no topo, e mostra no máximo três.
+  const pendencias = todasPendencias.slice(1, 4);
+  const pendenciasRestantes = Math.max(0, todasPendencias.length - 4);
 
   function runPendAction(p: Pendencia) {
     if (p.action.kind === 'modal') setModalOpen(true);
@@ -199,6 +249,17 @@ function DashboardReady({
     dismissPendencia(company.id, p.id);
     setDismissTick((t) => t + 1);
   }
+  /** Dispensa de vez: orientação é convite, não cobrança. Quem já decidiu
+   *  que não vai preencher agora não precisa ver o mesmo aviso todo dia. */
+  function hidePendencia(p: Pendencia) {
+    setHiddenOnHome(company.id, p.id, true);
+    setDismissTick((t) => t + 1);
+  }
+  /** Desliga toda a orientação da Home. Religa no Checklist da empresa. */
+  function desligarOrientacao() {
+    setHiddenOnHome(company.id, 'sugestoes', true);
+    setDismissTick((t) => t + 1);
+  }
   function runPendSecondary(p: Pendencia) {
     if (!p.secondary) return;
     if (p.secondary.kind === 'dismiss') closePendencia(p);
@@ -207,41 +268,101 @@ function DashboardReady({
 
   return (
     <div className="dash">
-      {/* ── título ── */}
+      {/* ── nível 1: quem é e a ação principal, lado a lado ── */}
       <div className="dash-home-head">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div className="dash-home-head__id">
           {company.logoUrl && (
             <img className="dash-companylogo" src={company.logoUrl} alt={`Logo de ${company.name}`} />
           )}
           <div>
-          <h1 className="dash-page__title">olá, {firstName || 'por aqui'}</h1>
-          {showActiveCompany && (
-            <p className="dash-page__active">
-              Você está trabalhando em <strong>{company.name}</strong>
-            </p>
-          )}
-          <p className="dash-page__subtitle">
-            {recommended
-              ? 'O estado atual do seu negócio e o que fazer agora.'
-              : 'Tudo em dia por aqui. Siga registrando os gastos do mês.'}
-          </p>
+            <h1 className="dash-page__title">olá, {firstName || 'por aqui'}</h1>
+            {/* Uma linha só. A empresa ativa já aparece na barra lateral, e o
+                subtítulo genérico não dizia nada que a página não mostre. */}
+            <p className="dash-page__subtitle">{company.name}</p>
           </div>
         </div>
-        <div className="dash-monthnav">
-          <button className="dash-monthnav__arrow" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">
-            <IconChevronLeft />
+        <div className="dash-quick">
+          <button className="dash-quick__btn dash-quick__btn--primary" onClick={() => setModalOpen(true)}>
+            <IconPlus /> Registrar movimentação
           </button>
-          <span className="dash-monthnav__label">{allTime ? 'Todo o período' : monthLabel}</span>
-          <button className="dash-monthnav__arrow" onClick={() => shiftMonth(1)} aria-label="Próximo mês">
-            <IconChevronRight />
-          </button>
-          <button
-            className={'dash-monthnav__all' + (allTime ? ' is-active' : '')}
-            onClick={() => setAllTime((v) => !v)}
-          >
-            Tudo
-          </button>
+          <MoreActions onNavigate={onNavigate} />
         </div>
+      </div>
+
+      {/* ── nível 2: o período que manda nos números abaixo ── */}
+      <div className="dash-monthnav">
+        <button className="dash-monthnav__arrow" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">
+          <IconChevronLeft />
+        </button>
+        <span className="dash-monthnav__label">{allTime ? 'Todo o período' : monthLabel}</span>
+        <button className="dash-monthnav__arrow" onClick={() => shiftMonth(1)} aria-label="Próximo mês">
+          <IconChevronRight />
+        </button>
+        <button
+          className={'dash-monthnav__all' + (allTime ? ' is-active' : '')}
+          onClick={() => setAllTime((v) => !v)}
+        >
+          Tudo
+        </button>
+      </div>
+
+      {/* ── nível 3: resumo do período. Rótulo e número; a frase de apoio só
+             aparece quando muda o que a pessoa faria. ── */}
+      <div className="dash-cards">
+        {/* Quanto a empresa tem: tudo que entrou menos tudo que saiu, desde o
+            começo. Não depende do período, por isso a comparação embaixo diz
+            como o mês está mexendo nesse número. */}
+        <StatCard
+          icon={<IconWallet />}
+          tone={saldoAtualCents < 0 ? 'rose' : 'green'}
+          label="Saldo atual"
+          value={formatMoney(saldoAtualCents)}
+          hint={
+            allTime
+              ? 'desde o início'
+              : resultadoMes === 0
+                ? `sem movimento em ${monthName.toLowerCase()}`
+                : `${resultadoMes > 0 ? '+' : '−'} ${formatMoney(Math.abs(resultadoMes))} em ${monthName.toLowerCase()}`
+          }
+        />
+        <StatCard
+          icon={<IconArrowIn />}
+          tone="green"
+          label={allTime ? 'Entradas' : 'Entradas no mês'}
+          value={formatMoney(entradasCents)}
+          hint={
+            entradasMes.length === 0
+              ? 'nenhum recebimento'
+              : `${entradasMes.length} ${entradasMes.length === 1 ? 'recebimento' : 'recebimentos'}`
+          }
+        />
+        <StatCard
+          icon={<IconArrowOut />}
+          tone="rose"
+          label={allTime ? 'Saídas' : 'Saídas no mês'}
+          value={formatMoney(saidasCents)}
+          hint={
+            saidasMes.length === 0
+              ? 'nenhum pagamento'
+              : `${saidasMes.length} ${saidasMes.length === 1 ? 'pagamento' : 'pagamentos'}`
+          }
+        />
+        {/* Contas já previstas e ainda não pagas. Ignoram o período de
+            propósito: dívida em aberto não some porque o filtro é outro mês. */}
+        <StatCard
+          icon={<IconClock />}
+          tone={venceEmBreveCents > 0 ? 'amber' : compromissosCents > 0 ? 'muted' : 'green'}
+          label="Compromissos futuros"
+          value={formatMoney(compromissosCents)}
+          hint={
+            compromissosCents === 0
+              ? 'nada a pagar'
+              : venceEmBreveCents > 0
+                ? `${formatMoney(venceEmBreveCents)} em até 7 dias`
+                : `${payable.length} ${payable.length === 1 ? 'conta em aberto' : 'contas em aberto'}`
+          }
+          onClick={() => onNavigate('/financeiro?filtro=a-pagar')}
+        />
       </div>
 
       {/* ── pagamentos aguardando minha confirmação (prioridade máxima) ── */}
@@ -295,6 +416,17 @@ function DashboardReady({
       {/* ── próximo passo recomendado (um por vez — PRD §5) ── */}
       {recommended && (
         <section className="dash-recommend">
+          {/* Sugestão se fecha de vez: quem já decidiu que não vai fazer isso
+              não precisa reencontrar o mesmo card toda vez que abre a Home. */}
+          <button
+            type="button"
+            className="dash-recommend__close"
+            title="Não mostrar mais esta sugestão"
+            aria-label={`Não mostrar mais: ${recommended.title}`}
+            onClick={() => hidePendencia(recommended)}
+          >
+            <IconClose />
+          </button>
           <div className="dash-recommend__body">
             <span className="dash-recommend__kicker">Próximo passo recomendado</span>
             <h2 className="dash-recommend__title">{recommended.title}</h2>
@@ -323,83 +455,7 @@ function DashboardReady({
         </section>
       )}
 
-      <ChecklistNextSteps companyId={company.id} />
-
-      {/* ── ações rápidas: uma ação principal + atalho para as áreas ── */}
-      <div className="dash-quick">
-        <button className="dash-quick__btn dash-quick__btn--primary" onClick={() => setModalOpen(true)}>
-          <IconPlus /> Registrar movimentação
-        </button>
-        <MoreActions onNavigate={onNavigate} />
-      </div>
-
-      {/* ── cards principais ── */}
-      <div className="dash-cards">
-        {/* Mesma linguagem da tela de Movimentações: saída de dinheiro é rosa,
-            com a seta saindo da bandeja. Ver o mesmo número com a mesma cara
-            nas duas telas evita a pessoa achar que são coisas diferentes. */}
-        <StatCard
-          icon={<IconArrowOut />}
-          tone="rose"
-          label={allTime ? 'Total gasto' : `Gasto em ${monthName}`}
-          value={formatMoney(gastoCents)}
-          hint={
-            filteredExpenses.length > 0
-              ? allTime
-                ? 'Tudo que já foi investido no negócio até aqui.'
-                : `O que a empresa gastou em ${monthName.toLowerCase()}.`
-              : 'Registre os gastos para o Plim mostrar quanto já foi investido.'
-          }
-        />
-        {activeCosts.length > 0 ? (
-          <StatCard
-            icon={<IconRepeat />}
-            tone="indigo"
-            label="Custo mensal"
-            value={formatMoney(recurring.monthlyTotalCents)}
-            hint={`${activeCosts.length} ${activeCosts.length === 1 ? 'custo ativo' : 'custos ativos'}, o que custa manter a empresa por mês.`}
-          />
-        ) : (
-          <StatCard
-            icon={<IconRepeat />}
-            tone="indigo"
-            label="Custo mensal"
-            hint="Cadastre assinaturas e ferramentas para ver quanto custa manter a empresa."
-            cta={
-              <button className="dash-stat__cta" onClick={() => setRecurringOpen(true)}>
-                <IconPlus /> cadastrar
-              </button>
-            }
-          />
-        )}
-        {/* Âmbar, não rosa: acerto em aberto é pendência, não erro. O rosa fica
-            reservado para saída de dinheiro e para o que venceu. */}
-        <StatCard
-          icon={<IconArrowRight />}
-          tone={acertosCents > 0 ? 'amber' : 'green'}
-          label="Acertos"
-          value={formatMoney(acertosCents)}
-          hint={
-            acertosCents > 0
-              ? 'Alguém pagou mais do que a parte dele. Veja quem acerta com quem.'
-              : 'Tudo quite entre os sócios.'
-          }
-        />
-        {/* Cinza quando a participação já fecha 100%: não há nada a fazer aqui,
-            e o card não deve competir por atenção. Âmbar enquanto falta. */}
-        <StatCard
-          icon={<IconUsers />}
-          tone={pendingEquity === 0 ? 'muted' : 'amber'}
-          label="Sociedade"
-          value={`${members.length} ${members.length === 1 ? 'sócio' : 'sócios'}`}
-          hint={
-            pendingEquity === 0
-              ? 'Participação 100% definida, os acertos saem exatos.'
-              : `Quase lá: ${formatPct(allocated)} definidos, faltam ${formatPct(pendingEquity)}. Completar deixa os acertos exatos.`
-          }
-          onClick={() => onNavigate('/socios')}
-        />
-      </div>
+      <ChecklistNextSteps companyId={company.id} hidden={orientacaoDesligada} />
 
       {/* ── atividades da semana ── */}
       <Panel
@@ -445,8 +501,16 @@ function DashboardReady({
         ) : (
           <>
             <div className="dash-settlements">
+              {/* Cada linha abre o extrato do par: de quais despesas veio a
+                  dívida, quanto cabia a cada um e o que já foi acertado. Um
+                  número sozinho na Home levanta a pergunta "de onde saiu isso?",
+                  e a resposta tem que estar a um clique. */}
               {settlements.map((s, i) => (
-                <div className="dash-settlement" key={`${s.fromMemberId}-${s.toMemberId}-${i}`}>
+                <Link
+                  className="dash-settlement"
+                  key={`${s.fromMemberId}-${s.toMemberId}-${i}`}
+                  to={`/acertos/entre/${s.fromMemberId}/${s.toMemberId}`}
+                >
                   <span className="dash-settlement__avatar">{initials(s.fromName)}</span>
                   <span className="dash-settlement__text">
                     <strong>{s.fromName}</strong> precisa pagar{' '}
@@ -455,12 +519,15 @@ function DashboardReady({
                     </strong>{' '}
                     para <strong>{s.toName}</strong>
                   </span>
-                </div>
+                  <span className="dash-settlement__go" aria-hidden="true">
+                    <IconChevronRight />
+                  </span>
+                </Link>
               ))}
             </div>
             <p className="dash-panel__note">
-              Calculado a partir de {expenseCount} {expenseCount === 1 ? 'despesa compartilhada' : 'despesas compartilhadas'},
-              já descontando dívidas cruzadas (aportes não entram). Com as participações em dia, esse número é exato.
+              Já com as dívidas cruzadas descontadas, a partir de {expenseCount}{' '}
+              {expenseCount === 1 ? 'despesa compartilhada' : 'despesas compartilhadas'}.
             </p>
           </>
         )}
@@ -500,16 +567,43 @@ function DashboardReady({
               >
                 <span className="dash-row__date">{formatDate(e.spentOn)}</span>
                 <span className="dash-row__desc">{e.description}</span>
-                <span className={'dash-row__type' + (e.kind === 'contribution' ? ' dash-row__type--aporte' : '')}>
-                  {e.kind === 'contribution' ? 'Aporte' : 'Despesa'}
+                {/* Entrada não é despesa: antes toda movimentação que não fosse
+                    aporte aparecia como "Despesa", e o dinheiro que entrou
+                    aparecia com a etiqueta errada. */}
+                <span
+                  className={
+                    'dash-row__type' +
+                    (e.kind === 'contribution'
+                      ? ' dash-row__type--aporte'
+                      : e.kind === 'revenue'
+                        ? ' dash-row__type--entrada'
+                        : '')
+                  }
+                >
+                  {e.kind === 'contribution' ? 'Aporte' : e.kind === 'revenue' ? 'Entrada' : 'Despesa'}
                 </span>
                 <span className="dash-row__payer">
-                  <span className="dash-row__avatar" aria-hidden="true">
-                    {initials(nameOf(e.paidByMemberId))}
-                  </span>
-                  {nameOf(e.paidByMemberId)}
+                  {/* Em entrada ninguém pagou: a coluna mostra onde o dinheiro
+                      caiu, e não um sócio que não desembolsou nada. */}
+                  {e.kind === 'revenue' ? (
+                    <span className="dash-row__company">{e.account || 'Conta da empresa'}</span>
+                  ) : paidByCompany(e) ? (
+                    <span className="dash-row__company">Empresa</span>
+                  ) : (
+                    <>
+                      <span className="dash-row__avatar" aria-hidden="true">
+                        {initials(nameOf(e.paidByMemberId))}
+                      </span>
+                      {nameOf(e.paidByMemberId)}
+                    </>
+                  )}
                 </span>
-                <span className="dash-row__value">{formatMoney(e.amountCents)}</span>
+                <span
+                  className={'dash-row__value' + (e.kind === 'revenue' ? ' dash-row__value--in' : '')}
+                >
+                  {e.kind === 'revenue' ? '+ ' : ''}
+                  {formatMoney(e.amountCents)}
+                </span>
               </button>
             ))}
           </div>
@@ -566,10 +660,12 @@ function DashboardReady({
       </Panel>
 
       {/* ── pendências inteligentes (Jornada 1) ── */}
-      <Panel title="Pendências da empresa">
-        {pendencias.length === 0 ? (
-          <EmptyRow text="Sua empresa está organizada, nada pendente. Continue registrando os gastos que o Plim cuida dos cálculos." />
-        ) : (
+      {/* Painel só existe quando há o que sugerir além do card do topo: sem
+          pendência, um bloco dizendo "nada pendente" é mais uma caixa para a
+          pessoa rolar. */}
+      {pendencias.length > 0 && (
+      <Panel title="Outras sugestões">
+        {(
           <div className="dash-pending">
             {pendencias.map((p) => (
               <div className="dash-pending__item" key={p.id}>
@@ -588,12 +684,31 @@ function DashboardReady({
                       {p.secondary.label}
                     </button>
                   )}
+                  <button
+                    className="dash-pending__hide"
+                    title="Não mostrar mais esta sugestão"
+                    aria-label={`Dispensar "${p.title}"`}
+                    onClick={() => hidePendencia(p)}
+                  >
+                    Dispensar
+                  </button>
                 </div>
               </div>
             ))}
+            <div className="dash-pending__foot">
+              {pendenciasRestantes > 0 && (
+                <button className="dash-pending__later" onClick={() => onNavigate('/empresa/checklist')}>
+                  Ver as outras {pendenciasRestantes} no checklist
+                </button>
+              )}
+              <button className="dash-pending__hide" onClick={desligarOrientacao}>
+                Não mostrar sugestões na Home
+              </button>
+            </div>
           </div>
         )}
       </Panel>
+      )}
 
       {isInProgress && (
         <div className="dash-continue">
@@ -675,7 +790,8 @@ function StatCard({
   tone: 'indigo' | 'rose' | 'green' | 'amber' | 'muted';
   label: string;
   value?: string;
-  hint: string;
+  /** Linha de apoio. Ausente quando o número se explica sozinho. */
+  hint?: string;
   badge?: string;
   cta?: ReactNode;
   /** Torna o card clicável (ex.: Sociedade → /socios). */
@@ -693,7 +809,7 @@ function StatCard({
           {value}
         </span>
       )}
-      <span className="dash-stat__hint">{hint}</span>
+      {hint && <span className="dash-stat__hint">{hint}</span>}
     </>
   );
   if (onClick) {
@@ -886,7 +1002,7 @@ function MoreActions({ onNavigate }: { onNavigate: (to: string) => void }) {
   );
 }
 
-function ChecklistNextSteps({ companyId }: { companyId: string }) {
+function ChecklistNextSteps({ companyId, hidden }: { companyId: string; hidden: boolean }) {
   const navigate = useNavigate();
   const [view, setView] = useState<ChecklistView | null>(null);
   // Duas saídas, com intenções diferentes: "Fazer depois" fecha por hoje e
@@ -895,7 +1011,10 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
   const [closed, setClosed] = useState(
     () =>
       isDismissed(companyId, 'checklist-nextsteps') ||
-      isHiddenOnHome(companyId, 'checklist-nextsteps'),
+      isHiddenOnHome(companyId, 'checklist-nextsteps') ||
+      // A chave geral de sugestões também desliga este bloco: quem pediu para
+      // parar de ver orientação na Home pediu por toda ela.
+      isHiddenOnHome(companyId, 'sugestoes'),
   );
 
   useEffect(() => {
@@ -909,7 +1028,9 @@ function ChecklistNextSteps({ companyId }: { companyId: string }) {
     };
   }, [companyId]);
 
-  if (!view || closed) return null;
+  // `hidden` vem do pai e reage na hora quando a pessoa desliga as sugestões;
+  // `closed` guarda a decisão tomada dentro do próprio bloco.
+  if (!view || closed || hidden) return null;
   const pending = view.items.filter(
     (i) => i.status === 'not_started' || i.status === 'in_progress',
   );

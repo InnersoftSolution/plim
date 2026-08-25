@@ -5,13 +5,15 @@
 }
 
 /* ── barra lateral ───────────────────────── */
-/* Barra em Tinta, como a página "UI Dashboard" do branding book: o menu é
-   estrutura escura e o conteúdo respira em Papel. */
+/* Barra clara: o menu é estrutura, não protagonista. Branco contra o Papel
+   do conteúdo separa as duas áreas por tom, sem precisar de bloco escuro, e
+   a única cor cheia da tela passa a ser a ação em violeta. */
 .shell-sidebar {
   width: 236px;
   flex-shrink: 0;
-  background: var(--color-bg-dark);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border-default);
+  color: var(--color-text-default);
   display: flex;
   flex-direction: column;
   padding: 0 12px 16px;
@@ -26,7 +28,7 @@
   margin: 0 -12px 14px;
   padding: 0 12px 0 16px;
   height: 58px;
-  border-bottom: 1px solid rgba(247, 245, 242, 0.08);
+  border-bottom: 1px solid var(--color-border-default);
 }
 .shell-brand {
   display: flex;
@@ -47,15 +49,15 @@
   background: var(--color-brand-primary);
   box-shadow: var(--shadow-brand);
 }
-/* botões sobre a faixa Tinta */
+/* botões do cabeçalho da barra */
 .shell-sidebar__head .shell-close,
 .shell-collapse {
-  color: rgba(247, 245, 242, 0.7);
+  color: var(--color-text-muted);
 }
 .shell-sidebar__head .shell-close:hover,
 .shell-collapse:hover {
-  background: rgba(247, 245, 242, 0.12);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-default);
+  color: var(--color-text-default);
 }
 /* recolher/expandir: só no desktop, onde a barra é fixa */
 .shell-collapse {
@@ -118,15 +120,14 @@
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
-  /* texto em Papel: sobre a Tinta o cinza cansava a leitura */
-  color: var(--color-text-inverse);
+  color: var(--color-text-default);
   text-decoration: none;
   transition: background-color var(--duration-quick) var(--ease-plim),
     color var(--duration-quick) var(--ease-plim);
 }
 /* só o ícone fica em tom menor, para o nome liderar a linha */
 .shell-nav__item svg:not(.shell-nav__chev) {
-  color: rgba(247, 245, 242, 0.55);
+  color: var(--color-text-muted);
   transition: color var(--duration-quick) var(--ease-plim);
 }
 .shell-nav__item:hover svg,
@@ -134,25 +135,26 @@
   color: inherit;
 }
 .shell-nav__item:hover {
-  background: rgba(247, 245, 242, 0.07);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-default);
+  color: var(--color-text-default);
 }
-/* ativo: pílula violeta, o único bloco de cor cheia do menu */
+/* ativo: lilás com texto violeta. Sobre fundo claro, o bloco de cor cheia
+   pesava demais para um menu; o tom suave marca o lugar sem gritar. */
 .shell-nav__item.is-active {
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
   font-weight: 600;
-  box-shadow: var(--shadow-brand);
 }
 /* grupo com filho ativo não é destino: marca discreta, sem roubar a pílula */
 .shell-nav__item--group.is-active {
-  background: var(--color-bg-dark-2);
-  color: var(--color-text-inverse);
+  background: transparent;
+  color: var(--color-text-default);
+  font-weight: 600;
   box-shadow: none;
 }
 .shell-nav__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg-dark), 0 0 0 4px var(--color-brand-primary);
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-brand-primary);
 }
 .shell-nav__item svg {
   flex-shrink: 0;
@@ -195,7 +197,7 @@
   gap: 2px;
   margin: 2px 0 2px 15px;
   padding-left: 12px;
-  border-left: 1px solid rgba(247, 245, 242, 0.12);
+  border-left: 1px solid var(--color-border-default);
 }
 .shell-subnav__item {
   padding: 8px 12px;
@@ -203,30 +205,31 @@
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 400;
-  /* também em Papel; a hierarquia vem do peso e do recuo, não do cinza */
-  color: rgba(247, 245, 242, 0.88);
+  /* A hierarquia vem do peso e do recuo, não de apagar o texto: o Névoa
+     sobre branco dava 2:1 de contraste e sumia. */
+  color: var(--color-text-muted);
   text-decoration: none;
   transition: background-color var(--duration-quick) var(--ease-plim),
     color var(--duration-quick) var(--ease-plim);
 }
 .shell-subnav__item:hover {
-  background: rgba(247, 245, 242, 0.07);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-default);
+  color: var(--color-text-default);
 }
 .shell-subnav__item.is-active {
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
   font-weight: 600;
 }
 .shell-subnav__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg-dark), 0 0 0 4px var(--color-brand-primary);
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-brand-primary);
 }
 
 .shell-foot {
   margin-top: auto;
   padding-top: 14px;
-  border-top: 1px solid rgba(247, 245, 242, 0.08);
+  border-top: 1px solid var(--color-border-default);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -235,17 +238,17 @@
 .shell-foot .btn--ghost {
   width: 100%;
   justify-content: center;
-  border: 1px solid rgba(247, 245, 242, 0.16);
-  color: var(--color-text-inverse);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-default);
 }
 .shell-foot .btn--ghost:hover {
   border-color: var(--color-brand-primary);
-  background: rgba(247, 245, 242, 0.07);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-default);
+  color: var(--color-brand-primary-deep);
 }
 .shell-foot__admin {
-  color: var(--color-brand-accent);
-  border-color: rgba(185, 168, 238, 0.4);
+  color: var(--color-brand-primary);
+  border-color: var(--color-border-brand);
 }
 .shell-foot__profile {
   display: flex;
@@ -253,17 +256,17 @@
   gap: 8px;
   padding: 8px;
   border-radius: var(--radius-nav-item);
-  color: rgba(247, 245, 242, 0.8);
+  color: var(--color-text-muted);
   text-decoration: none;
   min-width: 0;
 }
 .shell-foot__profile:hover {
-  background: rgba(247, 245, 242, 0.07);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-default);
+  color: var(--color-text-default);
 }
 .shell-foot__profile.is-active {
-  background: var(--color-bg-dark-2);
-  color: var(--color-text-inverse);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
 }
 .shell-foot__user {
   font-size: 12px;
@@ -272,22 +275,21 @@
   white-space: nowrap;
 }
 
-/* ── seletor de empresa sobre a barra escura ──
-   O componente nasceu para fundo claro; aqui só as cores mudam. */
+/* ── seletor de empresa ── */
 .shell-sidebar .csw__btn {
-  background: var(--color-bg-dark-2);
-  border-color: rgba(247, 245, 242, 0.12);
+  background: var(--color-bg-default);
+  border-color: var(--color-border-default);
 }
 .shell-sidebar .csw__btn:hover:not(:disabled) {
   border-color: var(--color-brand-primary);
   box-shadow: none;
 }
 .shell-sidebar .csw__name {
-  color: var(--color-text-inverse);
+  color: var(--color-text-default);
 }
 .shell-sidebar .csw__eyebrow,
 .shell-sidebar .csw__chev {
-  color: rgba(247, 245, 242, 0.62);
+  color: var(--color-text-muted);
 }
 
 /* ── menu recolhido: só os ícones (desktop) ──
@@ -316,6 +318,16 @@
   .shell--collapsed .shell-nav__item {
     justify-content: center;
     padding-inline: 0;
+  }
+  /* Recolhido, os subitens somem e o grupo passa a ser a única pista de onde
+     a pessoa está: aqui ele assume o destaque que no menu aberto pertence ao
+     subitem ativo. */
+  .shell--collapsed .shell-nav__item--group.is-active {
+    background: var(--color-bg-brand-soft);
+    color: var(--color-brand-primary-deep);
+  }
+  .shell--collapsed .shell-nav__item--group.is-active svg {
+    color: inherit;
   }
   .shell--collapsed .shell-nav__item > span,
   .shell--collapsed .shell-nav__chev,
@@ -391,21 +403,24 @@
     flex-direction: column;
   }
   /* barra superior fixa com o hambúrguer */
+  /* Mesma decisão da barra lateral: clara, separada por linha e não por
+     bloco escuro. */
   .shell-mobilebar {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    background: var(--color-brand-header);
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border-default);
     position: sticky;
     top: 0;
     z-index: 30;
   }
   .shell-mobilebar .shell-burger {
-    color: var(--color-text-inverse);
+    color: var(--color-text-default);
   }
   .shell-mobilebar .shell-burger:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--color-bg-default);
   }
   /* a barra lateral vira um drawer que desliza da esquerda */
   .shell-sidebar {

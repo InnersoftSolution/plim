@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useAdminMe } from '../admin/useAdminMe';
 import { CompanySwitcher } from '../company/CompanySwitcher';
 import { DeletionBanner } from '../company/DeletionBanner';
-import { LogoWhite } from './LogoWhite';
+import { Logo } from './Logo';
 import { LogoMark } from './LogoMark';
 import { Button } from './ui/Button';
 import './appshell.css';
@@ -100,18 +100,20 @@ export function AppShell() {
         <button className="shell-burger" aria-label="Abrir menu" onClick={() => setMenuOpen(true)}>
           <IconMenu />
         </button>
-        <LogoWhite height={24} />
+        <Logo height={24} />
       </header>
 
       {menuOpen && <div className="shell-backdrop" onClick={closeMenu} />}
 
       <aside className="shell-sidebar">
         <div className="shell-sidebar__head">
+          {/* Barra clara: a marca volta a ser Tinta sobre o branco, e o
+              símbolo mantém o quadrado violeta como único ponto de cor. */}
           <div className="shell-brand">
             <span className="shell-brand__mark" aria-hidden="true">
               <LogoMark size={17} color="#F7F5F2" />
             </span>
-            {!iconsOnly && <LogoWhite height={18} />}
+            {!iconsOnly && <Logo height={18} />}
           </div>
           <button
             type="button"

@@ -8,6 +8,17 @@ import type { Expense } from '@plim/shared';
 /** Janela (em dias) que consideramos "a vencer em breve". */
 export const DUE_SOON_DAYS = 7;
 
+/**
+ * Conta quitada pelo caixa da EMPRESA: está paga e nenhum sócio desembolsou.
+ *
+ * É o que separa "a empresa pagou a conta dela" de "alguém adiantou pelos
+ * outros". Só o segundo caso vira dívida entre sócios, e a diferença aparece
+ * na ausência de pagamento de sócio, não num campo à parte.
+ */
+export function paidByCompany(e: Expense): boolean {
+  return e.kind === 'expense' && e.paymentStatus === 'paid' && e.payments.length === 0;
+}
+
 export type DueBucket = 'overdue' | 'soon' | 'later';
 
 /** Data de hoje em YYYY-MM-DD (fuso local). */

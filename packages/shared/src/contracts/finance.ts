@@ -206,6 +206,18 @@ export const createExpenseSchema = z.object({
    * estado válido, e o que falta é conta com o fornecedor.
    */
   payments: z.array(expensePaymentInputSchema).max(20).optional(),
+  /**
+   * A conta saiu do caixa da EMPRESA, não do bolso de ninguém.
+   *
+   * Faz diferença de verdade: quando um sócio adianta, os outros passam a
+   * dever a parte deles a ele. Quando a própria empresa paga, o gasto conta
+   * para a empresa e ninguém deve nada a ninguém. Sem isso, toda despesa de
+   * uma empresa que já tem caixa próprio vira dívida entre sócios.
+   *
+   * Marcada assim, a despesa fica sem pagamento de sócio: é isso que zera a
+   * responsabilidade de cada um no cálculo dos acertos.
+   */
+  paidByCompany: z.boolean().optional(),
   spentOn: z.string().date().optional(), // YYYY-MM-DD; back usa hoje se ausente
   splitMode: expenseSplitModeSchema.default('equity'),
   customShares: z.array(expenseShareInputSchema).optional(),
