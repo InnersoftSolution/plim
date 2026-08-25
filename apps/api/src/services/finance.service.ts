@@ -826,6 +826,7 @@ export class FinanceService {
     paidOn: string | undefined,
     actingUserId?: string | null,
     paidByMemberId?: string | null,
+    paidByCompany?: boolean,
   ): Promise<Expense> {
     const { members } = await this.companyService.getOverview(companyId, actingUserId);
     const expense = await this.repo.findExpenseById(companyId, expenseId);
@@ -840,22 +841,27 @@ export class FinanceService {
     }
     // Quem pagou de verdade pode não ser o pagador previsto: a pergunta é
     // feita na hora de pagar, e a resposta manda no acerto entre sócios.
-    const pagador = paidByMemberId ?? expense.paidByMemberId;
-    if (!members.some((m) => m.id === pagador)) {
+    // Pode não ser sócio nenhum: conta gerada por custo recorrente nasce com um
+    // pagador PREVISTO, e quem paga costuma ser o caixa da empresa.
+    const pagador = paidByCompany ? null : paidByMemberId ?? expense.paidByMemberId;
+    if (pagador && !members.some((m) => m.id === pagador)) {
       throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio pagador não encontrado.');
     }
     const dia = paidOn ?? new Date().toISOString().slice(0, 10);
     let paga = await this.repo.markExpensePaid(expenseId, dia);
-    if (pagador !== paga.paidByMemberId) {
+    if (pagador && pagador !== paga.paidByMemberId) {
       paga = await this.repo.updateExpense(expenseId, { paidByMemberId: pagador });
     }
-    // A conta a pagar não tinha pagamento nenhum; agora tem. Sem esta linha o
-    // dinheiro sairia do bolso de alguém sem ninguém ficar credor.
+    // A conta a pagar não tinha pagamento nenhum; agora tem, a menos que quem
+    // pagou tenha sido a empresa: aí a conta fica quitada sem ninguém virar
+    // credor, que é o certo, porque ninguém tirou do próprio bolso.
     const payments = await this.repo.replaceExpensePayments(
       expenseId,
-      pagamentoIntegral(pagador, paga.amountCents, dia),
+      pagador ? pagamentoIntegral(pagador, paga.amountCents, dia) : [],
     );
-    const nomePagador = members.find((m) => m.id === pagador)?.fullName ?? 'Sócio';
+    const nomePagador = pagador
+      ? members.find((m) => m.id === pagador)?.fullName ?? 'Sócio'
+      : 'a empresa';
     await this.trilha(
       companyId,
       members,

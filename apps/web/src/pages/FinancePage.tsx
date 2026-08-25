@@ -93,6 +93,13 @@ type Filter =
   | 'vencidas'
   | 'pagas';
 
+/**
+ * Opção "a empresa pagou" no diálogo de pagamento. Não é um sócio, por isso
+ * não pode ser um id: conta quitada pelo caixa da empresa fica sem pagamento
+ * de sócio nenhum, e assim ninguém vira credor dos outros.
+ */
+const EMPRESA_PAGOU = '__empresa__';
+
 /** Recorte de período da tela (o seletor global controla tudo). */
 type PeriodSel = 'month' | 'last-month' | 'last-3' | 'year';
 
@@ -587,7 +594,14 @@ export function FinancePage() {
     if (!paying) return;
     setBusyId(paying.id);
     try {
-      await financeApi.payExpense(company.id, paying.id, payDate, payWho);
+      const empresaPagou = payWho === EMPRESA_PAGOU;
+      await financeApi.payExpense(
+        company.id,
+        paying.id,
+        payDate,
+        empresaPagou ? undefined : payWho,
+        empresaPagou,
+      );
       setPaying(null);
       await load();
     } finally {
@@ -1280,11 +1294,18 @@ export function FinancePage() {
               label="Quem pagou esta despesa?"
               value={payWho}
               onChange={setPayWho}
-              options={members.map((m) => ({
-                value: m.id,
-                label: m.fullName,
-                hint: m.id === paying.paidByMemberId ? 'pagador previsto' : undefined,
-              }))}
+              options={[
+                {
+                  value: EMPRESA_PAGOU,
+                  label: 'A empresa pagou',
+                  hint: 'saiu do caixa: ninguém fica devendo',
+                },
+                ...members.map((m) => ({
+                  value: m.id,
+                  label: m.fullName,
+                  hint: m.id === paying.paidByMemberId ? 'pagador previsto' : undefined,
+                })),
+              ]}
             />
             <label className="field">
               <span className="field__label">Data do pagamento</span>
@@ -1297,8 +1318,9 @@ export function FinancePage() {
               />
             </label>
             <p className="fin2-paydialog__hint">
-              Quem pagou entra no acerto entre os sócios: as partes dos outros passam a ser
-              devidas a essa pessoa.
+              {payWho === EMPRESA_PAGOU
+                ? 'Conta paga pelo caixa da empresa: o gasto entra para a empresa e nenhum sócio fica devendo nada.'
+                : 'Quem pagou entra no acerto entre os sócios: as partes dos outros passam a ser devidas a essa pessoa.'}
             </p>
             <div className="fin2-paydialog__acts">
               <Button onClick={() => void confirmPay()} disabled={busyId === paying.id || !payDate}>

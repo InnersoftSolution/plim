@@ -124,17 +124,20 @@ export const financeApi = {
     return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}/refuse`, { method: 'POST' });
   },
 
+  /** `paidByMemberId` vazio + `paidByCompany` = quem pagou foi o caixa da empresa. */
   payExpense(
     companyId: string,
     expenseId: string,
     paidOn?: string,
     paidByMemberId?: string,
+    paidByCompany?: boolean,
   ): Promise<Expense> {
     return apiFetch<Expense>(`/companies/${companyId}/expenses/${expenseId}/pay`, {
       method: 'POST',
       body: JSON.stringify({
         ...(paidOn ? { paidOn } : {}),
-        ...(paidByMemberId ? { paidByMemberId } : {}),
+        ...(paidByMemberId && !paidByCompany ? { paidByMemberId } : {}),
+        ...(paidByCompany ? { paidByCompany: true } : {}),
       }),
     });
   },

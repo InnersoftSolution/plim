@@ -290,6 +290,15 @@ export const payExpenseSchema = z.object({
   paidOn: z.string().date().optional(), // data do pagamento; back usa hoje se ausente
   /** Quem de fato pagou. Ausente = o pagador previsto da conta. */
   paidByMemberId: z.string().uuid().optional(),
+  /**
+   * Saiu do caixa da EMPRESA, não do bolso de ninguém.
+   *
+   * Vale principalmente para as contas geradas por custo recorrente: elas
+   * nascem com um sócio como pagador PREVISTO, mas quem paga pode ser a
+   * própria empresa. Sem isso, quitar a conta criaria dívida dos outros
+   * sócios com quem estava previsto, que não desembolsou nada.
+   */
+  paidByCompany: z.boolean().optional(),
 });
 export type PayExpenseInput = z.infer<typeof payExpenseSchema>;
 

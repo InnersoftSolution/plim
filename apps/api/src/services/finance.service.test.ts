@@ -562,6 +562,43 @@ describe('FinanceService', () => {
     expect(owner.paidCents).toBe(30000);
   });
 
+  it('conta paga pela empresa não deixa ninguém devendo', async () => {
+    // Conta gerada por custo recorrente nasce com um sócio como pagador
+    // PREVISTO. Quem paga costuma ser o caixa da empresa, e nesse caso o gasto
+    // é da empresa: nenhum sócio vira credor dos outros.
+    const created = await finance.createExpense(
+      companyId,
+      {
+        description: 'Desenvolvedor - Jil',
+        amountCents: 300000,
+        paidByMemberId: ownerId,
+        splitMode: 'equity',
+        paymentStatus: 'unpaid',
+        dueDate: '2026-09-05',
+      },
+      'u1',
+    );
+
+    const paga = await finance.payExpense(
+      companyId,
+      created.id,
+      '2026-09-05',
+      'u1',
+      null,
+      true, // pagou a empresa
+    );
+    expect(paga.paymentStatus).toBe('paid');
+    expect(paga.payments).toHaveLength(0);
+
+    const saldos = await finance.getBalances(companyId, 'u1');
+    for (const s of saldos) {
+      expect(s.paidCents).toBe(0);
+      expect(s.owedCents).toBe(0);
+      expect(s.netCents).toBe(0);
+    }
+    expect(await finance.getSettlements(companyId, 'u1')).toHaveLength(0);
+  });
+
   it('não deixa pagar duas vezes', async () => {
     const created = await finance.createExpense(
       companyId,
