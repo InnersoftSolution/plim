@@ -48,20 +48,19 @@ const GRUPOS = {
    */
   despesasOperacionais: true,
   /**
-   * Antecipação de recebíveis do Asaas em agosto (R$ 19.168,15).
-   * PENDENTE: antecipação costuma ser o MESMO dinheiro das vendas, adiantado.
-   * Se as receitas mensais já contam essas vendas, lançar isso conta duas
-   * vezes e infla o faturamento em quase 20 mil.
+   * Antecipação de recebíveis do Asaas em agosto (R$ 19.168,15): RECEITA.
+   *
+   * Decisão da Rafaelle em 25/08. Não duplica as receitas mensais porque são
+   * parcelas futuras que o Asaas adiantou, e não as vendas que já caíram na
+   * conta mês a mês. Como é dinheiro da empresa, não gera dívida entre sócios.
    */
-  antecipacao: false,
+  antecipacao: true,
   /**
-   * Pagamento do projeto EMBRAPII (R$ 19.064,16 em agosto).
-   * PENDENTE: é saída, confirmado pela própria planilha (é o que faz o
-   * resultado de agosto fechar em R$ 4.378,88). Falta saber se já foi pago,
-   * por quem, e como fica o rateio 50/30/20 que a planilha usa nessa linha,
-   * diferente dos 51/29/20 do Plim.
+   * Pagamento 01 do projeto EMBRAPII (R$ 19.064,16, 13/08): saída paga pelo
+   * caixa da empresa, com o dinheiro da antecipação. A Dyely completou os
+   * R$ 2.500 que faltaram, e essa parte entra rateada (grupo acima).
    */
-  embrapii: false,
+  embrapii: true,
   /**
    * Tráfego pago de abril (R$ 2.500) e a campanha do Meta (R$ 1.000).
    * PENDENTE: a campanha de R$ 1.000 existia no Plim como conta a pagar e
@@ -69,7 +68,7 @@ const GRUPOS = {
    * saber se foi apagada de propósito. O tráfego de R$ 2.500 de abril também
    * não bate com nada que já está cadastrado.
    */
-  trafegoAbril: false,
+  trafegoAbril: true,
 };
 
 // Para conferir um grupo sem editar o arquivo:
@@ -152,6 +151,16 @@ const receita = (data, desc, cents) => ({ tipo: 'revenue', data, desc, cents, ca
 /** `de` = id do sócio que pagou, ou 'EMPRESA' quando saiu do caixa da empresa. */
 const despesa = (data, cat, desc, cents, de) => ({ tipo: 'expense', data, cat, desc, cents, de });
 const daEmpresa = (l) => l.de === 'EMPRESA';
+/** Conta a pagar: nada saiu ainda, então tem vencimento e nenhum pagamento. */
+const aPagar = (data, cat, desc, cents, previsto, vencimento) => ({
+  tipo: 'expense',
+  data,
+  cat,
+  desc,
+  cents,
+  de: previsto,
+  vencimento,
+});
 
 const LANCAMENTOS = [];
 
@@ -234,6 +243,17 @@ if (GRUPOS.embrapii) {
 if (GRUPOS.trafegoAbril) {
   LANCAMENTOS.push(
     despesa('2026-04-30', CAT.marketing, 'Tráfego pago: abril/26', 250000, 'EMPRESA'),
+    // Linha 34 da aba de custos, marcada "Aguardando": nunca foi paga. Volta
+    // como conta a pagar, com o vencimento na data do lançamento da campanha,
+    // e por isso vai aparecer como vencida, que é o que a planilha diz.
+    aPagar(
+      '2026-04-09',
+      CAT.marketing,
+      'Tráfego: campanha de anúncios do lançamento (saldo Meta)',
+      100000,
+      DYELY,
+      '2026-04-09',
+    ),
   );
 }
 
@@ -262,18 +282,23 @@ const norm = (s) =>
     .trim();
 
 /**
- * Duplicata = mesmo valor e mesmo mês de competência. A descrição não precisa
- * bater letra a letra (a planilha e o Plim escrevem diferente), mas o valor e
- * o mês juntos já são um sinal forte o bastante para pedir revisão humana.
+ * Duplicata = mesmo valor, mesmo mês E descrição parecida.
+ *
+ * Valor e mês sozinhos não bastam: duas contas diferentes de R$ 1.000 no
+ * mesmo abril (a campanha do Meta e uma parcela do desenvolvedor) davam
+ * falso positivo, e o lançamento novo era descartado como se já existisse.
+ * A descrição não precisa bater letra a letra, porque a planilha e o Plim
+ * escrevem diferente; basta o começo de uma aparecer na outra.
  */
 function jaExiste(l) {
   const mes = l.data.slice(0, 7);
-  return existentes.find(
-    (e) =>
-      e.amount_cents === l.cents &&
-      e.spent_on.slice(0, 7) === mes &&
-      (e.kind === l.tipo || norm(e.description).includes(norm(l.desc).slice(0, 12))),
-  );
+  const alvo = norm(l.desc);
+  return existentes.find((e) => {
+    if (e.amount_cents !== l.cents) return false;
+    if (e.spent_on.slice(0, 7) !== mes) return false;
+    const dela = norm(e.description);
+    return dela.includes(alvo.slice(0, 12)) || alvo.includes(dela.slice(0, 12));
+  });
 }
 
 /**
@@ -324,8 +349,10 @@ for (const l of novos) {
   const quem =
     l.tipo === 'revenue'
       ? 'entrada na conta da empresa'
-      : daEmpresa(l)
-        ? 'pago pelo caixa da empresa (ninguém fica devendo)'
+      : l.vencimento
+        ? `CONTA A PAGAR (vence ${l.vencimento}, previsto: ${nome(l.de)})`
+        : daEmpresa(l)
+          ? 'pago pelo caixa da empresa (ninguém fica devendo)'
         : l.tipo === 'contribution'
         ? `aporte de ${nome(l.de)}${l.reembolsavel ? ', reembolsável (os outros devem a cota)' : ''}`
         : `pago por ${nome(l.de)}`;
@@ -337,7 +364,9 @@ for (const l of novos) {
 console.log(`\nEntra: ${brl(entra)}  |  Sai: ${brl(sai)}`);
 
 const geramAcerto = novos.filter(
-  (l) => (l.tipo === 'expense' && !daEmpresa(l)) || (l.tipo === 'contribution' && l.reembolsavel),
+  (l) =>
+    (l.tipo === 'expense' && !daEmpresa(l) && !l.vencimento) ||
+    (l.tipo === 'contribution' && l.reembolsavel),
 );
 if (geramAcerto.length) {
   const porSocio = {};
@@ -397,7 +426,8 @@ for (const l of novos) {
       spent_on: l.data,
       // Aporte comum não divide; aporte reembolsável divide como despesa.
       split_mode: ehReceita || (ehAporte && !l.reembolsavel) ? 'custom' : 'equity',
-      payment_status: 'paid',
+      payment_status: l.vencimento ? 'unpaid' : 'paid',
+      due_date: l.vencimento ?? null,
       confirmation_status: 'confirmed',
       category_id: await catId(l.cat),
       source: ehReceita ? 'Asaas' : null,
@@ -432,7 +462,7 @@ for (const l of novos) {
   // Pagamento de sócio: entrada não tem (o dinheiro chegou), e conta paga
   // pelo caixa da empresa também não (ninguém tirou do bolso). Sem pagamento
   // de sócio, a responsabilidade de cada um é zero e nada vira dívida.
-  if (!ehReceita && !empresaPagou) {
+  if (!ehReceita && !empresaPagou && !l.vencimento) {
     const { error: e3 } = await db.from('expense_payments').insert({
       expense_id: exp.id,
       member_id: l.de,
