@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageLoading } from '../components/PageLoading';
 import {
@@ -31,6 +31,7 @@ import {
   useFinanceView,
   type FlowPoint,
   type PartnerRow,
+  type UpcomingItem,
 } from '../finance/FinanceView';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeApi';
@@ -340,9 +341,43 @@ export function FinancePage() {
 
   /* Próximos pagamentos: só o que ainda vai vencer (o que já venceu tem
      widget e área próprios), da data mais próxima para a mais distante. */
-  const upcoming = payable
-    .filter((e) => dueBucket(e) !== 'overdue')
-    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+  /* ── o que está chegando ──
+   * Duas origens, porque só a primeira não conta a verdade: as contas a pagar
+   * já registradas, e a próxima cobrança de cada custo recorrente ativo, que
+   * ainda não virou movimentação. Sem a segunda, o bloco dizia "nada a vencer"
+   * para uma empresa que paga o mesmo desenvolvedor todo dia 5.
+   *
+   * O previsto olha 60 dias à frente. É o bastante para cobrir o mês que vem,
+   * que é a pergunta ("quanto sai em setembro?"), e curto o bastante para o
+   * custo anual não aparecer aqui faltando dez meses. */
+  const HORIZONTE_PREVISTO = 60;
+  const upcoming: UpcomingItem[] = [
+    ...payable
+      .filter((e) => dueBucket(e) !== 'overdue')
+      .map<UpcomingItem>((e) => ({
+        tipo: 'conta',
+        id: e.id,
+        description: e.description,
+        amountCents: e.amountCents,
+        dueDate: e.dueDate,
+        expense: e,
+      })),
+    ...recurring.costs
+      .filter((c) => {
+        if (!c.active || !c.nextChargeOn) return false;
+        // Custo com fim marcado para antes da próxima cobrança já acabou.
+        if (c.endsOn && c.nextChargeOn > c.endsOn) return false;
+        const dias = daysUntil(c.nextChargeOn);
+        return dias >= 0 && dias <= HORIZONTE_PREVISTO;
+      })
+      .map<UpcomingItem>((c) => ({
+        tipo: 'previsto',
+        id: `rc-${c.id}`,
+        description: c.name,
+        amountCents: c.amountCents,
+        dueDate: c.nextChargeOn!,
+      })),
+  ].sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
 
   /* Fluxo de caixa: trajetória dos últimos 12 meses com movimento. Este
      widget ignora o recorte de período de propósito: tendência com um mês só
@@ -583,9 +618,17 @@ export function FinancePage() {
     }
   }
 
+  /**
+   * Cobrança gerada por um custo recorrente que sai do caixa: o "pagador
+   * previsto" gravado na conta é só registro, e usá-lo como padrão do
+   * pagamento criaria um acerto que não existe.
+   */
+  const custosDoCaixa = new Set(recurring.costs.filter((c) => c.paidByCompany).map((c) => c.id));
+  const saiDoCaixa = (e: Expense) => e.recurringCostId != null && custosDoCaixa.has(e.recurringCostId);
+
   /** Abre o diálogo "quem pagou?": pagar não é só trocar um status. */
   function markPaid(expense: Expense) {
-    setPayWho(expense.paidByMemberId);
+    setPayWho(saiDoCaixa(expense) ? EMPRESA_PAGOU : expense.paidByMemberId);
     setPayDate(todayIso());
     setPaying(expense);
   }
@@ -667,6 +710,94 @@ export function FinancePage() {
     ? 'Sem dados suficientes ainda. Registre entradas e despesas para o Plim mostrar o fluxo do negócio.'
     : 'Nenhum aporte registrado ainda.';
 
+  /* ── blocos da Visão financeira ──
+   * Montados em lista, e não soltos no JSX, por dois motivos: assim a página
+   * sabe QUANTOS blocos vão realmente aparecer (dois ficam meio a meio) e não
+   * desenha o cartão quando nenhum deles tem o que mostrar. Dois blocos
+   * dependem do recorte: categorias some fora das abas de despesa, e o gráfico
+   * de entradas e saídas some nas abas de recorrentes e a pagar. */
+  const blocosVisao: ReactNode[] = [];
+  if (view.isOn('categorias') && showGastoCat) {
+    blocosVisao.push(
+      <GastosPorCategoriaCard
+        key="categorias"
+        rows={gastoCat.rows}
+        totalCents={gastoCat.total}
+        selected={categoryFilter}
+        onSelect={(key) => setCategoryFilter(key)}
+      />,
+    );
+  }
+  if (view.isOn('proximos')) {
+    blocosVisao.push(
+      <UpcomingWidget
+        key="proximos"
+        items={upcoming}
+        onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
+        onSeeAll={() => setFilter('a-pagar')}
+        onOpenRecorrentes={() => setFilter('recorrentes')}
+      />,
+    );
+  }
+  if (view.isOn('fluxo')) blocosVisao.push(<CashFlowWidget key="fluxo" points={flowPoints} />);
+  if (view.isOn('aportes')) {
+    blocosVisao.push(<ContributionsWidget key="aportes" rows={aporteRows} total={totalAportado} />);
+  }
+  if (view.isOn('entradas-saidas') && showChart) {
+    blocosVisao.push(
+      <div className="fw fw--8 fin2-flux" key="entradas-saidas">
+        <div className="fin2-flux__seg" role="tablist" aria-label="Modo do gráfico">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={fluxMode === 'mensal'}
+            className={fluxMode === 'mensal' ? 'is-on' : ''}
+            onClick={() => setFluxMode('mensal')}
+          >
+            Mensal
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={fluxMode === 'acumulado'}
+            className={fluxMode === 'acumulado' ? 'is-on' : ''}
+            onClick={() => setFluxMode('acumulado')}
+          >
+            Acumulado
+          </button>
+        </div>
+        <FinChart
+          points={showAcc ? chartAcc.points : chart.points}
+          title={chartTitle}
+          subtitle={showAcc ? 'Saldo acumulado mês a mês: violeta quando positivo, vermelho quando negativo.' : chartSubtitle}
+          caption={chartCaption}
+          emptyText={chartEmpty}
+          helpText={chartHelp}
+          onSelectMonth={(key) => {
+            // Do "quanto" para o "o quê": abre o mês na lista e rola até ele.
+            setOpenMonths((m) => ({ ...m, [key]: true }));
+            requestAnimationFrame(() =>
+              document.getElementById(`mes-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+            );
+          }}
+        />
+      </div>,
+    );
+  }
+  if (view.isOn('atrasos')) {
+    blocosVisao.push(
+      <OverdueWidget
+        key="atrasos"
+        items={dueOverdue}
+        onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
+        onSeeAll={() => setFilter('vencidas')}
+      />,
+    );
+  }
+  if (view.isOn('pagamentos-socio')) {
+    blocosVisao.push(<PaidByWidget key="pagamentos-socio" rows={pagamentosPorSocio} total={totalPagoSocios} />);
+  }
+
   return (
     <div className="fin fin--wide">
       {/* ── cabeçalho ── */}
@@ -718,23 +849,18 @@ export function FinancePage() {
         )}
       </div>
 
-      {/* ── resumo: quatro números, o saldo lidera ── */}
+      {/* ── resumo: quatro números, o saldo lidera ──
+          Regra de cor da faixa: DIREÇÃO é ícone, VEREDITO é cor. Entrou e Saiu
+          são fatos neutros, sempre positivos, e saída alta não é problema (mês
+          de investimento é assim); pintá-los de verde e vermelho ensinaria a
+          pessoa a ignorar o vermelho justamente quando ele importa. Colorido
+          fica só o que muda de sinal (o saldo) e o que pede ação (vencido). */}
+      {/* Ordem de leitura: a resposta primeiro. O saldo é o que a pessoa veio
+          ver; entradas, saídas e pendências são o detalhamento dele. */}
       <section className="fin2-sum" aria-label="Resumo financeiro do período">
-        <div>
-          <span className="fin2-sum__lab">Entrou</span>
-          <span className="fin2-sum__val" data-financial>{formatMoney(receitaCents)}</span>
-          <span className="fin2-sum__note">
-            {entradasCount === 0 ? 'nenhuma entrada' : `${entradasCount} ${entradasCount === 1 ? 'entrada' : 'entradas'}`}
-          </span>
-        </div>
-        <div>
-          <span className="fin2-sum__lab">Saiu</span>
-          <span className="fin2-sum__val" data-financial>{formatMoney(gastoCents)}</span>
-          <span className="fin2-sum__note">
-            {despesasCount === 0 ? 'nenhuma despesa paga' : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`}
-          </span>
-        </div>
-        <div>
+        <div className="fin2-sum__hero">
+          {/* Sem ícone: as setas e o relógio dizem algo, mas o "=" era só um
+              desenho de sinal de igual perdido ao lado do rótulo. */}
           <span className="fin2-sum__lab">Saldo do período</span>
           <span
             className={'fin2-sum__val fin2-sum__val--big' + (resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')}
@@ -742,11 +868,41 @@ export function FinancePage() {
           >
             {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
           </span>
-          <span className="fin2-sum__note">entrou − saiu</span>
+          {/* O sinal não pode viver só na cor: quem não distingue vermelho de
+              verde lê a palavra. */}
+          <span className="fin2-sum__note">
+            {resultadoCents < 0 ? 'saiu mais do que entrou' : resultadoCents > 0 ? 'entrou mais do que saiu' : 'entrou − saiu'}
+          </span>
         </div>
         <div>
-          <span className="fin2-sum__lab">A pagar</span>
-          <span className="fin2-sum__val" data-financial>{formatMoney(payableCents)}</span>
+          <span className="fin2-sum__lab">
+            <span className="fin2-sum__ic fin2-sum__ic--in"><IconIn /></span>Entrou
+          </span>
+          <span className="fin2-sum__val" data-financial>{formatMoney(receitaCents)}</span>
+          <span className="fin2-sum__note">
+            {entradasCount === 0 ? 'nenhuma entrada' : `${entradasCount} ${entradasCount === 1 ? 'entrada' : 'entradas'}`}
+          </span>
+        </div>
+        <div>
+          <span className="fin2-sum__lab">
+            <span className="fin2-sum__ic fin2-sum__ic--out"><IconOut /></span>Saiu
+          </span>
+          <span className="fin2-sum__val" data-financial>{formatMoney(gastoCents)}</span>
+          <span className="fin2-sum__note">
+            {despesasCount === 0 ? 'nenhuma despesa paga' : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`}
+          </span>
+        </div>
+        <div>
+          <span className="fin2-sum__lab">
+            <span className={'fin2-sum__ic' + (overdueCents > 0 ? ' fin2-sum__ic--late' : '')}><IconDue /></span>
+            A pagar
+          </span>
+          <span
+            className={'fin2-sum__val' + (overdueCents > 0 ? ' is-neg' : '')}
+            data-financial
+          >
+            {formatMoney(payableCents)}
+          </span>
           <span className="fin2-sum__note">
             {payable.length === 0 ? (
               'nenhum pagamento pendente'
@@ -776,6 +932,24 @@ export function FinancePage() {
             Entrou no total <b data-financial>{formatMoney(receitaCents + aportesPeriodoCents)}</b>
           </span>
         </div>
+      )}
+
+      {/* ── Visão financeira ──
+          Subiu para logo abaixo dos números do topo: o resumo diz quanto, os
+          gráficos dizem de onde e para quando, e só então vem a lista com o
+          caso a caso. Antes ficava no fim da página, depois de dezenas de
+          linhas, onde quase ninguém chegava. É um cartão só, com os blocos
+          divididos por dentro, igual ao cartão de números logo acima. */}
+      {!nothingYet && blocosVisao.length > 0 && (
+        <section className="fin2-view" aria-label="Visão financeira">
+          <div className="fin2-view__head">
+            <h2>Visão financeira</h2>
+            <button type="button" className="fin2-ghostbtn" onClick={() => setCustomizeOpen(true)}>
+              <IconSliders /> Personalizar
+            </button>
+          </div>
+          <div className="fw-grid">{blocosVisao}</div>
+        </section>
       )}
 
       {/* ── aguardando MINHA confirmação (operacional: só na tela principal) ── */}
@@ -819,7 +993,7 @@ export function FinancePage() {
             {dueOverdue.length > 0 && (
               <AttGroup tone="overdue" title="Em atraso">
                 {dueOverdue.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
                     onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
                 ))}
               </AttGroup>
@@ -827,7 +1001,7 @@ export function FinancePage() {
             {dueToday.length > 0 && (
               <AttGroup tone="today" title="Vence hoje">
                 {dueToday.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
                     onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
                 ))}
               </AttGroup>
@@ -835,7 +1009,7 @@ export function FinancePage() {
             {dueSoon.length > 0 && (
               <AttGroup tone="soon" title={`Próximos ${DUE_SOON_DAYS} dias`}>
                 {dueSoon.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id}
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
                     onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
                 ))}
               </AttGroup>
@@ -1029,88 +1203,6 @@ export function FinancePage() {
         </div>
       )}
 
-      {/* ── Visão financeira: análise modular, complementa a lista ── */}
-      {!nothingYet && (
-        <section className="fin2-view" aria-label="Visão financeira">
-          <div className="fin2-view__head">
-            <h2>Visão financeira</h2>
-            <button type="button" className="fin2-ghostbtn" onClick={() => setCustomizeOpen(true)}>
-              Personalizar visão
-            </button>
-          </div>
-          <div className="fw-grid">
-            {view.isOn('fluxo') && <CashFlowWidget points={flowPoints} />}
-            {view.isOn('proximos') && (
-              <UpcomingWidget
-                items={upcoming}
-                onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
-                onSeeAll={() => setFilter('a-pagar')}
-              />
-            )}
-            {view.isOn('categorias') && showGastoCat && (
-              <GastosPorCategoriaCard
-                rows={gastoCat.rows}
-                totalCents={gastoCat.total}
-                selected={categoryFilter}
-                onSelect={(key) => setCategoryFilter(key)}
-              />
-            )}
-            {view.isOn('aportes') && <ContributionsWidget rows={aporteRows} total={totalAportado} />}
-            {view.isOn('entradas-saidas') && showChart && (
-              <div className="fw fw--8 fin2-flux">
-                <div className="fin2-flux__seg" role="tablist" aria-label="Modo do gráfico">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={fluxMode === 'mensal'}
-                    className={fluxMode === 'mensal' ? 'is-on' : ''}
-                    onClick={() => setFluxMode('mensal')}
-                  >
-                    Mensal
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={fluxMode === 'acumulado'}
-                    className={fluxMode === 'acumulado' ? 'is-on' : ''}
-                    onClick={() => setFluxMode('acumulado')}
-                  >
-                    Acumulado
-                  </button>
-                </div>
-                <FinChart
-                  points={showAcc ? chartAcc.points : chart.points}
-                  title={chartTitle}
-                  subtitle={showAcc ? 'Saldo acumulado mês a mês: violeta quando positivo, vermelho quando negativo.' : chartSubtitle}
-                  caption={chartCaption}
-                  emptyText={chartEmpty}
-                  helpText={chartHelp}
-                  onSelectMonth={(key) => {
-                    // Do "quanto" para o "o quê": abre o mês na lista e rola até ele.
-                    setOpenMonths((m) => ({ ...m, [key]: true }));
-                    requestAnimationFrame(() =>
-                      document
-                        .getElementById(`mes-${key}`)
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-                    );
-                  }}
-                />
-              </div>
-            )}
-            {view.isOn('atrasos') && (
-              <OverdueWidget
-                items={dueOverdue}
-                onOpen={(e) => navigate(`/financeiro/movimentacao/${e.id}`)}
-                onSeeAll={() => setFilter('vencidas')}
-              />
-            )}
-            {view.isOn('pagamentos-socio') && (
-              <PaidByWidget rows={pagamentosPorSocio} total={totalPagoSocios} />
-            )}
-          </div>
-        </section>
-      )}
-
       {/* ── personalizar a visão financeira ── */}
       <Modal
         open={customizeOpen}
@@ -1288,7 +1380,12 @@ export function FinancePage() {
                 ...members.map((m) => ({
                   value: m.id,
                   label: m.fullName,
-                  hint: m.id === paying.paidByMemberId ? 'pagador previsto' : undefined,
+                  // Quando o custo sai do caixa, o sócio gravado é só registro:
+                  // rotulá-lo de "previsto" empurraria a escolha errada.
+                  hint:
+                    m.id === paying.paidByMemberId && !saiDoCaixa(paying)
+                      ? 'pagador previsto'
+                      : undefined,
                 })),
               ]}
             />
@@ -1381,6 +1478,7 @@ function AttRow({
   nameOf,
   categoryOf,
   busy,
+  empresa,
   onOpen,
   onPay,
 }: {
@@ -1388,6 +1486,8 @@ function AttRow({
   nameOf: (id: string) => string;
   categoryOf: (id: string | null) => Category | null;
   busy: boolean;
+  /** true = a cobrança vem de um custo recorrente pago pelo caixa da empresa. */
+  empresa?: boolean;
   onOpen: () => void;
   onPay: () => void;
 }) {
@@ -1396,7 +1496,8 @@ function AttRow({
       <button type="button" className="fin2-attrow__info" onClick={onOpen}>
         <span className="fin2-attrow__t">{e.description}</span>
         <span className="fin2-attrow__c">
-          {categoryOf(e.categoryId)?.name ?? 'Sem categoria'} · pagador previsto {nameOf(e.paidByMemberId)}
+          {categoryOf(e.categoryId)?.name ?? 'Sem categoria'} ·{' '}
+          {empresa ? 'sai do caixa da empresa' : `pagador previsto ${nameOf(e.paidByMemberId)}`}
         </span>
       </button>
       {e.dueDate && <StChip dueDate={e.dueDate} />}
@@ -1466,7 +1567,8 @@ function MovRow({
             <span className="fin-mov__badge fin-mov__badge--rec">{isOnce ? 'Única vez' : 'Recorrente'}</span>
           </span>
           <span className="fin-mov__meta">
-            {freqLabel(c.frequency)} · pago por {nameOf(c.paidByMemberId)}
+            {freqLabel(c.frequency)} ·{' '}
+            {c.paidByCompany ? 'sai do caixa da empresa' : `pago por ${nameOf(c.paidByMemberId)}`}
           </span>
         </div>
         <div className="fin-mov__right">
@@ -1602,6 +1704,42 @@ function IconDownload() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M7 10l5 5 5-5" />
       <path d="M12 15V3" />
+    </svg>
+  );
+}
+
+/** Controles deslizantes: personalizar o que a Visão financeira mostra. */
+function IconSliders() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8h10M18 8h2M4 16h4M12 16h8" />
+      <circle cx="16" cy="8" r="2" />
+      <circle cx="10" cy="16" r="2" />
+    </svg>
+  );
+}
+
+/* Ícones da faixa de resumo. São 13px, sem moldura: marcam a direção do
+   dinheiro sem virar enfeite ao lado de um rótulo de 11px. */
+function IconIn() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5M6 13l6 6 6-6" />
+    </svg>
+  );
+}
+function IconOut() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+function IconDue() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
     </svg>
   );
 }

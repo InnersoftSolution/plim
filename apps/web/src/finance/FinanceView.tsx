@@ -33,17 +33,26 @@ export const WIDGET_CATALOG: {
   question: string;
   span: Span;
 }[] = [
-  { id: 'fluxo', label: 'Fluxo de caixa', question: 'Como nossa situação evoluiu?', span: 8 },
-  { id: 'proximos', label: 'Próximos pagamentos', question: 'O que está chegando?', span: 4 },
+  /* A ordem daqui é a ordem na tela: os dois primeiros são a visão padrão, e
+     "Onde gastamos" vem antes de "O que vem aí" porque é a pergunta que a
+     pessoa faz primeiro ao abrir o financeiro. */
   { id: 'categorias', label: 'Gastos por categoria', question: 'Onde estamos gastando?', span: 6 },
+  { id: 'proximos', label: 'Próximos pagamentos', question: 'O que está chegando?', span: 4 },
+  { id: 'fluxo', label: 'Fluxo de caixa', question: 'Como nossa situação evoluiu?', span: 8 },
   { id: 'aportes', label: 'Aportes dos sócios', question: 'Quanto cada sócio colocou?', span: 6 },
   { id: 'entradas-saidas', label: 'Entradas e saídas', question: 'Quanto entrou e quanto saiu por mês?', span: 8 },
   { id: 'atrasos', label: 'Contas em atraso', question: 'Existe algo vencido?', span: 4 },
   { id: 'pagamentos-socio', label: 'Pagamentos por sócio', question: 'Quem está bancando as despesas?', span: 6 },
 ];
 
-/** Visão padrão: responde as perguntas do dia a dia sem poluir a tela. */
-const DEFAULT_VIEW: WidgetId[] = ['fluxo', 'proximos', 'categorias', 'aportes'];
+/**
+ * Visão padrão: dois blocos, lado a lado, no alto da página. Um olha para trás
+ * (para onde o dinheiro foi) e outro para a frente (o que vence). São as duas
+ * perguntas que o sócio faz ao abrir a tela; o resto é aprofundamento e entra
+ * por "Personalizar". Quatro blocos por padrão viravam uma parede de gráfico
+ * antes da lista.
+ */
+const DEFAULT_VIEW: WidgetId[] = ['categorias', 'proximos'];
 
 const storageKey = (companyId: string) => `plim.finview.${companyId}`;
 
@@ -270,31 +279,54 @@ function shortDate(iso: string): string {
   return `${day} ${meses[Number(m) - 1] ?? ''}`.trim();
 }
 
+/**
+ * Uma linha de "o que está chegando". São duas naturezas diferentes de dívida
+ * futura, e a pessoa precisa distinguir: `conta` já está registrada e tem
+ * página própria; `previsto` ainda não existe como movimentação, é a próxima
+ * cobrança de um custo recorrente. Sem o previsto o bloco mentia por omissão,
+ * dizendo "nada a vencer" para quem sabe que paga o mesmo fornecedor todo mês.
+ */
+export type UpcomingItem =
+  | { tipo: 'conta'; id: string; description: string; amountCents: number; dueDate: string | null; expense: Expense }
+  | { tipo: 'previsto'; id: string; description: string; amountCents: number; dueDate: string };
+
 export function UpcomingWidget({
   items,
   onOpen,
   onSeeAll,
+  onOpenRecorrentes,
 }: {
-  /** Contas a vencer (não vencidas), da mais próxima para a mais distante. */
-  items: Expense[];
+  /** Contas a vencer e cobranças previstas, da mais próxima para a mais distante. */
+  items: UpcomingItem[];
   onOpen: (e: Expense) => void;
   onSeeAll: () => void;
+  /** Previsto não tem página própria: leva para a lista de custos recorrentes. */
+  onOpenRecorrentes: () => void;
 }) {
-  const total = items.reduce((s, e) => s + e.amountCents, 0);
+  const total = items.reduce((s, i) => s + i.amountCents, 0);
   const mostrados = items.slice(0, 5);
+  const temPrevisto = mostrados.some((i) => i.tipo === 'previsto');
   return (
     <Widget id="proximos" title="Próximos pagamentos" subtitle="O que está chegando">
       {mostrados.length === 0 ? (
-        <p className="fw__empty">Nenhuma conta a vencer nos registros.</p>
+        <p className="fw__empty">
+          Nenhuma conta a vencer e nenhum custo recorrente com cobrança próxima.
+        </p>
       ) : (
         <>
           <ul className="fw-next">
-            {mostrados.map((e) => (
-              <li key={e.id}>
-                <button type="button" onClick={() => onOpen(e)}>
-                  <span className="fw-next__when">{e.dueDate ? shortDate(e.dueDate) : 'SEM DATA'}</span>
-                  <span className="fw-next__what">{e.description}</span>
-                  <span className="fw-next__v" data-financial>{formatMoney(e.amountCents)}</span>
+            {mostrados.map((i) => (
+              <li key={i.id}>
+                <button
+                  type="button"
+                  onClick={() => (i.tipo === 'conta' ? onOpen(i.expense) : onOpenRecorrentes())}
+                >
+                  <span className="fw-next__when">{i.dueDate ? shortDate(i.dueDate) : 'SEM DATA'}</span>
+                  {/* A etiqueta fica FORA do texto que trunca: dentro dele, um
+                      nome comprido comia o "previsto" junto com o resto. */}
+                  <span className="fw-next__what">{i.description}</span>
+                  {i.tipo === 'previsto' && <span className="fw-next__tag">previsto</span>}
+                  <span className="fw-next__v" data-financial>{formatMoney(i.amountCents)}</span>
                 </button>
               </li>
             ))}
@@ -309,6 +341,12 @@ export function UpcomingWidget({
               </button>
             )}
           </div>
+          {temPrevisto && (
+            <p className="fw__note">
+              O que está marcado como previsto ainda não é uma conta registrada: é a próxima
+              cobrança de um custo recorrente, na data que ele tem cadastrada.
+            </p>
+          )}
         </>
       )}
     </Widget>

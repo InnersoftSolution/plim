@@ -237,11 +237,15 @@ export function MovementDetailPage() {
           {' · '}
           {isRevenue
             ? `recebido por ${movement.account || payerName}`
-            : pagouEmpresa
-              ? 'pago pela empresa'
-              : varios
-                ? `pago por ${movement.payments.length} sócios`
-                : `pago por ${payerName}`}
+            : toPay
+              ? // Conta em aberto não tem pagador: quem paga se decide na hora de
+                // quitar. Dizer "pago por Fulano" aqui era afirmar o que não houve.
+                'ainda não paga'
+              : pagouEmpresa
+                ? 'pago pela empresa'
+                : varios
+                  ? `pago por ${movement.payments.length} sócios`
+                  : `pago por ${payerName}`}
         </p>
       </header>
 

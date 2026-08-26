@@ -5,6 +5,11 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  /* A página é o container das suas próprias quebras. Quem decide se quatro
+     números cabem lado a lado é a largura DISPONÍVEL, não a da janela: com a
+     barra lateral aberta, uma janela de 1100px deixa uns 840px de conteúdo, e
+     era aí que o saldo passava por cima do "A pagar". */
+  container-type: inline-size;
 }
 
 .fin-head h1 {
@@ -237,7 +242,7 @@
    para o grid de widgets e para a tabela respirarem lado a lado. */
 .fin--wide {
   max-width: 1240px;
-  gap: 16px;
+  gap: 24px;
 }
 .fin-head--row {
   display: flex;
@@ -284,10 +289,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
   text-align: left;
-  padding: 14px 18px;
+  padding: 16px 20px;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
@@ -306,7 +311,9 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  /* A descrição e a linha de data/pagador colavam uma na outra e viravam um
+     bloco só de texto. */
+  gap: 5px;
 }
 .fin-mov__desc {
   font-size: 14px;
@@ -745,7 +752,7 @@
 .fin-groups {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .fin-group {
   border: 1px solid var(--color-border-default);
@@ -758,7 +765,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 16px 20px;
   background: none;
   border: none;
   cursor: pointer;
@@ -1096,18 +1103,20 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-/* resumo: 4 números, o saldo lidera */
+/* resumo: o saldo lidera abrindo a faixa, os três detalhes vêm depois.
+   Uma linguagem só de separação (o traço), nenhuma caixa dentro de caixa. */
 .fin2-sum {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.3fr 1.2fr;
+  grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
-  padding: 16px 6px;
+  padding: 20px 6px;
 }
 .fin2-sum > div {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
   padding: 2px 22px;
   border-left: 1px solid var(--color-border-default);
@@ -1117,11 +1126,30 @@
   border-left: none;
 }
 .fin2-sum__lab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 700;
+  margin-bottom: 2px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-muted);
+}
+/* A cor mora no ícone, não no número: verde e vermelho dizem a direção do
+   dinheiro sem transformar a faixa inteira em semáforo. */
+.fin2-sum__ic {
+  display: inline-flex;
+  /* Ícone que carrega significado segue a regra de contraste de gráfico: o tom
+     mais claro ficava em 2:1 e sumia. */
+  color: var(--color-text-muted);
+}
+.fin2-sum__ic--in {
+  color: var(--color-status-positive);
+}
+.fin2-sum__ic--out,
+.fin2-sum__ic--late {
+  color: var(--color-status-negative-ink);
 }
 .fin2-sum__val {
   font-size: 22px;
@@ -1134,11 +1162,13 @@
   font-size: 27px;
   font-weight: 700;
 }
+/* Tom fechado, não o vermelho claro: sobre o fundo do saldo o tom claro caía
+   para 3,95:1, apertado demais para o número principal da página. */
 .fin2-sum__val.is-neg {
-  color: var(--color-status-negative);
+  color: var(--color-status-negative-ink);
 }
 .fin2-sum__val.is-pos {
-  color: var(--color-status-positive);
+  color: var(--color-status-positive-ink, var(--color-status-positive));
 }
 .fin2-sum__note {
   font-size: 12px;
@@ -1148,6 +1178,75 @@
 .fin2-sum__note strong {
   color: var(--color-status-negative-ink);
   font-weight: 600;
+}
+
+/* ── a faixa em estágios, medidos pelo espaço disponível ──
+   Primeiro os números cedem: entre 1040px e o limite eles encolhem junto com
+   a largura, em vez de esperar a quebra. Medindo, quatro colunas com o corpo
+   cheio exigem 820px de largura mínima; encolhendo a fonte esse mínimo cai
+   junto, e a faixa chega inteira até bem perto do ponto de virada. */
+@container (max-width: 1040px) {
+  .fin2-sum__val {
+    font-size: clamp(17px, 2.2cqi, 22px);
+  }
+  .fin2-sum__val--big {
+    font-size: clamp(20px, 2.75cqi, 27px);
+  }
+}
+
+/* Aqui nem encolhendo cabe. Em vez de um 2×2 ambíguo, três linhas com papéis
+   claros: o saldo abre sozinho, Entrou e Saiu dividem a do meio (são o par
+   que se compara), e A pagar fecha sozinho porque a nota dele é longa. */
+@container (max-width: 860px) {
+  .fin2-sum {
+    grid-template-columns: 1fr 1fr;
+    padding: 0 16px;
+  }
+  .fin2-sum > div {
+    padding: 14px 0;
+    border-left: none;
+    border-top: 1px solid var(--color-border-default);
+  }
+  .fin2-sum > .fin2-sum__hero {
+    grid-column: 1 / -1;
+    border-top: none;
+  }
+  .fin2-sum > div:nth-child(3) {
+    border-left: 1px solid var(--color-border-default);
+    padding-left: 16px;
+  }
+  .fin2-sum > div:nth-child(2) {
+    padding-right: 16px;
+  }
+  .fin2-sum > div:last-child {
+    grid-column: 1 / -1;
+  }
+  /* Uma linha inteira para ele: o saldo pode ser grande sem colidir. */
+  .fin2-sum__val {
+    font-size: clamp(16px, 4.6cqi, 21px);
+  }
+  .fin2-sum__val--big {
+    font-size: clamp(22px, 7cqi, 28px);
+  }
+}
+
+/* Coluna estreita de verdade (celular): o rótulo encolhe para caber numa
+   linha só, e o saldo abre mão do tamanho maior, senão "− R$ 23.864,68"
+   atravessa a divisória. Ele continua liderando pela cor, pelo peso e pelo
+   fundo próprio, que é o bastante. */
+/* Celular estreito: só o rótulo encolhe. O saldo mantém o corpo grande,
+   porque a linha inteira é dele. */
+@container (max-width: 440px) {
+  .fin2-sum__lab {
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    gap: 5px;
+  }
+  /* O :not() é necessário: sem ele esta regra, que vem depois no arquivo,
+     empata em especificidade com a do --big e rouba o corpo do saldo. */
+  .fin2-sum__val:not(.fin2-sum__val--big) {
+    font-size: clamp(14px, 4.9cqi, 18px);
+  }
 }
 .fin2-origins {
   display: flex;
@@ -1268,6 +1367,9 @@
   white-space: nowrap;
 }
 .fin2-ghostbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   border-radius: 999px;
@@ -1324,13 +1426,18 @@
 }
 
 /* cabeçalho do bloco de movimentações + busca */
+/* O espaço da página é de 24px entre blocos. Aqui ele é quebrado de propósito,
+   nos dois sentidos: 32px acima marcam o começo de uma seção nova, 12px abaixo
+   grudam o título na lista que ele nomeia. Espaço igual em toda parte deixa
+   tudo à mesma distância e o olho não sabe o que pertence a quê. */
 .fin2-movhead {
   display: flex;
   align-items: center;
   gap: 12px;
   justify-content: space-between;
   flex-wrap: wrap;
-  margin-bottom: -10px;
+  margin-top: 8px;
+  margin-bottom: -12px;
 }
 .fin2-movhead h2 {
   margin: 0;
@@ -1374,11 +1481,24 @@
 }
 
 /* ── Visão financeira ── */
+/* A Visão financeira é UM cartão, com a mesma casca do resumo de números logo
+   acima. Os blocos lá dentro perdem a borda própria e se separam por um fio,
+   igual às colunas do resumo: cartão dentro de cartão empilha duas molduras e
+   faz a página parecer uma pilha de caixas. */
 .fin2-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 4px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  /* Sem padding no cartão: quem afasta o conteúdo da borda é cada bloco, senão
+     o espaçamento dobraria entre os blocos e a borda. O overflow apara os
+     cantos retos dos blocos dentro do cartão arredondado. */
+  padding: 0;
+  overflow: hidden;
+  /* Container das colunas: quem manda na quebra é a largura útil ao lado do
+     menu, não a da janela. */
+  container-type: inline-size;
 }
 .fin2-view__head {
   display: flex;
@@ -1386,6 +1506,7 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  padding: 18px 22px 16px;
 }
 .fin2-view__head h2 {
   margin: 0;
@@ -1663,38 +1784,25 @@
   .fin-hide-sm {
     display: none;
   }
+  /* Alvo de toque: no dedo, 32px é erro de clique. O mínimo do guia da Apple,
+     que é a referência do app, é 44px, e os controles desta tela estavam
+     entre 32 e 37. Só a altura muda: o desenho continua o mesmo. */
+  .fin .sel__btn,
+  .fin2-filterbtn,
+  .fin2-viewswap,
+  .fin2-ghostbtn,
+  .fin2-search {
+    min-height: 44px;
+  }
+  .fw__link,
+  .fw__foot button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
   .fin2-view__head h2,
   .fin2-movhead h2 {
     font-size: 16px;
-  }
-  .fin2-sum {
-    grid-template-columns: 1fr 1fr;
-    row-gap: 16px;
-    padding: 14px 0;
-  }
-  .fin2-sum > div {
-    padding: 0 16px;
-    border-left: none;
-  }
-  .fin2-sum > div:nth-child(even) {
-    border-left: 1px solid var(--color-border-default);
-  }
-  /* Em 375px a coluna tem ~150px: o rótulo cabe numa linha só com o
-     espaçamento menor, e todos os valores usam o mesmo corpo. O saldo
-     continua liderando pela cor e pelo peso, não pelo tamanho, senão
-     "− R$ 23.864,68" invade a coluna vizinha. */
-  .fin2-sum__lab {
-    font-size: 10px;
-    letter-spacing: 0.07em;
-  }
-  /* O corpo acompanha a largura da tela: em 320px o valor encolhe em vez de
-     atravessar a divisória, em 430px volta ao tamanho cheio. */
-  .fin2-sum__val,
-  .fin2-sum__val--big {
-    font-size: clamp(13px, 4.1vw, 18px);
-  }
-  .fin2-sum > div {
-    padding: 0 14px;
   }
   .fin2-attrow {
     flex-wrap: wrap;

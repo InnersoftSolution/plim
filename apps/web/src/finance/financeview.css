@@ -21,6 +21,10 @@
   border-radius: 16px;
   background: var(--color-bg-surface);
   min-width: 0;
+  /* Container do próprio bloco: o conteúdo lá dentro precisa reagir à largura
+     da COLUNA em que ele caiu, não à da grade inteira. Num monitor largo com
+     dois blocos, a grade tem 900px e cada coluna tem 430. */
+  container-type: inline-size;
 }
 /* Faixa intermediária: dois blocos por linha, e o gráfico grande sozinho. */
 @container (min-width: 560px) {
@@ -40,6 +44,50 @@
     .fw--6 { grid-column: span 6; }
     .fw--8 { grid-column: span 8; }
   }
+}
+
+/* ── dentro do cartão da Visão financeira ──
+ * Os blocos perdem a moldura própria: cartão dentro de cartão empilha duas
+ * bordas e faz a página parecer uma pilha de caixas.
+ *
+ * A separação é um fio desenhado por sombra na esquerda e no topo de cada
+ * bloco. A vantagem sobre borda é que a sombra acerta sozinha onde a linha
+ * quebra: numa segunda linha o fio de cima vira o separador entre as linhas, e
+ * o da esquerda cai fora do cartão e some no overflow. Com borda, aquele fio
+ * esquerdo viraria um risco solto no começo da linha.
+ *
+ * Os spans do catálogo dão lugar a duas colunas iguais, com o último bloco
+ * ocupando a linha inteira quando o número é ímpar: assim não sobra meia linha
+ * vazia dentro do cartão. */
+.fin2-view .fw-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.fin2-view .fw {
+  grid-column: auto;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bg-surface);
+  padding: 18px 22px;
+  box-shadow:
+    -1px 0 0 var(--color-border-default),
+    0 -1px 0 var(--color-border-default);
+}
+@container (min-width: 560px) {
+  .fin2-view .fw-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fin2-view .fw {
+    grid-column: span 1;
+  }
+  .fin2-view .fw:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}
+/* O gráfico de fluxo zera o padding para não virar moldura dentro da moldura;
+   dentro do cartão ele é uma célula como as outras e precisa dele de volta. */
+.fin2-view .fw.fin2-flux {
+  padding: 18px 22px;
 }
 
 .fw__head {
@@ -204,7 +252,8 @@
 .fw-next button {
   width: 100%;
   display: grid;
-  grid-template-columns: 58px 1fr auto;
+  /* data · nome (encolhe) · etiqueta opcional · valor */
+  grid-template-columns: 58px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 9px 8px;
@@ -237,11 +286,51 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* "previsto": o que ainda não é conta registrada. Amarelo de alerta, o mesmo
+   das badges de recorrente e a vencer: dinheiro que ainda vai sair pede
+   atenção, não neutralidade. */
+.fw-next__tag {
+  grid-column: 3;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+  vertical-align: 1px;
+}
+/* Sempre na última coluna, tenha a linha etiqueta ou não: assim os valores
+   ficam alinhados entre si, que é o que se lê de cima a baixo. */
 .fw-next__v {
+  grid-column: 4;
   font-family: var(--font-mono);
   font-size: 13.5px;
   font-weight: 600;
   color: var(--color-text-default);
+}
+/* Coluna estreita: a etiqueta desce para a linha de baixo em vez de disputar
+   espaço com o nome. Num celular ela comia metade do nome, e "Google …" não
+   identifica conta nenhuma. */
+@container (max-width: 360px) {
+  .fw-next button {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    row-gap: 3px;
+  }
+  .fw-next__when,
+  .fw-next__what {
+    grid-row: 1;
+  }
+  .fw-next__v {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .fw-next__tag {
+    grid-column: 2 / span 2;
+    grid-row: 2;
+    justify-self: start;
+  }
 }
 .fw-clear {
   display: flex;

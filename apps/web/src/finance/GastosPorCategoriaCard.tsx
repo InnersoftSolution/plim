@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatMoney } from './financeApi';
 import { Widget } from './FinanceView';
@@ -34,6 +35,9 @@ export function GastosPorCategoriaCard({
   selected: string;
   onSelect: (key: string) => void;
 }) {
+  // Antes do early return: hook não pode ficar atrás de condicional.
+  const [mostrarTudo, setMostrarTudo] = useState(false);
+
   if (rows.length === 0) {
     return (
       <Widget id="categorias" title="Gastos por categoria">
@@ -47,6 +51,14 @@ export function GastosPorCategoriaCard({
 
   const keyOf = (id: string | null) => id ?? '__none__';
   const maior = rows[0]?.totalCents ?? 1;
+  /* As cinco primeiras respondem a pergunta: numa lista ordenada, a cauda é
+     onde o dinheiro NÃO está. Mostrar dez fazia o bloco crescer sem responder
+     mais nada, e agora ele mora no alto da página, empurrando a lista. Quem
+     precisa do detalhe abre o resto num toque. */
+  const TOPO = 5;
+  const visiveis = mostrarTudo ? rows : rows.slice(0, TOPO);
+  const escondidas = rows.length - visiveis.length;
+  const restanteCents = rows.slice(TOPO).reduce((s, r) => s + r.totalCents, 0);
   // Nada categorizado ainda: o card vira orientação (jornada guiada).
   const onlyUncategorized = rows.length === 1 && rows[0]!.id === null;
 
@@ -62,7 +74,7 @@ export function GastosPorCategoriaCard({
       }
     >
       <ul className="gpc__list">
-        {rows.map((r) => {
+        {visiveis.map((r) => {
           const key = keyOf(r.id);
           const active = selected === key;
           return (
@@ -98,6 +110,20 @@ export function GastosPorCategoriaCard({
           );
         })}
       </ul>
+      {/* O botão diz quanto está escondido, não só quantas linhas: sem o valor
+          a pessoa não sabe se vale a pena abrir. */}
+      {(escondidas > 0 || mostrarTudo) && (
+        <div className="fw__foot">
+          <button type="button" className="fw__link" onClick={() => setMostrarTudo((v) => !v)}>
+            {mostrarTudo ? 'Ver menos' : `Ver as outras ${escondidas}`}
+          </button>
+          {!mostrarTudo && (
+            <span>
+              somam <b data-financial>{formatMoney(restanteCents)}</b>
+            </span>
+          )}
+        </div>
+      )}
       {onlyUncategorized && (
         <p className="gpc__hint">
           Suas despesas ainda não têm categoria. Abra uma movimentação, toque em{' '}
