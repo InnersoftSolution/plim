@@ -482,6 +482,9 @@
   background: var(--color-bg-brand-soft);
   color: var(--color-brand-primary);
 }
+/* Despesa é dinheiro saindo: vermelho, a mesma leitura da Home. O roxo da marca
+   não diz nada sobre o sentido do valor. */
+.fin-mov__badge--expense { background: var(--color-status-negative-bg); color: var(--color-status-negative-ink); }
 .fin-mov__badge--aporte { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__badge--revenue { background: var(--color-status-positive-bg); color: var(--color-status-positive); }
 .fin-mov__badge--rec { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
@@ -1093,11 +1096,6 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.fin2-period__hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
 /* resumo: 4 números, o saldo lidera */
 .fin2-sum {
   display: grid;
@@ -1151,16 +1149,6 @@
   color: var(--color-status-negative-ink);
   font-weight: 600;
 }
-.fin2-phrase {
-  margin: -8px 0 0;
-  padding: 0 4px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-.fin2-phrase b {
-  color: var(--color-text-default);
-  font-weight: 600;
-}
 .fin2-origins {
   display: flex;
   gap: 20px;
@@ -1181,38 +1169,6 @@
 .fin2-origins b {
   font-weight: 600;
   color: var(--color-text-default);
-}
-
-/* tudo em dia */
-.fin2-ok {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--color-border-default);
-  border-left: 4px solid var(--color-status-positive);
-  border-radius: 14px;
-  background: var(--color-bg-surface);
-}
-.fin2-ok__badge {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-status-positive-bg);
-  color: var(--color-status-positive);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.fin2-ok strong {
-  font-size: 14px;
-}
-.fin2-ok p {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--color-text-muted);
 }
 
 /* atenção */
@@ -1581,22 +1537,25 @@
   background: var(--color-bg-elevated);
 }
 
-/* troca de visualização, junto do período */
+/* troca de visualização: mesma forma da busca e do botão de filtros, porque
+   fica na mesma fileira e é do mesmo peso que eles */
 .fin2-viewswap {
-  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
   border: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   border-radius: 999px;
-  padding: 8px 14px;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-muted);
   cursor: pointer;
   white-space: nowrap;
 }
 .fin2-viewswap:hover {
-  color: var(--color-brand-primary-deep);
+  color: var(--color-brand-primary);
   border-color: var(--color-brand-primary);
 }
 
@@ -1702,12 +1661,6 @@
 /* mobile */
 @media (max-width: 700px) {
   .fin-hide-sm {
-    display: none;
-  }
-  .fin2-viewswap {
-    margin-left: 0;
-  }
-  .fin2-period__hint {
     display: none;
   }
   .fin2-view__head h2,

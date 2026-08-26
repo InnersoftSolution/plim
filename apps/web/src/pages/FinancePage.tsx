@@ -716,18 +716,6 @@ export function FinancePage() {
             }))}
           />
         )}
-        <span className="fin2-period__hint">O período controla tudo nesta página</span>
-        {/* Trocar de visualização é ajuste de leitura, não ação principal:
-            mora junto do período, não competindo com os filtros da lista. */}
-        {!nothingYet && items.length > 0 && filter !== 'recorrentes' && (
-          <button
-            type="button"
-            className="fin2-viewswap"
-            onClick={() => setViewMode((v) => (v === 'table' ? 'cards' : 'table'))}
-          >
-            {viewMode === 'table' ? 'Ver em cartões' : 'Ver em tabela'}
-          </button>
-        )}
       </div>
 
       {/* ── resumo: quatro números, o saldo lidera ── */}
@@ -775,20 +763,9 @@ export function FinancePage() {
           </span>
         </div>
       </section>
-      {(receitaCents > 0 || gastoCents > 0) && (
-        <p className="fin2-phrase">
-          {/* Interpretar o dado, não repetir o número: quase equilibrado é
-              equilibrado para quem lê (menos de 1% do que entrou). */}
-          {resultadoCents < 0 && -resultadoCents > receitaCents * 0.01 ? (
-            <>As saídas superaram as entradas em <b data-financial>{formatMoney(-resultadoCents)}</b> neste período.</>
-          ) : resultadoCents > 0 && resultadoCents > receitaCents * 0.01 ? (
-            <>As entradas superaram as saídas em <b data-financial>{formatMoney(resultadoCents)}</b> neste período.</>
-          ) : (
-            <>Entradas e saídas ficaram praticamente equilibradas neste período.</>
-          )}
-        </p>
-      )}
-      {(receitaCents > 0 || aportesPeriodoCents > 0) && (
+      {/* A quebra entre receita e aporte só informa quando existe aporte: sem
+          ele, "Receitas" repetiria o cartão Entrou palavra por palavra. */}
+      {aportesPeriodoCents > 0 && (
         <div className="fin2-origins">
           <span className="fin2-origins__lab">Origem das entradas</span>
           <span>Receitas <b data-financial>{formatMoney(receitaCents)}</b></span>
@@ -827,16 +804,9 @@ export function FinancePage() {
       )}
 
       {/* ── Atenção: pendências por criticidade (vencidas → hoje → 7 dias) ── */}
-      {!archiveYear && (
-        payable.length === 0 ? (
-          <section className="fin2-ok">
-            <span className="fin2-ok__badge" aria-hidden="true">✓</span>
-            <div>
-              <strong>Tudo em dia</strong>
-              <p>Nenhum pagamento pendente.</p>
-            </div>
-          </section>
-        ) : (
+      {/* Sem pendência não há aviso: o cartão "A pagar" já diz que está zerado,
+          e um bloco inteiro para confirmar isso só empurra a lista para baixo. */}
+      {!archiveYear && payable.length > 0 && (
           <section aria-label="Pagamentos que precisam de atenção" className="fin2-att">
             <div className="fin2-att__head">
               <h2>Atenção</h2>
@@ -877,7 +847,6 @@ export function FinancePage() {
               </button>
             )}
           </section>
-        )
       )}
 
       {/* ── movimentações: o conteúdo principal da página ── */}
@@ -888,7 +857,10 @@ export function FinancePage() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
             <input
               type="search"
-              placeholder="Buscar movimentação"
+              // "Buscar" basta: o campo mora logo abaixo do título Movimentações
+              // e o rótulo longo era cortado no meio da palavra em telas pequenas.
+              placeholder="Buscar"
+              aria-label="Buscar movimentação"
               value={query}
               onChange={(ev) => setQuery(ev.target.value)}
             />
@@ -905,6 +877,19 @@ export function FinancePage() {
             Filtros
             {filtrosAtivos > 0 && <span className="fin2-filterbtn__n">{filtrosAtivos}</span>}
           </button>
+          {/* Trocar cartão por tabela é ajuste de leitura DA LISTA: fica onde a
+              lista começa, não lá em cima junto do período. */}
+          {!nothingYet && items.length > 0 && filter !== 'recorrentes' && (
+            <button
+              type="button"
+              className="fin2-viewswap"
+              onClick={() => setViewMode((v) => (v === 'table' ? 'cards' : 'table'))}
+              title={viewMode === 'table' ? 'Ver em cartões' : 'Ver em tabela'}
+            >
+              {viewMode === 'table' ? <IconCards /> : <IconTable />}
+              <span className="fin-hide-sm">{viewMode === 'table' ? 'Cartões' : 'Tabela'}</span>
+            </button>
+          )}
         </div>
       </div>
       {/* O que está filtrando fica à vista e sai com um toque: filtro
@@ -1538,14 +1523,18 @@ function MovRow({
             </span>
           ) : paidExpense ? (
             <>
-              <span className="fin-mov__badge">Despesa</span>
+              <span className="fin-mov__badge fin-mov__badge--expense">Despesa</span>
               <span className="fin-mov__badge fin-mov__badge--paid">Paga</span>
             </>
           ) : (
             <span
               className={
                 'fin-mov__badge' +
-                (isRevenue ? ' fin-mov__badge--revenue' : isAporte ? ' fin-mov__badge--aporte' : '')
+                (isRevenue
+                  ? ' fin-mov__badge--revenue'
+                  : isAporte
+                    ? ' fin-mov__badge--aporte'
+                    : ' fin-mov__badge--expense')
               }
             >
               {isRevenue ? 'Entrada' : isAporte ? 'Aporte' : 'Despesa'}
@@ -1613,6 +1602,26 @@ function IconDownload() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M7 10l5 5 5-5" />
       <path d="M12 15V3" />
+    </svg>
+  );
+}
+
+/** Grade de linhas e colunas: a visão em tabela. */
+function IconTable() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M3 15h18M10 4v16" />
+    </svg>
+  );
+}
+
+/** Blocos empilhados: a visão em cartões. */
+function IconCards() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="6" rx="2" />
+      <rect x="3" y="14" width="18" height="6" rx="2" />
     </svg>
   );
 }
@@ -1696,7 +1705,9 @@ function MovTable({
                   <td>
                     <span className={'fin-table__status ' + st.cls}>{st.label}</span>
                   </td>
-                  <td>{nameOf(e.paidByMemberId)}</td>
+                  {/* Quando a conta saiu do caixa não há sócio pagador: mostrar um
+                      nome aqui faria a tabela contradizer o cartão e o detalhe. */}
+                  <td>{paidByCompany(e) ? 'A empresa' : nameOf(e.paidByMemberId)}</td>
                   <td className="fin-table__num" data-financial>
                     {formatMoney(e.amountCents)}
                   </td>
@@ -2024,7 +2035,9 @@ function MovDetail({
                 v={
                   item.expense.kind === 'revenue'
                     ? item.expense.account || nameOf(item.expense.paidByMemberId)
-                    : nameOf(item.expense.paidByMemberId)
+                    : paidByCompany(item.expense)
+                      ? 'A empresa (caixa)'
+                      : nameOf(item.expense.paidByMemberId)
                 }
               />
               {item.expense.createdByMemberId && item.expense.createdByMemberId !== item.expense.paidByMemberId && (
