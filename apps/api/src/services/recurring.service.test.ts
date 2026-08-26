@@ -40,6 +40,35 @@ describe('RecurringService', () => {
     ownerId = ownerMember.id;
   });
 
+  it('custo pago pelo caixa da empresa guarda e devolve o marcador', async () => {
+    const criado = await recurring.create(
+      companyId,
+      {
+        name: 'Google Workspace',
+        category: 'tools',
+        amountCents: 4826,
+        frequency: 'monthly',
+        // O sócio continua indo junto como registro, mas o marcador é quem manda.
+        paidByMemberId: ownerId,
+        paidByCompany: true,
+        splitMode: 'equity' as const,
+      },
+      'u1',
+    );
+    expect(criado.paidByCompany).toBe(true);
+
+    const { costs } = await recurring.list(companyId, 'u1');
+    expect(costs.find((c) => c.id === criado.id)?.paidByCompany).toBe(true);
+
+    // Editar sem mexer no campo não pode apagar o marcador.
+    const editado = await recurring.update(companyId, criado.id, { amountCents: 5000 }, 'u1');
+    expect(editado.paidByCompany).toBe(true);
+
+    // E dá para voltar atrás: um custo que passa a ser pago por um sócio.
+    const devolta = await recurring.update(companyId, criado.id, { paidByCompany: false }, 'u1');
+    expect(devolta.paidByCompany).toBe(false);
+  });
+
   it('cria custo ativo e soma no total mensal', async () => {
     await recurring.create(
       companyId,

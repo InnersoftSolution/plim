@@ -15,6 +15,7 @@ import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { centsToMaskedInput, maskedMoneyToCents, formatMoney } from './financeApi';
+import { EMPRESA_PAGOU } from './PayersField';
 import { recurringApi } from './recurringApi';
 import './wizard.css';
 import { MoneyField } from './MoneyField';
@@ -46,7 +47,11 @@ export function RecurringCostForm({
     cost ? centsToMaskedInput(cost.amountCents) : '',
   );
   const [frequency, setFrequency] = useState<RecurringFrequency | ''>(cost?.frequency ?? 'monthly');
-  const [paidBy, setPaidBy] = useState(cost?.paidByMemberId ?? members[0]?.id ?? '');
+  // O sentinela EMPRESA_PAGOU vive só no estado da tela: no payload ele vira
+  // paidByCompany true + um sócio de registro, igual ao wizard de movimentação.
+  const [paidBy, setPaidBy] = useState(
+    cost?.paidByCompany ? EMPRESA_PAGOU : cost?.paidByMemberId ?? members[0]?.id ?? '',
+  );
   const [splitMode, setSplitMode] = useState<RecurringSplitMode>(cost?.splitMode ?? 'equity');
   // Primeira cobrança já vem preenchida com hoje: o custo começa a cobrar de
   // imediato (vira conta a pagar dividida). O usuário pode adiar se quiser.
@@ -86,12 +91,14 @@ export function RecurringCostForm({
     }
     setSaving(true);
     try {
+      const empresaPaga = paidBy === EMPRESA_PAGOU;
       const payload = {
         name: name.trim(),
         category,
         amountCents,
         frequency,
-        paidByMemberId: paidBy,
+        paidByMemberId: empresaPaga ? members[0]!.id : paidBy,
+        paidByCompany: empresaPaga,
         splitMode,
         nextChargeOn: nextCharge || null,
         endsOn: endsOn || null,
@@ -183,9 +190,22 @@ export function RecurringCostForm({
             label="Quem paga"
             value={paidBy}
             onChange={setPaidBy}
-            options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+            options={[
+              {
+                value: EMPRESA_PAGOU,
+                label: 'A empresa (caixa)',
+                hint: 'sai do caixa: ninguém fica devendo',
+              },
+              ...members.map((m) => ({ value: m.id, label: m.fullName })),
+            ]}
           />
         </div>
+        {paidBy === EMPRESA_PAGOU && frequency !== 'once' && (
+          <p className="mw-hint" style={{ margin: 0 }}>
+            A conta sai do caixa da empresa. A cobrança gerada mostra a parte de cada sócio só como
+            referência de custo, sem gerar dívida entre vocês.
+          </p>
+        )}
         {members.length > 1 && frequency !== 'once' && (
           <Select
             label="Como dividir entre os sócios"

@@ -10,6 +10,12 @@ export interface RecurringCost {
   currencyCode: string | null;
   frequency: RecurringFrequency;
   paidByMemberId: string;
+  /**
+   * true = a cobrança sai do caixa da empresa. O paidByMemberId vira só um
+   * registro histórico: as telas mostram "caixa da empresa" e o pagamento da
+   * cobrança gerada não cria acerto entre sócios.
+   */
+  paidByCompany: boolean;
   /** Como a cobrança gerada se divide entre os sócios. */
   splitMode: RecurringSplitMode;
   /** Próxima cobrança (YYYY-MM-DD). Opcional, mas recomendada. */
@@ -30,6 +36,7 @@ export type RecurringCostUpdate = Partial<
     | 'amountCents'
     | 'frequency'
     | 'paidByMemberId'
+    | 'paidByCompany'
     | 'splitMode'
     | 'nextChargeOn'
     | 'endsOn'

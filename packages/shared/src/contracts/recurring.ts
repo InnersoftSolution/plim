@@ -53,6 +53,13 @@ export const createRecurringCostSchema = z.object({
   amountCents: z.number().int().positive('Valor deve ser maior que zero'),
   frequency: recurringFrequencySchema,
   paidByMemberId: z.string().uuid(),
+  /**
+   * true = a cobrança sai do caixa da empresa, não do bolso de um sócio.
+   * O paidByMemberId continua obrigatório como registro histórico (a coluna
+   * do banco é NOT NULL), mas deixa de aparecer nas telas e o pagamento da
+   * cobrança gerada nasce sem pagador, sem gerar acerto entre sócios.
+   */
+  paidByCompany: z.boolean().optional(),
   /** Como a cobrança gerada se divide entre os sócios. */
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().date().nullable().optional(), // opcional, mas recomendada
@@ -81,6 +88,8 @@ export const recurringCostSchema = z.object({
   currencyCode: z.string().nullable(),
   frequency: recurringFrequencySchema,
   paidByMemberId: z.string().uuid(),
+  /** true = sai do caixa da empresa; o pagador previsto é só registro. */
+  paidByCompany: z.boolean().default(false),
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().nullable(),
   endsOn: z.string().nullable().default(null),

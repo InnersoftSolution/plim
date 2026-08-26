@@ -45,6 +45,7 @@ function toDto(cost: RecurringCost): RecurringCostDto {
     currencyCode: cost.currencyCode,
     frequency: cost.frequency,
     paidByMemberId: cost.paidByMemberId,
+    paidByCompany: cost.paidByCompany,
     splitMode: cost.splitMode,
     nextChargeOn: cost.nextChargeOn,
     endsOn: cost.endsOn,
@@ -120,6 +121,7 @@ export class RecurringService {
       currencyCode: company.currencyCode,
       frequency: input.frequency,
       paidByMemberId: input.paidByMemberId,
+      paidByCompany: input.paidByCompany ?? false,
       splitMode: input.splitMode ?? 'equity',
       // Recorrente sem data começa a cobrar HOJE (vira conta a pagar dividida na
       // hora). 'once' fica sem data até o usuário informar o pagamento.
