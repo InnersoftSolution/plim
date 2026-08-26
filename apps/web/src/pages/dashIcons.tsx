@@ -56,6 +56,28 @@ export function IconCheck() {
   );
 }
 
+/* Duas setas em sentidos opostos: dinheiro indo e voltando entre sócios, que é
+   o que a área de Acertos resolve. */
+export function IconExchange() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="M3 8h14l-3.5-3.5M21 16H7l3.5 3.5" />
+    </svg>
+  );
+}
+
+/* Lista com itens marcados: a área de Atividades. Não usa o IconCheck porque
+   aquele é o sinal de "concluído" dentro de uma linha, não o nome de uma área. */
+export function IconTasks() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" {...base}>
+      <path d="m3 6 2 2 3.5-3.5" />
+      <path d="m3 15 2 2 3.5-3.5" />
+      <path d="M12 6.5h9M12 15.5h9" />
+    </svg>
+  );
+}
+
 export function IconArrowRight() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" {...base}>

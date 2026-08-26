@@ -199,7 +199,10 @@ function NavGroupItem({
 }) {
   const location = useLocation();
   const hasActiveChild = group.children.some((c) => location.pathname.startsWith(c.to));
-  const [open, setOpen] = useState(hasActiveChild || isDesktop());
+  // Todo grupo começa fechado, inclusive o da página atual. A barra abre curta,
+  // com uma linha por área, e quem quer o submenu pede. A orientação não se
+  // perde: o grupo da página atual fica destacado mesmo fechado.
+  const [open, setOpen] = useState(false);
 
   // Recolhido só cabe o ícone: clicar abre a barra de volta já com o grupo
   // aberto, em vez de expandir um submenu que não teria onde aparecer.

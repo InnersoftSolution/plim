@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { PageLoading } from '../components/PageLoading';
 import {
   recurringCategoryCatalog,
@@ -20,18 +20,8 @@ import { MovementWizard } from '../finance/MovementWizard';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
 import { financeApi, formatMoney } from '../finance/financeApi';
-import {
-  buildPendencias,
-  dismissPendencia,
-  isDismissed,
-  isHiddenOnHome,
-  setHiddenOnHome,
-  type Pendencia,
-} from './pendencias';
 import { dueBucket, paidByCompany, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
-import { checklistApi } from '../company/checklistApi';
-import type { ChecklistView } from '@plim/shared';
 import {
   IconArrowIn,
   IconArrowOut,
@@ -41,9 +31,10 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconClock,
-  IconClose,
+  IconExchange,
   IconPlus,
   IconRepeat,
+  IconTasks,
   IconUsers,
   IconWallet,
 } from './dashIcons';
@@ -124,7 +115,7 @@ function DashboardReady({
   onNavigate: (to: string) => void;
   onFinanceChange: (companyId: string) => void;
 }) {
-  const { company, members, expenses, settlements, recurring, activities } = data;
+  const { company, members, expenses, recurring, activities } = data;
   const { user } = useAuth();
   const { companies, canCreateMultipleCompanies } = useActiveCompany();
   // So mostra "trabalhando em X" para quem lida com multiempresa.
@@ -160,9 +151,6 @@ function DashboardReady({
   const gastoCents = filteredExpenses
     .filter((e) => e.kind === 'expense' && e.confirmationStatus === 'confirmed' && e.paymentStatus === 'paid')
     .reduce((sum, e) => sum + e.amountCents, 0);
-  const expenseCount = expenses.filter(
-    (e) => e.kind === 'expense' && e.confirmationStatus === 'confirmed' && e.paymentStatus === 'paid',
-  ).length;
   const awaitingMine = expenses.filter((e) => e.canConfirm).length;
   // Contas a pagar: alerta na Home (vencidas + a vencer em breve).
   const payable = payableExpenses(expenses);
@@ -178,7 +166,6 @@ function DashboardReady({
     overdue: weekActivities.filter((a) => a.isOverdue).length,
     done: weekActivities.filter((a) => a.status === 'done').length,
   };
-  const acertosCents = settlements.reduce((sum, s) => sum + s.amountCents, 0);
 
   /* ── números dos quatro cards do topo ──────────────────────────────────
    * Confirmado é o que conta: pendente de confirmação não é dinheiro ainda.
@@ -214,57 +201,6 @@ function DashboardReady({
 
   const isInProgress = company.onboardingStatus === 'in_progress';
 
-  // Jornada 1 — pendências inteligentes: o Plim observa, explica e sugere.
-  // "Fazer depois" esconde temporariamente (localStorage); o tick força re-render.
-  const [dismissTick, setDismissTick] = useState(0);
-  /**
-   * Orientação da Home, com uma chave só para desligar tudo.
-   *
-   * Antes a mesma sugestão aparecia em três lugares na mesma tela: o card de
-   * próximo passo, o bloco de próximos passos e o painel de pendências. Quem
-   * não ia fazer aquilo agora tinha que dispensar três vezes, e reencontrava
-   * no dia seguinte. Aqui vale uma regra: uma sugestão por vez no topo, e o
-   * resto sem repetir.
-   */
-  const orientacaoDesligada = isHiddenOnHome(company.id, 'sugestoes');
-  const todasPendencias = orientacaoDesligada
-    ? []
-    : buildPendencias(company, members, expenses, activeCosts.length, activities).filter(
-        (p) => !isDismissed(company.id, p.id) && !isHiddenOnHome(company.id, p.id),
-      );
-  void dismissTick;
-  // Um único próximo passo recomendado por vez: a pendência mais prioritária.
-  const recommended = todasPendencias[0] ?? null;
-  // O painel não repete o que já está no topo, e mostra no máximo três.
-  const pendencias = todasPendencias.slice(1, 4);
-  const pendenciasRestantes = Math.max(0, todasPendencias.length - 4);
-
-  function runPendAction(p: Pendencia) {
-    if (p.action.kind === 'modal') setModalOpen(true);
-    else if (p.action.kind === 'recurring') setRecurringOpen(true);
-    else if (p.action.to) onNavigate(p.action.to);
-  }
-  // Fechar esconde só até amanhã: lembrete diário, nunca some para sempre.
-  function closePendencia(p: Pendencia) {
-    dismissPendencia(company.id, p.id);
-    setDismissTick((t) => t + 1);
-  }
-  /** Dispensa de vez: orientação é convite, não cobrança. Quem já decidiu
-   *  que não vai preencher agora não precisa ver o mesmo aviso todo dia. */
-  function hidePendencia(p: Pendencia) {
-    setHiddenOnHome(company.id, p.id, true);
-    setDismissTick((t) => t + 1);
-  }
-  /** Desliga toda a orientação da Home. Religa no Checklist da empresa. */
-  function desligarOrientacao() {
-    setHiddenOnHome(company.id, 'sugestoes', true);
-    setDismissTick((t) => t + 1);
-  }
-  function runPendSecondary(p: Pendencia) {
-    if (!p.secondary) return;
-    if (p.secondary.kind === 'dismiss') closePendencia(p);
-    else onNavigate(p.secondary.to);
-  }
 
   return (
     <div className="dash">
@@ -413,64 +349,23 @@ function DashboardReady({
         </section>
       )}
 
-      {/* ── próximo passo recomendado (um por vez — PRD §5) ── */}
-      {recommended && (
-        <section className="dash-recommend">
-          {/* Sugestão se fecha de vez: quem já decidiu que não vai fazer isso
-              não precisa reencontrar o mesmo card toda vez que abre a Home. */}
-          <button
-            type="button"
-            className="dash-recommend__close"
-            title="Não mostrar mais esta sugestão"
-            aria-label={`Não mostrar mais: ${recommended.title}`}
-            onClick={() => hidePendencia(recommended)}
-          >
-            <IconClose />
-          </button>
-          <div className="dash-recommend__body">
-            <span className="dash-recommend__kicker">Próximo passo recomendado</span>
-            <h2 className="dash-recommend__title">{recommended.title}</h2>
-            <p className="dash-recommend__reason">{recommended.reason}</p>
-          </div>
-          <div className="dash-recommend__actions">
-            <Button onClick={() => runPendAction(recommended)}>{recommended.action.label}</Button>
-            {recommended.secondary ? (
-              <button
-                className="dash-pending__later"
-                title={recommended.secondary.kind === 'dismiss' ? 'Fecha por hoje. Volta amanhã.' : undefined}
-                onClick={() => runPendSecondary(recommended)}
-              >
-                {recommended.secondary.label}
-              </button>
-            ) : (
-              <button
-                className="dash-pending__later"
-                title="Fecha por hoje. Volta amanhã."
-                onClick={() => closePendencia(recommended)}
-              >
-                Fazer depois
-              </button>
-            )}
-          </div>
-        </section>
-      )}
+      {/* A orientação saiu da Home a pedido da Rafaelle (26 ago 2026): o
+          "próximo passo recomendado", o painel de sugestões e os próximos
+          passos do checklist cobravam coisas já feitas e empurravam os dados
+          para baixo. O checklist continua inteiro em /empresa/checklist; na
+          Home ficam só fatos que pedem ação: conta vencida e pagamento a
+          confirmar, logo acima. */}
 
-      <ChecklistNextSteps companyId={company.id} hidden={orientacaoDesligada} />
-
-      {/* ── atividades da semana ── */}
-      <Panel
-        title="Atividades da semana"
-        action={actSummary.total > 0 ? { label: 'Ver atividades', to: '/atividades' } : undefined}
-        onNavigate={onNavigate}
-      >
-        {actSummary.total === 0 ? (
-          <div className="dash-actempty">
-            <p>Nenhuma atividade planejada para esta semana. Crie atividades para organizar o que cada sócio precisa fazer.</p>
-            <Button onClick={() => onNavigate('/atividades?nova=1')}>
-              <IconPlus /> Criar primeira atividade
-            </Button>
-          </div>
-        ) : (
+      {/* ── atividades da semana ──
+          Sem atividade na semana o painel não tem o que mostrar, e um bloco
+          inteiro convidando a criar a primeira empurra o resto da Home para
+          baixo toda vez. Quem quiser chegar lá tem o atalho em "Mais ações". */}
+      {actSummary.total > 0 && (
+        <Panel
+          title="Atividades da semana"
+          action={{ label: 'Ver atividades', to: '/atividades' }}
+          onNavigate={onNavigate}
+        >
           <div className="dash-actweek">
             <div className="dash-actweek__pills">
               <span className="dash-actpill">{actSummary.total} {actSummary.total === 1 ? 'atividade' : 'atividades'}</span>
@@ -487,51 +382,12 @@ function DashboardReady({
               </Button>
             </div>
           </div>
-        )}
-      </Panel>
+        </Panel>
+      )}
 
-      {/* ── acertos entre sócios ── */}
-      <Panel
-        title="Acertos entre sócios"
-        action={settlements.length > 0 ? { label: 'Ver acertos', to: '/acertos' } : undefined}
-        onNavigate={onNavigate}
-      >
-        {settlements.length === 0 ? (
-          <EmptyRow text="Nenhum acerto pendente entre sócios. Quando houver despesas compartilhadas, o Plim mostra aqui quem precisa pagar quem." />
-        ) : (
-          <>
-            <div className="dash-settlements">
-              {/* Cada linha abre o extrato do par: de quais despesas veio a
-                  dívida, quanto cabia a cada um e o que já foi acertado. Um
-                  número sozinho na Home levanta a pergunta "de onde saiu isso?",
-                  e a resposta tem que estar a um clique. */}
-              {settlements.map((s, i) => (
-                <Link
-                  className="dash-settlement"
-                  key={`${s.fromMemberId}-${s.toMemberId}-${i}`}
-                  to={`/acertos/entre/${s.fromMemberId}/${s.toMemberId}`}
-                >
-                  <span className="dash-settlement__avatar">{initials(s.fromName)}</span>
-                  <span className="dash-settlement__text">
-                    <strong>{s.fromName}</strong> precisa pagar{' '}
-                    <strong className="dash-settlement__amount">
-                      {formatMoney(s.amountCents)}
-                    </strong>{' '}
-                    para <strong>{s.toName}</strong>
-                  </span>
-                  <span className="dash-settlement__go" aria-hidden="true">
-                    <IconChevronRight />
-                  </span>
-                </Link>
-              ))}
-            </div>
-            <p className="dash-panel__note">
-              Já com as dívidas cruzadas descontadas, a partir de {expenseCount}{' '}
-              {expenseCount === 1 ? 'despesa compartilhada' : 'despesas compartilhadas'}.
-            </p>
-          </>
-        )}
-      </Panel>
+      {/* Acertos entre sócios saíram da Home: a tela de Acertos mostra o mesmo
+          e mais, com o extrato de cada par. Repetir aqui era manter duas
+          versões da mesma conta. O caminho está em "Mais ações" e no menu. */}
 
       {/* ── últimas movimentações ── */}
       <Panel
@@ -629,7 +485,8 @@ function DashboardReady({
                       {!c.active && <span className="dash-row__offtag">inativo</span>}
                     </span>
                     <span className="dash-cost__meta">
-                      {freqLabel(c.frequency)} · pago por {nameOf(c.paidByMemberId)}
+                      {freqLabel(c.frequency)} ·{' '}
+                      {c.paidByCompany ? 'sai do caixa da empresa' : `pago por ${nameOf(c.paidByMemberId)}`}
                       {c.nextChargeOn ? ` · próxima cobrança ${formatDate(c.nextChargeOn)}` : ''}
                       {c.frequency !== 'monthly' &&
                         ` · entra como ${formatMoney(c.monthlyEquivalentCents)}/mês`}
@@ -658,57 +515,6 @@ function DashboardReady({
           </>
         )}
       </Panel>
-
-      {/* ── pendências inteligentes (Jornada 1) ── */}
-      {/* Painel só existe quando há o que sugerir além do card do topo: sem
-          pendência, um bloco dizendo "nada pendente" é mais uma caixa para a
-          pessoa rolar. */}
-      {pendencias.length > 0 && (
-      <Panel title="Outras sugestões">
-        {(
-          <div className="dash-pending">
-            {pendencias.map((p) => (
-              <div className="dash-pending__item" key={p.id}>
-                <span className={`dash-pending__prio dash-pending__prio--${p.priority}`} />
-                <div className="dash-pending__body">
-                  <span className="dash-pending__title">{p.title}</span>
-                  <span className="dash-pending__desc">{p.description}</span>
-                  <span className="dash-pending__reason">{p.reason}</span>
-                </div>
-                <div className="dash-pending__acts">
-                  <button className="dash-pending__cta" onClick={() => runPendAction(p)}>
-                    {p.action.label} <IconArrowRight />
-                  </button>
-                  {p.secondary && (
-                    <button className="dash-pending__later" onClick={() => runPendSecondary(p)}>
-                      {p.secondary.label}
-                    </button>
-                  )}
-                  <button
-                    className="dash-pending__hide"
-                    title="Não mostrar mais esta sugestão"
-                    aria-label={`Dispensar "${p.title}"`}
-                    onClick={() => hidePendencia(p)}
-                  >
-                    Dispensar
-                  </button>
-                </div>
-              </div>
-            ))}
-            <div className="dash-pending__foot">
-              {pendenciasRestantes > 0 && (
-                <button className="dash-pending__later" onClick={() => onNavigate('/empresa/checklist')}>
-                  Ver as outras {pendenciasRestantes} no checklist
-                </button>
-              )}
-              <button className="dash-pending__hide" onClick={desligarOrientacao}>
-                Não mostrar sugestões na Home
-              </button>
-            </div>
-          </div>
-        )}
-      </Panel>
-      )}
 
       {isInProgress && (
         <div className="dash-continue">
@@ -902,9 +708,9 @@ function freqLabel(id: string): string {
  * conta propria (cache do apiFetch evita chamada repetida).
  */
 /**
- * "Mais ações": atalho enxuto para as 3 áreas operacionais do Plim.
+ * "Mais ações": atalho enxuto para as áreas operacionais do Plim.
  * Não repete o menu lateral nem lista ações individuais: leva a Financeiro,
- * Equipe e Empresa. Desktop = dropdown ancorado ao botão; mobile = bottom sheet
+ * Equipe, Atividades e Empresa. Desktop = dropdown ancorado ao botão; mobile = bottom sheet
  * (a mesma folha do resto do app, via CSS).
  */
 const MORE_AREAS: {
@@ -924,9 +730,23 @@ const MORE_AREAS: {
   {
     key: 'equipe',
     label: 'Equipe',
-    description: 'Veja sócios, papéis e atividades.',
+    description: 'Veja sócios e papéis.',
     to: '/socios',
     icon: <IconUsers />,
+  },
+  {
+    key: 'acertos',
+    label: 'Acertos',
+    description: 'Veja quem precisa pagar quem e quite as dívidas.',
+    to: '/acertos',
+    icon: <IconExchange />,
+  },
+  {
+    key: 'atividades',
+    label: 'Atividades',
+    description: 'Organize o que cada sócio precisa fazer.',
+    to: '/atividades',
+    icon: <IconTasks />,
   },
   {
     key: 'empresa',
@@ -1002,90 +822,3 @@ function MoreActions({ onNavigate }: { onNavigate: (to: string) => void }) {
   );
 }
 
-function ChecklistNextSteps({ companyId, hidden }: { companyId: string; hidden: boolean }) {
-  const navigate = useNavigate();
-  const [view, setView] = useState<ChecklistView | null>(null);
-  // Duas saídas, com intenções diferentes: "Fazer depois" fecha por hoje e
-  // volta amanhã; "Não mostrar aqui" tira o bloco da Home até a pessoa pedir
-  // de volta no checklist. Guia que insiste todo dia vira estorvo.
-  const [closed, setClosed] = useState(
-    () =>
-      isDismissed(companyId, 'checklist-nextsteps') ||
-      isHiddenOnHome(companyId, 'checklist-nextsteps') ||
-      // A chave geral de sugestões também desliga este bloco: quem pediu para
-      // parar de ver orientação na Home pediu por toda ela.
-      isHiddenOnHome(companyId, 'sugestoes'),
-  );
-
-  useEffect(() => {
-    let alive = true;
-    checklistApi
-      .get(companyId)
-      .then((v) => alive && setView(v))
-      .catch(() => alive && setView(null));
-    return () => {
-      alive = false;
-    };
-  }, [companyId]);
-
-  // `hidden` vem do pai e reage na hora quando a pessoa desliga as sugestões;
-  // `closed` guarda a decisão tomada dentro do próprio bloco.
-  if (!view || closed || hidden) return null;
-  const pending = view.items.filter(
-    (i) => i.status === 'not_started' || i.status === 'in_progress',
-  );
-  if (pending.length === 0) return null;
-  const top = pending.slice(0, 3);
-
-  function closeForToday() {
-    dismissPendencia(companyId, 'checklist-nextsteps');
-    setClosed(true);
-  }
-
-  return (
-    <section className="dash-panel dash-nextsteps">
-      <div className="dash-panel__head">
-        <div>
-          <h2 className="dash-panel__title">Próximos passos da empresa</h2>
-          <p className="dash-nextsteps__sub">
-            Você concluiu {view.summary.completed} de {view.summary.total} itens essenciais.
-          </p>
-        </div>
-        <button className="dash-panel__action" onClick={() => navigate('/empresa/checklist')}>
-          Ver checklist completo
-        </button>
-      </div>
-      <ul className="dash-nextsteps__list">
-        {top.map((item) => (
-          <li key={item.id} className="dash-nextsteps__item">
-            <span>{item.title}</span>
-            {item.actionRoute && (
-              <button className="dash-nextsteps__go" onClick={() => navigate(item.actionRoute!)}>
-                {item.actionLabel ?? 'Abrir'}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <div className="dash-nextsteps__foot">
-        <button
-          className="dash-pending__later"
-          title="Fecha por hoje. Volta amanhã."
-          onClick={closeForToday}
-        >
-          Fazer depois
-        </button>
-        <button
-          className="dash-pending__later"
-          title="Tira o bloco da Home. Você liga de novo no Checklist da empresa."
-          onClick={() => {
-            setHiddenOnHome(companyId, 'checklist-nextsteps', true);
-            setClosed(true);
-          }}
-        >
-          Não mostrar aqui
-        </button>
-      </div>
-    </section>
-  );
-}

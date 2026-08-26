@@ -145,12 +145,19 @@
   color: var(--color-brand-primary-deep);
   font-weight: 600;
 }
-/* grupo com filho ativo não é destino: marca discreta, sem roubar a pílula */
+/* Grupo aberto não é destino: quem marca o lugar é o subitem, então aqui basta
+   o peso da fonte para não competir com a pílula logo abaixo. */
 .shell-nav__item--group.is-active {
   background: transparent;
   color: var(--color-text-default);
   font-weight: 600;
   box-shadow: none;
+}
+/* Fechado é outra história: não há subitem à vista, e sem a pílula aqui a
+   pessoa perde a única pista de onde está. */
+.shell-nav__item--group.is-active[aria-expanded='false'] {
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-primary-deep);
 }
 .shell-nav__item:focus-visible {
   outline: none;
