@@ -123,6 +123,15 @@ function DashboardReady({
   const [modalOpen, setModalOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
   const activeCosts = recurring.costs.filter((c) => c.active);
+  /* Custo do mês é só o que sai TODO mês (mensal, semanal, "outro"). O
+   * trimestral e o anual não entram diluídos: eles pertencem ao mês em que a
+   * cobrança cai, e aparecem citados à parte com valor cheio e data. */
+  const custoTodoMesCents = activeCosts
+    .filter((c) => c.frequency === 'monthly' || c.frequency === 'weekly' || c.frequency === 'other')
+    .reduce((t, c) => t + c.monthlyEquivalentCents, 0);
+  const custosEventuais = activeCosts.filter(
+    (c) => c.frequency === 'quarterly' || c.frequency === 'annual',
+  );
 
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? '';
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
@@ -195,8 +204,31 @@ function DashboardReady({
     soma(noMesAnterior.filter(ehEntrada)) - soma(noMesAnterior.filter(ehSaidaPaga));
   const variacaoMes = resultadoMes - resultadoAnterior;
 
-  /** Compromissos: contas a pagar em aberto, e o que vence em até 7 dias. */
-  const compromissosCents = payable.reduce((t, e) => t + e.amountCents, 0);
+  /**
+   * Compromissos: contas a pagar em aberto MAIS as cobranças previstas dos
+   * recorrentes nos próximos 30 dias. Só as contas registradas mostravam
+   * R$ 0,00 e "nada a pagar" para uma empresa com R$ 3.436 saindo dia 5,
+   * porque a cobrança de recorrente só vira conta na virada do mês. Sem
+   * dupla contagem: quando ela materializa, o nextChargeOn avança junto.
+   */
+  const compromissosAbertoCents = payable.reduce((t, e) => t + e.amountCents, 0);
+  const hojeIso = new Date().toISOString().slice(0, 10);
+  const em30dias = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const previstos30dCents = recurring.costs
+    .filter(
+      (c) =>
+        c.active &&
+        c.nextChargeOn != null &&
+        c.nextChargeOn >= hojeIso &&
+        c.nextChargeOn <= em30dias &&
+        (c.endsOn == null || c.nextChargeOn <= c.endsOn),
+    )
+    .reduce((t, c) => t + c.amountCents, 0);
+  const compromissosCents = compromissosAbertoCents + previstos30dCents;
   const venceEmBreveCents = [...overdueBills, ...dueSoonBills].reduce((t, e) => t + e.amountCents, 0);
 
   const isInProgress = company.onboardingStatus === 'in_progress';
@@ -287,15 +319,21 @@ function DashboardReady({
             propósito: dívida em aberto não some porque o filtro é outro mês. */}
         <StatCard
           icon={<IconClock />}
-          tone={venceEmBreveCents > 0 ? 'amber' : compromissosCents > 0 ? 'muted' : 'green'}
+          // Âmbar quando há compromisso vindo: é a cor de "previsto/a vencer"
+          // no resto do app. Cinza era o único ícone sem cor da fileira.
+          tone={compromissosCents > 0 ? 'amber' : 'green'}
           label="Compromissos futuros"
           value={formatMoney(compromissosCents)}
           hint={
             compromissosCents === 0
-              ? 'nada a pagar'
+              ? 'nada previsto nos próximos 30 dias'
               : venceEmBreveCents > 0
                 ? `${formatMoney(venceEmBreveCents)} em até 7 dias`
-                : `${payable.length} ${payable.length === 1 ? 'conta em aberto' : 'contas em aberto'}`
+                : previstos30dCents > 0 && compromissosAbertoCents === 0
+                  ? 'previstos nos próximos 30 dias'
+                  : previstos30dCents > 0
+                    ? `${formatMoney(compromissosAbertoCents)} em aberto + previstos`
+                    : `${payable.length} ${payable.length === 1 ? 'conta em aberto' : 'contas em aberto'}`
           }
           onClick={() => onNavigate('/financeiro?filtro=a-pagar')}
         />
@@ -392,7 +430,13 @@ function DashboardReady({
       {/* ── últimas movimentações ── */}
       <Panel
         title={allTime ? 'Últimas movimentações' : `Últimas movimentações (${monthName.toLowerCase()})`}
-        action={expenses.length > 0 ? { label: 'Ver todas', to: '/financeiro' } : undefined}
+        // "Ver todas" respeita o que o painel está mostrando: no recorte de um
+        // mês, cai nas movimentações do mês vigente; em "Tudo", cai no ano.
+        action={
+          expenses.length > 0
+            ? { label: 'Ver todas', to: allTime ? '/financeiro' : '/financeiro?periodo=mes' }
+            : undefined
+        }
         onNavigate={onNavigate}
       >
         {filteredExpenses.length === 0 ? (
@@ -466,8 +510,12 @@ function DashboardReady({
         )}
       </Panel>
 
-      {/* ── custos mensais (Jornada 3) ── */}
-      <Panel title="Custos mensais">
+      {/* ── custos recorrentes (Jornada 3) ──
+          O que sai TODO MÊS e o que vem de tempos em tempos são contas
+          diferentes, e misturá-las enganava nos dois sentidos: o trimestral
+          diluído (÷3) inchava o custo do mês normal e escondia o tamanho do
+          baque no mês em que a cobrança cai de verdade (Rafaelle, 26 ago). */}
+      <Panel title="Custos recorrentes">
         {recurring.costs.length === 0 ? (
           <EmptyRow
             text="Nenhum custo mensal cadastrado. Cadastre assinaturas e ferramentas para entender quanto custa manter sua empresa funcionando."
@@ -488,7 +536,10 @@ function DashboardReady({
                       {freqLabel(c.frequency)} ·{' '}
                       {c.paidByCompany ? 'sai do caixa da empresa' : `pago por ${nameOf(c.paidByMemberId)}`}
                       {c.nextChargeOn ? ` · próxima cobrança ${formatDate(c.nextChargeOn)}` : ''}
-                      {c.frequency !== 'monthly' &&
+                      {/* Só o semanal ganha equivalente mensal, porque ele DE FATO
+                          sai todo mês. Trimestral e anual não são custo do mês:
+                          diluí-los aqui era inflar a conta de quem lê. */}
+                      {c.frequency === 'weekly' &&
                         ` · entra como ${formatMoney(c.monthlyEquivalentCents)}/mês`}
                     </span>
                   </div>
@@ -509,8 +560,22 @@ function DashboardReady({
               ))}
             </div>
             <p className="dash-panel__note">
-              Estimativa mensal: {formatMoney(recurring.monthlyTotalCents)}. Soma
-              dos custos ativos (anuais ÷12, semanais ×52÷12, trimestrais ÷3). Custos inativos não contam.
+              Todo mês saem <b data-financial>{formatMoney(custoTodoMesCents)}</b> em custos fixos
+              (mensais e semanais ativos).
+              {custosEventuais.length > 0 && (
+                <>
+                  {' '}Fora dessa conta:{' '}
+                  {custosEventuais
+                    .map(
+                      (c) =>
+                        `${c.name} com ${formatMoney(c.amountCents)} ${
+                          c.frequency === 'annual' ? 'por ano' : 'por trimestre'
+                        }${c.nextChargeOn ? `, próxima em ${formatDate(c.nextChargeOn)}` : ''}`,
+                    )
+                    .join('; ')}
+                  . Esses entram no mês em que a cobrança cai.
+                </>
+              )}
             </p>
           </>
         )}

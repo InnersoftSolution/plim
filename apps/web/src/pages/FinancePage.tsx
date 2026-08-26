@@ -104,9 +104,20 @@ const EMPRESA_PAGOU = '__empresa__';
 /** Recorte de período da tela (o seletor global controla tudo). */
 type PeriodSel = 'month' | 'last-month' | 'last-3' | 'year';
 
+/** Nome do mês (deslocado em `shift` meses), capitalizado: "Agosto". */
+function nomeDoMes(shift: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + shift);
+  const nome = d.toLocaleDateString('pt-BR', { month: 'long' });
+  return nome.charAt(0).toUpperCase() + nome.slice(1);
+}
+
+/* "Este mês" obrigava a pessoa a fazer a conta de qual mês é; o nome direto
+   ("Agosto") diz na hora o que o recorte mostra (Rafaelle, 26 ago). */
 const PERIOD_LABEL: Record<PeriodSel, string> = {
-  month: 'Este mês',
-  'last-month': 'Mês passado',
+  month: `${nomeDoMes(0)} (este mês)`,
+  'last-month': nomeDoMes(-1),
   'last-3': 'Últimos 3 meses',
   year: 'Este ano',
 };
@@ -199,12 +210,29 @@ export function FinancePage() {
     if (f === 'a-pagar' || f === 'despesas' || f === 'aportes' || f === 'recorrentes') {
       setFilter(f);
     }
+    // ?periodo=mes abre no mês vigente: quem clicou em "Ver todas" nas últimas
+    // movimentações do mês quer as do mês, não o ano inteiro.
+    if (searchParams.get('periodo') === 'mes') setPeriodSel('month');
   }, [searchParams]);
 
   // Trocou de filtro/período/visão: volta a tabela para a primeira página.
   useEffect(() => {
     setTablePage(1);
   }, [filter, categoryFilter, periodSel, archiveYear, viewMode]);
+
+  // Chegou da Home pelo "Ver todas" do mês: além de recortar o período, rola
+  // direto até a lista. Sem isso a pessoa caía no topo da página, via os
+  // resumos e perguntava "cadê agosto?", que estava abaixo da dobra.
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+    if (searchParams.get('periodo') !== 'mes') return;
+    // O atraso espera os gráficos assentarem: rolar durante o layout ainda em
+    // movimento fazia o navegador recolher o scroll de volta para o topo.
+    const t = setTimeout(() => {
+      document.getElementById('lista-movimentacoes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [state.status, searchParams]);
 
   // Chegou da Home clicando numa movimentação (?mov=id): rola até ela e destaca.
   useEffect(() => {
@@ -280,7 +308,6 @@ export function FinancePage() {
   // recorte é "este mês" — some da tela e vira surpresa com juros.
   const payable = payableExpenses(expenses);
   const overduePayable = payable.filter((e) => dueBucket(e) === 'overdue');
-  const payableCents = payable.reduce((s, e) => s + e.amountCents, 0);
 
   /* ── contagens e recortes do resumo novo ── */
   const entradasCount = expenses.filter((e) => e.kind === 'revenue' && confirmed(e) && inPeriod(e)).length;
@@ -302,8 +329,6 @@ export function FinancePage() {
   const dueLater = payable.filter(
     (e) => !e.dueDate || daysUntil(e.dueDate) > DUE_SOON_DAYS,
   );
-  const overdueCents = dueOverdue.reduce((s, e) => s + e.amountCents, 0);
-  const weekCents = [...dueToday, ...dueSoon].reduce((s, e) => s + e.amountCents, 0);
 
   /* Dinheiro dos sócios: capital acumulado desde o início (aporte é estoque,
      não fluxo do período; o rótulo na tela diz isso). */
@@ -660,9 +685,32 @@ export function FinancePage() {
   // adaptativa com projeção (o dia a dia continua olhando para frente).
   const chartPeriod = archiveYear ?? '';
   const isYearView = archiveYear != null;
+  /* A projeção olha um mês específico, então usa o custo DAQUELE mês, não uma
+   * média borrada: os fixos (mensal/semanal) entram sempre, e o trimestral ou
+   * anual só entra se a próxima cobrança dele cair no mês projetado. Diluir o
+   * EMBRAPII (÷3) inflava setembro e escondia o baque real de novembro. */
+  const projecaoRecorrenteCents = (() => {
+    const hoje = todayIso();
+    const prox = new Date();
+    prox.setDate(1);
+    prox.setMonth(prox.getMonth() + 1);
+    const mesProjetado = `${prox.getFullYear()}-${String(prox.getMonth() + 1).padStart(2, '0')}`;
+    const ativos = recurring.costs.filter((c) => c.active && (c.endsOn == null || c.endsOn >= hoje));
+    const fixos = ativos
+      .filter((c) => c.frequency === 'monthly' || c.frequency === 'weekly' || c.frequency === 'other')
+      .reduce((t, c) => t + c.monthlyEquivalentCents, 0);
+    const doMes = ativos
+      .filter(
+        (c) =>
+          (c.frequency === 'quarterly' || c.frequency === 'annual') &&
+          c.nextChargeOn?.startsWith(mesProjetado),
+      )
+      .reduce((t, c) => t + c.amountCents, 0);
+    return fixos + doMes;
+  })();
   const chart = isFlowChart
-    ? buildFlowSeries(expenses, recurring.monthlyTotalCents, chartPeriod)
-    : buildMonthlySeries(expenses, 'contribution', recurring.monthlyTotalCents, chartPeriod);
+    ? buildFlowSeries(expenses, projecaoRecorrenteCents, chartPeriod)
+    : buildMonthlySeries(expenses, 'contribution', projecaoRecorrenteCents, chartPeriod);
   const showChart = filter !== 'recorrentes' && filter !== 'a-pagar' && !nothingYet;
   const hasProjection = chart.points.some((p) => p.projected);
   const nextLabel = chart.points.find((p) => p.projected)?.label ?? 'próximo mês';
@@ -700,7 +748,7 @@ export function FinancePage() {
     : 'Dinheiro que os sócios colocaram no negócio, mês a mês.';
   const chartCaption = isFlowChart
     ? hasProjection
-      ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(recurring.monthlyTotalCents)} de custos recorrentes ativos.`
+      ? `Projeção de ${nextLabel}: média dos gastos registrados + ${formatMoney(projecaoRecorrenteCents)} de custos recorrentes previstos para o mês.`
       : `Ano fechado: sem projeção, o histórico completo de ${archiveYear}.`
     : 'Aportes não entram na projeção de gastos, são investimento, não custo.';
   const chartHelp = isFlowChart
@@ -849,31 +897,13 @@ export function FinancePage() {
         )}
       </div>
 
-      {/* ── resumo: quatro números, o saldo lidera ──
-          Regra de cor da faixa: DIREÇÃO é ícone, VEREDITO é cor. Entrou e Saiu
-          são fatos neutros, sempre positivos, e saída alta não é problema (mês
-          de investimento é assim); pintá-los de verde e vermelho ensinaria a
-          pessoa a ignorar o vermelho justamente quando ele importa. Colorido
-          fica só o que muda de sinal (o saldo) e o que pede ação (vencido). */}
-      {/* Ordem de leitura: a resposta primeiro. O saldo é o que a pessoa veio
-          ver; entradas, saídas e pendências são o detalhamento dele. */}
+      {/* ── resumo: três números, na ordem da conta (Rafaelle, 26 ago) ──
+          Entrou | Saiu | Saldo: a faixa lê como a operação que ela é, e o
+          resultado fecha a linha. "A pagar" saiu daqui; contas em aberto já
+          têm o bloco de Atenção e o card da Home.
+          Regra de cor: DIREÇÃO é ícone, VEREDITO é cor. Entrou e Saiu são
+          fatos neutros; colorido fica só o saldo, que muda de sinal. */}
       <section className="fin2-sum" aria-label="Resumo financeiro do período">
-        <div className="fin2-sum__hero">
-          {/* Sem ícone: as setas e o relógio dizem algo, mas o "=" era só um
-              desenho de sinal de igual perdido ao lado do rótulo. */}
-          <span className="fin2-sum__lab">Saldo do período</span>
-          <span
-            className={'fin2-sum__val fin2-sum__val--big' + (resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')}
-            data-financial
-          >
-            {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
-          </span>
-          {/* O sinal não pode viver só na cor: quem não distingue vermelho de
-              verde lê a palavra. */}
-          <span className="fin2-sum__note">
-            {resultadoCents < 0 ? 'saiu mais do que entrou' : resultadoCents > 0 ? 'entrou mais do que saiu' : 'entrou − saiu'}
-          </span>
-        </div>
         <div>
           <span className="fin2-sum__lab">
             <span className="fin2-sum__ic fin2-sum__ic--in"><IconIn /></span>Entrou
@@ -892,30 +922,20 @@ export function FinancePage() {
             {despesasCount === 0 ? 'nenhuma despesa paga' : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`}
           </span>
         </div>
-        <div>
-          <span className="fin2-sum__lab">
-            <span className={'fin2-sum__ic' + (overdueCents > 0 ? ' fin2-sum__ic--late' : '')}><IconDue /></span>
-            A pagar
-          </span>
+        <div className="fin2-sum__hero">
+          {/* Sem ícone: as setas e o relógio dizem algo, mas o "=" era só um
+              desenho de sinal de igual perdido ao lado do rótulo. */}
+          <span className="fin2-sum__lab">Saldo do período</span>
           <span
-            className={'fin2-sum__val' + (overdueCents > 0 ? ' is-neg' : '')}
+            className={'fin2-sum__val fin2-sum__val--big' + (resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')}
             data-financial
           >
-            {formatMoney(payableCents)}
+            {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
           </span>
+          {/* O sinal não pode viver só na cor: quem não distingue vermelho de
+              verde lê a palavra. */}
           <span className="fin2-sum__note">
-            {payable.length === 0 ? (
-              'nenhum pagamento pendente'
-            ) : overdueCents > 0 ? (
-              <>
-                <strong>{formatMoney(overdueCents)} vencidos</strong>
-                {weekCents > 0 && <> · {formatMoney(weekCents)} vencem esta semana</>}
-              </>
-            ) : weekCents > 0 ? (
-              `${formatMoney(weekCents)} vencem esta semana`
-            ) : (
-              'nenhum pagamento vencido'
-            )}
+            {resultadoCents < 0 ? 'saiu mais do que entrou' : resultadoCents > 0 ? 'entrou mais do que saiu' : 'entrou − saiu'}
           </span>
         </div>
       </section>
@@ -1024,7 +1044,7 @@ export function FinancePage() {
       )}
 
       {/* ── movimentações: o conteúdo principal da página ── */}
-      <div className="fin2-movhead">
+      <div className="fin2-movhead" id="lista-movimentacoes">
         <h2>Movimentações</h2>
         <div className="fin2-movhead__tools">
           <label className="fin2-search">
@@ -1732,14 +1752,6 @@ function IconOut() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 5v14M6 11l6-6 6 6" />
-    </svg>
-  );
-}
-function IconDue() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7.5V12l3 2" />
     </svg>
   );
 }

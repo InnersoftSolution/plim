@@ -1107,7 +1107,10 @@
    Uma linguagem só de separação (o traço), nenhuma caixa dentro de caixa. */
 .fin2-sum {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+  /* Entrou | Saiu | Saldo: a ordem da própria conta. Três colunas iguais com
+     o conteúdo centrado em cada uma: encostado à esquerda, o terço direito da
+     faixa ficava vazio e ela parecia pender para um lado. */
+  grid-template-columns: 1fr 1fr 1fr;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
@@ -1116,7 +1119,12 @@
 .fin2-sum > div {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Alinhado pelo TOPO, não pelo centro: com centralização, cada coluna
+     "flutuava" numa altura conforme o tamanho da própria nota, e os quatro
+     rótulos ficavam em linhas diferentes. Rótulo com rótulo, valor com valor. */
+  justify-content: flex-start;
+  align-items: center;
+  text-align: center;
   gap: 2px;
   padding: 2px 22px;
   border-left: 1px solid var(--color-border-default);
@@ -1129,6 +1137,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Mesma altura com ou sem ícone: o rótulo do saldo não tem ícone e ficava
+     1px mais baixo que os vizinhos, o bastante para parecer torto. */
+  min-height: 16px;
   font-size: 11px;
   font-weight: 700;
   margin-bottom: 2px;
@@ -1194,9 +1205,9 @@
   }
 }
 
-/* Aqui nem encolhendo cabe. Em vez de um 2×2 ambíguo, três linhas com papéis
-   claros: o saldo abre sozinho, Entrou e Saiu dividem a do meio (são o par
-   que se compara), e A pagar fecha sozinho porque a nota dele é longa. */
+/* Aqui nem encolhendo cabe. Duas linhas com papéis claros: Entrou e Saiu
+   dividem a de cima (são o par que se compara) e o saldo fecha embaixo com a
+   linha inteira, grande, porque é a resposta. */
 @container (max-width: 860px) {
   .fin2-sum {
     grid-template-columns: 1fr 1fr;
@@ -1205,21 +1216,17 @@
   .fin2-sum > div {
     padding: 14px 0;
     border-left: none;
-    border-top: 1px solid var(--color-border-default);
   }
-  .fin2-sum > .fin2-sum__hero {
-    grid-column: 1 / -1;
-    border-top: none;
-  }
-  .fin2-sum > div:nth-child(3) {
+  .fin2-sum > div:nth-child(2) {
     border-left: 1px solid var(--color-border-default);
     padding-left: 16px;
   }
-  .fin2-sum > div:nth-child(2) {
+  .fin2-sum > div:first-child {
     padding-right: 16px;
   }
-  .fin2-sum > div:last-child {
+  .fin2-sum > .fin2-sum__hero {
     grid-column: 1 / -1;
+    border-top: 1px solid var(--color-border-default);
   }
   /* Uma linha inteira para ele: o saldo pode ser grande sem colidir. */
   .fin2-sum__val {
