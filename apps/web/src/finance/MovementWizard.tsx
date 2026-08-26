@@ -29,6 +29,7 @@ import {
   payersError,
   payersToPayload,
   singlePayer,
+  EMPRESA_PAGOU,
   type Payers,
 } from './PayersField';
 
@@ -379,7 +380,10 @@ export function MovementWizard({
   /** Acertos de um mês, já sem o pagador dele (ninguém deve a si mesmo). */
   const settledOf = (key: string, payerId: string) =>
     (settledByMonth[key] ?? []).filter((id) => id !== payerId);
-  const memberName = members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
+  const memberName =
+    memberId === EMPRESA_PAGOU
+      ? 'A empresa (caixa)'
+      : members.find((m) => m.id === memberId)?.fullName ?? 'Sócio';
   const soloMember = members.length <= 1;
   // Divisão entre sócios: sempre na despesa; no aporte só quando reembolsável.
   const splitsAmongPartners = isExpense || (type === 'contribution' && reimbursable);
@@ -799,19 +803,24 @@ export function MovementWizard({
         const quemPagou =
           paymentStatus === 'unpaid'
             ? { paidByMemberId: memberId, payments: undefined }
-            : payersToPayload(payers, memberId);
+            : payersToPayload(payers, members[0]!.id);
+        const empresaPagou =
+          'paidByCompany' in quemPagou || memberId === EMPRESA_PAGOU;
         await financeApi.createExpense(company.id, {
           description: description.trim(),
           amountCents: amountCents!,
+          // Quando quem paga é a empresa, o paidByMemberId é só o vínculo
+          // obrigatório da tabela; quem manda no acerto é paidByCompany.
           paidByMemberId: quemPagou.paidByMemberId,
           payments: quemPagou.payments,
+          paidByCompany: empresaPagou || undefined,
           spentOn: paymentStatus === 'unpaid' ? undefined : date,
           splitMode,
           note: note.trim() || null,
           paymentStatus,
           dueDate: paymentStatus === 'unpaid' ? dueDate : null,
           settledMemberIds:
-            paymentStatus === 'paid' && settledIds.length > 0
+            paymentStatus === 'paid' && !empresaPagou && settledIds.length > 0
               ? settledIds.filter((id) => id !== quemPagou.paidByMemberId)
               : undefined,
           categoryId,
@@ -1017,7 +1026,20 @@ export function MovementWizard({
                   label="Quem pagou na maioria dos meses"
                   value={memberId}
                   onChange={setMemberId}
-                  options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+                  options={[
+                    // Só faz sentido em despesa: aporte é, por definição, um
+                    // sócio colocando dinheiro.
+                    ...(isExpense
+                      ? [
+                          {
+                            value: EMPRESA_PAGOU,
+                            label: isUnpaid ? 'A empresa vai pagar' : 'A empresa pagou',
+                            hint: 'sai do caixa: ninguém fica devendo',
+                          },
+                        ]
+                      : []),
+                    ...members.map((m) => ({ value: m.id, label: m.fullName })),
+                  ]}
                 />
 
                 {mesesBlock()}
@@ -1393,7 +1415,20 @@ export function MovementWizard({
                     setMemberId(v);
                     setPayers(singlePayer(v));
                   }}
-                  options={members.map((m) => ({ value: m.id, label: m.fullName }))}
+                  options={[
+                    // Só faz sentido em despesa: aporte é, por definição, um
+                    // sócio colocando dinheiro.
+                    ...(isExpense
+                      ? [
+                          {
+                            value: EMPRESA_PAGOU,
+                            label: isUnpaid ? 'A empresa vai pagar' : 'A empresa pagou',
+                            hint: 'sai do caixa: ninguém fica devendo',
+                          },
+                        ]
+                      : []),
+                    ...members.map((m) => ({ value: m.id, label: m.fullName })),
+                  ]}
                 />
               )
             )}
@@ -1429,14 +1464,21 @@ export function MovementWizard({
                         em Acertos, com destino e valor explícitos. */}
                     {splitRows(
                       // Com vários pagadores não faz sentido apontar "· pagou"
-                      // em uma pessoa só: mais de uma colocou dinheiro.
-                      payers.mode === 'multi' ? '' : memberId,
-                      !isUnpaid && payers.mode === 'single',
+                      // em uma pessoa só: mais de uma colocou dinheiro. Com a
+                      // empresa pagando, não faz sentido apontar ninguém.
+                      payers.mode === 'multi' || memberId === EMPRESA_PAGOU ? '' : memberId,
+                      !isUnpaid && payers.mode === 'single' && memberId !== EMPRESA_PAGOU,
                       isUnpaid ? 'vai pagar' : 'pagou',
                     )}
                   </div>
                 )}
-                {!isUnpaid && members.length > 1 && payers.mode === 'single' && (
+                {!isUnpaid && members.length > 1 && payers.mode === 'single' && memberId === EMPRESA_PAGOU && (
+                  <p className="mw-hint">
+                    A conta sai do caixa da empresa. As partes acima mostram de quem é o custo,
+                    mas ninguém precisa devolver nada a ninguém.
+                  </p>
+                )}
+                {!isUnpaid && members.length > 1 && payers.mode === 'single' && memberId !== EMPRESA_PAGOU && (
                   <p className="mw-hint">
                     Alguém já te passou a parte dela? Toque em "está devendo" para marcar como
                     acertado. O Plim registra o acerto junto com a despesa.
@@ -1701,8 +1743,13 @@ export function MovementWizard({
                       : 'aportou'
                   : // Recorrente ainda não cobrou: ninguém deve nada agora. O
                     // retroativo é o oposto: já aconteceu, então a dívida existe
-                    // e precisa aparecer aqui.
-                    (isRecurringExpense && !isRetroRepeated) || isUnpaid || s.cents === 0
+                    // e precisa aparecer aqui. Conta paga pelo caixa da empresa
+                    // também não gera dívida: as partes só dizem de quem é o
+                    // custo, e ninguém precisa devolver nada.
+                    (isRecurringExpense && !isRetroRepeated) ||
+                      isUnpaid ||
+                      memberId === EMPRESA_PAGOU ||
+                      s.cents === 0
                     ? null
                     : settledIds.includes(s.memberId)
                       ? 'já acertou'

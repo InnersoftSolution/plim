@@ -18,6 +18,15 @@ export type Payers =
   | { mode: 'single'; memberId: string }
   | { mode: 'multi'; amounts: Record<string, string> };
 
+/**
+ * "A empresa pagou": a conta saiu do caixa, não do bolso de ninguém.
+ *
+ * Fica no mesmo lugar em que se escolhe a pessoa porque é a mesma pergunta
+ * ("de onde saiu o dinheiro?"), e é a resposta mais comum numa empresa que já
+ * fatura. Escolhendo isso, a despesa não gera acerto entre sócios.
+ */
+export const EMPRESA_PAGOU = '__empresa__';
+
 /** Estado inicial: uma pessoa só, que é o caso comum. */
 export function singlePayer(memberId: string): Payers {
   return { mode: 'single', memberId };
@@ -35,6 +44,11 @@ export function payersTotalCents(payers: Payers, amountCents: number | null): nu
  */
 export function payersToPayload(payers: Payers, fallbackMemberId: string) {
   if (payers.mode === 'single') {
+    // Empresa pagando: a coluna do banco recebe só um vínculo, e quem manda no
+    // acerto é `paidByCompany`, devolvido junto para quem monta a chamada.
+    if (payers.memberId === EMPRESA_PAGOU) {
+      return { paidByMemberId: fallbackMemberId, payments: undefined, paidByCompany: true };
+    }
     return { paidByMemberId: payers.memberId || fallbackMemberId, payments: undefined };
   }
   const payments = Object.entries(payers.amounts)
@@ -120,12 +134,21 @@ export function PayersField({
       </div>
 
       {payers.mode === 'single' ? (
-        <Select
-          label="Quem colocou o dinheiro"
-          value={payers.memberId}
-          onChange={(v) => onChange(singlePayer(v))}
-          options={members.map((m) => ({ value: m.id, label: m.fullName }))}
-        />
+        <>
+          <Select
+            label="Quem colocou o dinheiro"
+            value={payers.memberId}
+            onChange={(v) => onChange(singlePayer(v))}
+            options={[
+              {
+                value: EMPRESA_PAGOU,
+                label: 'A empresa pagou',
+                hint: 'saiu do caixa: ninguém fica devendo',
+              },
+              ...members.map((m) => ({ value: m.id, label: m.fullName })),
+            ]}
+          />
+        </>
       ) : (
         <div className="payers__list">
           <p className="payers__hint">

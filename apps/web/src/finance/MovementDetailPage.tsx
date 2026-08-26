@@ -7,6 +7,7 @@ import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { financeApi, formatMoney } from './financeApi';
 import { acertosDaMovimentacao, totalPago } from './movimentacaoAcerto';
+import { paidByCompany } from './due';
 import './movementdetail.css';
 
 /**
@@ -74,6 +75,12 @@ export function MovementDetailPage() {
   const toPay = isExpense && movement.paymentStatus === 'unpaid';
   const confirmed = movement.confirmationStatus === 'confirmed';
   const payerName = nameOf(movement.paidByMemberId);
+  /**
+   * Conta quitada pelo caixa da empresa: está paga e nenhum sócio desembolsou.
+   * Sem isto a tela dizia que a pessoa do vínculo tinha pago, e o vínculo é só
+   * uma coluna obrigatória, não um fato sobre o dinheiro.
+   */
+  const pagouEmpresa = paidByCompany(movement);
 
   /**
    * PAGAMENTO: quem tirou dinheiro do bolso. Pode ser mais de uma pessoa, e não
@@ -121,6 +128,13 @@ export function MovementDetailPage() {
     frases.push(
       `${payerName} colocou esse dinheiro no negócio.`,
       'Aporte é capital, não gasto: não soma no total gasto nem na média mensal.',
+    );
+  } else if (pagouEmpresa) {
+    // Conta quitada pelo caixa: o gasto é da empresa e ninguém adiantou nada,
+    // então não existe acerto para explicar aqui.
+    frases.push(
+      'Foi paga pelo caixa da empresa e entrou no total gasto.',
+      'Como nenhum sócio tirou do próprio bolso, não há nada a acertar entre vocês.',
     );
   } else {
     frases.push(
@@ -222,10 +236,12 @@ export function MovementDetailPage() {
             : formatDate(movement.spentOn)}
           {' · '}
           {isRevenue
-            ? `recebido por ${payerName}`
-            : varios
-              ? `pago por ${movement.payments.length} sócios`
-              : `pago por ${payerName}`}
+            ? `recebido por ${movement.account || payerName}`
+            : pagouEmpresa
+              ? 'pago pela empresa'
+              : varios
+                ? `pago por ${movement.payments.length} sócios`
+                : `pago por ${payerName}`}
         </p>
       </header>
 
@@ -294,7 +310,9 @@ export function MovementDetailPage() {
           <h2 className="movp-card__title">Acerto entre sócios</h2>
           {acertos.length === 0 ? (
             <p className="movp-card__sub">
-              Cada um pagou exatamente a parte que cabia. Não há nada a acertar nesta movimentação.
+              {pagouEmpresa
+                ? 'Conta paga pelo caixa da empresa: nenhum sócio adiantou nada, então não há acerto nesta movimentação.'
+                : 'Cada um pagou exatamente a parte que cabia. Não há nada a acertar nesta movimentação.'}
             </p>
           ) : (
             <>
@@ -398,9 +416,13 @@ export function MovementDetailPage() {
           <Linha
             k={isRevenue ? 'Recebido por' : 'Pago por'}
             v={
-              varios
-                ? movement.payments.map((p) => nameOf(p.memberId)).join(', ')
-                : payerName
+              isRevenue
+                ? movement.account || payerName
+                : pagouEmpresa
+                  ? 'A empresa (caixa)'
+                  : varios
+                    ? movement.payments.map((p) => nameOf(p.memberId)).join(', ')
+                    : payerName
             }
           />
           {/* Sempre visível: é a trilha de "quem colocou isso aqui". Sem
