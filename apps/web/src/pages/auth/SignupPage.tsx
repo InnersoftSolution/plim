@@ -106,7 +106,7 @@ export function SignupPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           error={errors.password}
-          hint={password ? undefined : 'Pelo menos 8 caracteres, com letras e números'}
+          hint={password ? undefined : 'Pelo menos 10 caracteres, com letra, número e símbolo'}
         />
         <PasswordStrength value={password} />
         <Input

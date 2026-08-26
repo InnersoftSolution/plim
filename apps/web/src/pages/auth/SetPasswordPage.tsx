@@ -54,7 +54,7 @@ export function SetPasswordPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
-          hint="Pelo menos 8 caracteres, com uma letra e um número."
+          hint="Pelo menos 10 caracteres, com letra, número e símbolo."
           autoFocus
         />
         <Input

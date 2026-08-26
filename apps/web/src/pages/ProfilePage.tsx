@@ -125,7 +125,7 @@ function PasswordPanel() {
       <div className="dash-panel__head">
         <h2>Senha</h2>
       </div>
-      <p className="dash-panel__hint">Use pelo menos 8 caracteres, com uma letra e um número.</p>
+      <p className="dash-panel__hint">Use pelo menos 10 caracteres, com letra, número e símbolo.</p>
       {error && <div className="form-error">{error}</div>}
       {ok && <div className="form-ok">Senha alterada com sucesso.</div>}
       <div className="prof-fields">

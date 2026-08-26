@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginSchema } from '@plim/shared';
 import { useAuth } from '../../auth/AuthContext';
+import { useAuthBarrier } from '../../auth/useAuthBarrier';
 import { AuthError } from '../../auth/types';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '../../components/ui/Button';
@@ -18,9 +19,11 @@ export function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const barreira = useAuthBarrier();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (barreira.travado) return;
     setFormError('');
     const result = validateForm(loginSchema, { email, password });
     if (result.errors) {
@@ -31,8 +34,12 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(result.data);
+      barreira.limpar();
       navigate(POST_AUTH_REDIRECT);
     } catch (err) {
+      // Só senha/e-mail errados alimentam a barreira. Erro de rede não é
+      // tentativa: punir a pessoa pelo wi-fi dela seria injusto.
+      if (err instanceof AuthError) barreira.registrarErro();
       setFormError(err instanceof AuthError ? err.message : 'Não foi possível entrar. Tente novamente.');
     } finally {
       setSubmitting(false);
@@ -56,7 +63,14 @@ export function LoginPage() {
       <GoogleButton label="Entrar com o Google" onClick={handleGoogle} disabled={submitting} />
       <div className="auth-divider">ou com e-mail</div>
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        {formError && <div className="form-error">{formError}</div>}
+        {barreira.travado ? (
+          <div className="form-error" role="status">
+            Muitas tentativas seguidas. Aguarde {barreira.segundosRestantes}s para tentar de novo,
+            ou use <Link to="/forgot-password">esqueci minha senha</Link>.
+          </div>
+        ) : (
+          formError && <div className="form-error">{formError}</div>
+        )}
         <Input
           label="E-mail"
           type="email"
@@ -77,8 +91,12 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           error={errors.password}
         />
-        <Button type="submit" block disabled={submitting}>
-          {submitting ? 'Entrando…' : 'Entrar'}
+        <Button type="submit" block disabled={submitting || barreira.travado}>
+          {barreira.travado
+            ? `Aguarde ${barreira.segundosRestantes}s`
+            : submitting
+              ? 'Entrando…'
+              : 'Entrar'}
         </Button>
       </form>
       <div className="auth-links">
