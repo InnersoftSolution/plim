@@ -317,6 +317,12 @@ export const updateMovementSchema = z
     spentOn: z.string().date().optional(),
     note: z.string().trim().max(300).nullable().optional(),
     paidByMemberId: z.string().uuid().optional(),
+    /**
+     * true = a conta passou a ser paga pelo caixa da empresa: os pagamentos de
+     * sócio são apagados e nenhum acerto sobra. O paidByMemberId vira só o
+     * vínculo obrigatório da coluna, como na criação.
+     */
+    paidByCompany: z.boolean().optional(),
     /** Substitui quem pagou e quanto. Ver createExpenseSchema.payments. */
     payments: z.array(expensePaymentInputSchema).max(20).optional(),
     splitMode: expenseSplitModeSchema.optional(),

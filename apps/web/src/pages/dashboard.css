@@ -1,11 +1,12 @@
 .dash {
   max-width: 1080px;
   margin: 0 auto;
-  /* Grade de 8: 32 no topo, 24 nas laterais, 72 embaixo. */
-  padding: 32px 24px 72px;
+  /* Grade de 8: 24 no topo, 24 nas laterais, 64 embaixo. O gap caiu para 16
+     na reforma de 27 ago: mais conteúdo na primeira dobra. */
+  padding: 24px 24px 64px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .dash-muted {
@@ -103,66 +104,6 @@
 }
 .dash-home-config:hover {
   border-color: var(--color-brand-primary);
-}
-
-/* ── navegador de mês ────────────────────── */
-/* Faixa de período: sai do canto do título e passa a abrir o resumo, que é
-   o que ela comanda. */
-.dash-monthnav {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  align-self: flex-start;
-  margin-top: -8px;
-  background: var(--color-bg-elevated);
-  border-radius: 12px;
-  padding: 3px;
-}
-.dash-monthnav__arrow {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  border-radius: 9px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.dash-monthnav__arrow:hover {
-  background: var(--color-bg-surface);
-  color: var(--color-text-default);
-  box-shadow: 0 1px 3px -1px rgba(13, 17, 36, 0.12);
-}
-.dash-monthnav__label {
-  min-width: 112px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text-default);
-}
-.dash-monthnav__all {
-  margin-left: 3px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.dash-monthnav__all:hover {
-  color: var(--color-text-default);
-}
-.dash-monthnav__all.is-active {
-  background: var(--color-bg-surface);
-  color: var(--color-brand-primary);
-  box-shadow: 0 1px 3px -1px rgba(13, 17, 36, 0.14);
 }
 
 /* CTA dentro do card (custo mensal stub) */
@@ -664,7 +605,9 @@
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card);
-  padding: 16px;
+  /* Compacto (reforma de 27 ago): o card carrega 4 linhas curtas, não precisa
+     de ar de pôster. Grade de 8: 12px interno hoje lê como 8+4. */
+  padding: 12px 16px;
   /* O número de cada card cai na mesma altura: a comparação entre eles é
      visual, e desalinhar obriga o olho a procurar. */
   justify-content: space-between;
@@ -673,14 +616,62 @@
   gap: 6px;
   box-shadow: 0 1px 2px rgba(13, 17, 36, 0.04);
 }
-.dash-stat__icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+/* Card com ⓘ: o botão de informação é IRMÃO do card (botão dentro de botão é
+   HTML inválido), então os dois moram num wrapper que ocupa a célula da grade. */
+.dash-stat__wrap {
+  position: relative;
+  display: grid;
+}
+.dash-stat__infobtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+.dash-stat__infobtn:hover,
+.dash-stat__infobtn[aria-expanded='true'] {
+  color: var(--color-brand-primary-deep);
+  background: var(--color-bg-brand-soft);
+}
+.dash-stat__infopop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  box-shadow: 0 12px 32px -12px rgba(13, 17, 36, 0.28);
+  text-align: left;
+}
+
+.dash-stat__icon {
+  /* Menor e mais quieto: a cor marca o significado sem competir com o valor. */
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0;
+}
+.dash-stat__icon svg {
+  width: 15px;
+  height: 15px;
 }
 /* Uma cor por significado, nunca duas iguais lado a lado: verde entra, rosa
    sai, índigo é o resultado (o número já carrega o sinal), âmbar é prazo e
@@ -753,8 +744,8 @@
    numa linha, longe do número. */
 .dash-stat__value {
   font-family: var(--font-mono);
-  font-size: clamp(17px, 4.6vw, 22px);
-  font-weight: 800;
+  font-size: clamp(16px, 4.2vw, 20px);
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-text-default);
   white-space: nowrap;
@@ -801,6 +792,13 @@
   border-color: var(--color-brand-primary);
   color: #fff;
   box-shadow: 0 10px 24px -12px var(--color-brand-primary);
+}
+/* Reforma de 27 ago: única ação do topo, mas sem gritar. Menos padding, menos
+   sombra, corpo um passo menor. */
+.dash-quick__btn--slim {
+  padding: 8px 16px;
+  font-size: 13.5px;
+  box-shadow: none;
 }
 .dash-quick__btn--primary:hover:not(:disabled) {
   background: var(--color-brand-primary-hover);
@@ -1068,8 +1066,8 @@
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   padding: 0 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-text-subtle);
@@ -1082,8 +1080,8 @@
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: center;
-  padding: 11px 4px;
-  border-top: 1px solid var(--color-border-default);
+  padding: 8px 4px;
+  border-top: 1px solid var(--color-border-subtle, var(--color-border-default));
   font-size: 13px;
 }
 .dash-row:first-child {
@@ -1132,19 +1130,14 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--color-status-negative-ink);
-  background: var(--color-status-negative-bg);
-  padding: 3px 8px;
-  border-radius: 999px;
   justify-self: start;
 }
 .dash-row__type--aporte {
   color: var(--color-status-positive);
-  background: var(--color-status-positive-bg);
 }
 /* Entrada: mesma família do verde de "entrou" usada em Movimentações. */
 .dash-row__type--entrada {
   color: var(--color-status-positive);
-  background: var(--color-status-positive-bg);
 }
 .dash-row__value--in {
   color: var(--color-status-positive);
@@ -1904,4 +1897,152 @@
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 14px;
+}
+
+
+/* ── painel "De onde vem esse saldo" (card Saldo atual clicável) ── */
+.dash-saldo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* A equação em três blocos: números grandes, operadores discretos. */
+.dash-saldo__eq {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+}
+.dash-saldo__eq > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash-saldo__eqlab {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.dash-saldo__eq b {
+  font-family: var(--font-mono);
+  font-size: clamp(13px, 3.4vw, 17px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dash-saldo__eq b.is-neg { color: var(--color-status-negative-ink); }
+.dash-saldo__eq b.is-pos { color: var(--color-status-positive); }
+.dash-saldo__op {
+  font-size: 16px;
+  color: var(--color-text-subtle);
+  flex-shrink: 0;
+}
+.dash-saldo__frase {
+  margin: -6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+/* Ano a ano: linhas clicáveis que abrem o ano no Financeiro. */
+.dash-saldo__anos {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.dash-saldo__head,
+.dash-saldo__anos > button {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+}
+.dash-saldo__head {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-default);
+}
+.dash-saldo__head span:last-child { text-align: right; }
+.dash-saldo__anos > button {
+  border: none;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.dash-saldo__anos > button:hover { background: var(--color-bg-default); }
+.dash-saldo__ano {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.dash-saldo__anos span:last-child {
+  text-align: right;
+  font-weight: 700;
+}
+.dash-saldo__anos .is-neg { color: var(--color-status-negative-ink); }
+.dash-saldo__anos .is-pos { color: var(--color-status-positive); }
+/* O que fica de fora: nota informativa, não alerta. */
+.dash-saldo__fora {
+  padding: 12px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-surface);
+}
+.dash-saldo__fora strong {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+  color: var(--color-text-default);
+}
+.dash-saldo__fora p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+/* Coluna estreita: a equação empilha e a grade de anos vira ano + saldo, com
+   entrou/saiu descritos numa segunda linha, senão os quatro números não cabem
+   em 375px e o saldo era cortado ("R$ 21.110,"). */
+@media (max-width: 560px) {
+  .dash-saldo__eq {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .dash-saldo__eq > div {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .dash-saldo__op { display: none; }
+  .dash-saldo__eq b { font-size: 16px; }
+
+  .dash-saldo__anos { grid-template-columns: auto 1fr; }
+  .dash-saldo__head span:nth-child(2),
+  .dash-saldo__head span:nth-child(3) { display: none; }
+  .dash-saldo__anos > button > span:nth-child(2),
+  .dash-saldo__anos > button > span:nth-child(3) {
+    grid-column: 1 / -1;
+    font-size: 11.5px;
+    color: var(--color-text-subtle);
+    text-align: left;
+  }
+  .dash-saldo__anos > button > span:nth-child(2)::before { content: 'entrou '; }
+  .dash-saldo__anos > button > span:nth-child(3)::before { content: 'saiu '; }
 }

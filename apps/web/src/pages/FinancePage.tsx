@@ -301,6 +301,9 @@ export function FinancePage() {
     .reduce((s, e) => s + e.amountCents, 0);
   // Saúde do negócio: recebido − gasto (aportes ficam à parte, são capital).
   const resultadoCents = receitaCents - gastoCents;
+  /* Empate técnico: fechou a menos de 3% do que entrou. É zero a zero na
+   * prática, e não ganha cor de veredito. */
+  const quaseEmpate = resultadoCents !== 0 && receitaCents > 0 && Math.abs(resultadoCents) < receitaCents * 0.03;
   // Movimentações aguardando MINHA confirmação (backend marca canConfirm).
   const toConfirm = expenses.filter((e) => e.canConfirm);
   // Contas a pagar (jornada de vencimento): vencidas + a vencer. De propósito
@@ -923,11 +926,16 @@ export function FinancePage() {
           </span>
         </div>
         <div className="fin2-sum__hero">
-          {/* Sem ícone: as setas e o relógio dizem algo, mas o "=" era só um
-              desenho de sinal de igual perdido ao lado do rótulo. */}
+          {/* Empate técnico não é alerta: um mês que fecha a menos de 3% da
+              própria entrada (ago/26: −621 sobre 24.871) é zero a zero na
+              prática, e pintá-lo do vermelho de "problema" fazia a tela
+              contradizer o caixa saudável da Home (Rafaelle, 27 ago). */}
           <span className="fin2-sum__lab">Saldo do período</span>
           <span
-            className={'fin2-sum__val fin2-sum__val--big' + (resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')}
+            className={
+              'fin2-sum__val fin2-sum__val--big' +
+              (quaseEmpate ? '' : resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')
+            }
             data-financial
           >
             {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
@@ -935,7 +943,13 @@ export function FinancePage() {
           {/* O sinal não pode viver só na cor: quem não distingue vermelho de
               verde lê a palavra. */}
           <span className="fin2-sum__note">
-            {resultadoCents < 0 ? 'saiu mais do que entrou' : resultadoCents > 0 ? 'entrou mais do que saiu' : 'entrou − saiu'}
+            {quaseEmpate
+              ? 'praticamente empatado'
+              : resultadoCents < 0
+                ? 'saiu mais do que entrou'
+                : resultadoCents > 0
+                  ? 'entrou mais do que saiu'
+                  : 'entrou − saiu'}
           </span>
         </div>
       </section>

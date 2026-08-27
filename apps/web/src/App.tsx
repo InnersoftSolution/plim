@@ -13,6 +13,7 @@ import { MovementDetailPage } from './finance/MovementDetailPage';
 import { MovementEditPage } from './finance/MovementEditPage';
 import { AcertoEntreSociosPage } from './pages/AcertoEntreSociosPage';
 import { AcertosPage } from './pages/AcertosPage';
+import { ReportPage } from './pages/ReportPage';
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage';
 import { HomeRedirect } from './pages/HomeRedirect';
 import { SelectCompanyPage } from './pages/SelectCompanyPage';
@@ -86,6 +87,7 @@ export function App() {
             <Route path="/financeiro/movimentacao/:id" element={<MovementDetailPage />} />
             <Route path="/financeiro/movimentacao/:id/editar" element={<MovementEditPage />} />
             <Route path="/financeiro/:ano" element={<FinancePage />} />
+            <Route path="/relatorios" element={<ReportPage />} />
             <Route path="/acertos" element={<AcertosPage />} />
             <Route path="/acertos/:ano" element={<AcertosPage />} />
             {/* "entre" antes dos ids para não confundir com /acertos/2025. */}

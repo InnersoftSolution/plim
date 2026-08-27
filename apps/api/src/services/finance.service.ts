@@ -938,7 +938,10 @@ export class FinanceService {
     // tem que acompanhar. Sem isso, sobra acerto fantasma no saldo.
     const paymentsChanged = !isRevenue && (input.payments?.length ?? 0) > 0;
     const structural =
-      !isRevenue && (amountChanged || splitChanged || payerChanged || paymentsChanged);
+      !isRevenue &&
+      // Passar a conta para o caixa da empresa também mexe no esqueleto: os
+      // pagamentos de sócio somem e os acertos automáticos precisam acompanhar.
+      (amountChanged || splitChanged || payerChanged || paymentsChanged || input.paidByCompany === true);
 
     /**
      * Acertos MANUAIS ligados a esta movimentação. Manual é dinheiro que mudou
@@ -1000,12 +1003,34 @@ export class FinanceService {
       : null;
     if (informados) patch.paidByMemberId = maiorPagador(informados, expense.paidByMemberId);
 
+    // Empresa pagando não convive com pagamento de sócio: um exclui o outro.
+    if (input.paidByCompany && informados) {
+      throw new DomainError(
+        'COMPANY_WITH_PAYMENTS',
+        'Conta paga pela empresa não tem pagamento de sócio. Escolha um dos dois.',
+      );
+    }
+
     let atualizada = await this.repo.updateExpense(expenseId, patch);
 
     if (informados) {
       atualizada = {
         ...atualizada,
         payments: await this.repo.replaceExpensePayments(expenseId, informados),
+      };
+    }
+
+    /**
+     * A conta passou para o caixa da empresa: os pagamentos de sócio saem e,
+     * com zero pagamentos numa conta paga, a responsabilidade efetiva de todos
+     * é zero e nenhum acerto sobra (mesma regra da criação e do payExpense).
+     * As partes ficam como estão: continuam dizendo de quem é o custo.
+     */
+    const virouDaEmpresa = !isRevenue && input.paidByCompany === true;
+    if (virouDaEmpresa && expense.payments.length > 0) {
+      atualizada = {
+        ...atualizada,
+        payments: await this.repo.replaceExpensePayments(expenseId, []),
       };
     }
 
@@ -1018,7 +1043,9 @@ export class FinanceService {
      */
     const pagamentoUnicoIntegral =
       expense.payments.length === 1 && expense.payments[0]!.amountCents === expense.amountCents;
-    if (!informados && !isRevenue && (amountChanged || payerChanged) && pagamentoUnicoIntegral) {
+    // `!virouDaEmpresa`: se a conta acabou de passar para o caixa, recriar o
+    // pagamento aqui desfaria a limpeza acima e ressuscitaria o acerto.
+    if (!informados && !virouDaEmpresa && !isRevenue && (amountChanged || payerChanged) && pagamentoUnicoIntegral) {
       const payments = await this.repo.replaceExpensePayments(
         expenseId,
         pagamentoIntegral(

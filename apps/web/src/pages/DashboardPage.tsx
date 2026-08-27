@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageLoading } from '../components/PageLoading';
 import {
@@ -26,16 +26,10 @@ import {
   IconArrowIn,
   IconArrowOut,
   IconArrowRight,
-  IconBuilding,
-  IconChevronDown,
-  IconChevronLeft,
-  IconChevronRight,
   IconClock,
-  IconExchange,
+  IconInfo,
   IconPlus,
   IconRepeat,
-  IconTasks,
-  IconUsers,
   IconWallet,
 } from './dashIcons';
 import './dashboard.css';
@@ -136,30 +130,18 @@ function DashboardReady({
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? '';
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
 
-  // Filtro de período: mês selecionado (padrão: mês atual) ou "Tudo".
+  /* A Home não filtra período (Rafaelle, 27 ago): é a foto de AGORA. Mês, ano
+   * e histórico moram no Financeiro. Os cards usam o mês corrente, fixo. */
   const now = new Date();
-  const [allTime, setAllTime] = useState(false);
-  const [view, setView] = useState({ year: now.getFullYear(), month: now.getMonth() });
-  const monthKey = `${view.year}-${String(view.month + 1).padStart(2, '0')}`;
-  const monthName = capitalize(new Date(view.year, view.month, 1).toLocaleDateString('pt-BR', { month: 'long' }));
-  const monthLabel = capitalize(
-    new Date(view.year, view.month, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-  );
-  const filteredExpenses = allTime ? expenses : expenses.filter((e) => e.spentOn.startsWith(monthKey));
-  function shiftMonth(delta: number) {
-    setAllTime(false);
-    setView((v) => {
-      const d = new Date(v.year, v.month + delta, 1);
-      return { year: d.getFullYear(), month: d.getMonth() };
-    });
-  }
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const doMesAtual = expenses.filter((e) => e.spentOn.startsWith(monthKey));
+  /* As 5 mais recentes de qualquer mês: a Home mostra o que acabou de
+   * acontecer, não o recorte de um período. */
+  const recentes = [...expenses]
+    .sort((x, y) => (y.spentOn === x.spentOn ? y.createdAt.localeCompare(x.createdAt) : y.spentOn.localeCompare(x.spentOn)))
+    .slice(0, 5);
 
-  const allocated = members.reduce((sum, m) => sum + (m.equityPercent ?? 0), 0);
-  const pendingEquity = Math.max(0, 100 - allocated);
   // RB002: aporte não é gasto. Confirmação: só entra o que está confirmado.
-  const gastoCents = filteredExpenses
-    .filter((e) => e.kind === 'expense' && e.confirmationStatus === 'confirmed' && e.paymentStatus === 'paid')
-    .reduce((sum, e) => sum + e.amountCents, 0);
   const awaitingMine = expenses.filter((e) => e.canConfirm).length;
   // Contas a pagar: alerta na Home (vencidas + a vencer em breve).
   const payable = payableExpenses(expenses);
@@ -186,16 +168,20 @@ function DashboardReady({
     e.kind === 'expense' && confirmada(e) && e.paymentStatus === 'paid';
   const soma = (lista: Expense[]) => lista.reduce((t, e) => t + e.amountCents, 0);
 
-  const entradasMes = filteredExpenses.filter(ehEntrada);
-  const saidasMes = filteredExpenses.filter(ehSaidaPaga);
+  const entradasMes = doMesAtual.filter(ehEntrada);
+  const saidasMes = doMesAtual.filter(ehSaidaPaga);
   const entradasCents = soma(entradasMes);
   const saidasCents = soma(saidasMes);
 
-  /** Saldo acumulado da empresa: tudo que entrou menos tudo que saiu. */
-  const saldoAtualCents = soma(expenses.filter(ehEntrada)) - soma(expenses.filter(ehSaidaPaga));
+  /** Caixa REAL da empresa: receitas menos o que o próprio caixa pagou.
+   * Despesa que sócio pagou do bolso não sai daqui, nunca esteve aqui: ela
+   * vira acerto entre sócios, não buraco no caixa (decisão de 27 ago). */
+  const caixaCents =
+    soma(expenses.filter(ehEntrada)) -
+    soma(expenses.filter((e) => ehSaidaPaga(e) && paidByCompany(e)));
   /** Mesma conta no mês anterior, para dizer se melhorou ou piorou. */
   const mesAnterior = (() => {
-    const d = new Date(view.year, view.month - 1, 1);
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })();
   const noMesAnterior = expenses.filter((e) => e.spentOn.startsWith(mesAnterior));
@@ -203,6 +189,18 @@ function DashboardReady({
   const resultadoAnterior =
     soma(noMesAnterior.filter(ehEntrada)) - soma(noMesAnterior.filter(ehSaidaPaga));
   const variacaoMes = resultadoMes - resultadoAnterior;
+
+  /** Mês do lançamento confirmado mais recente: o caixa é sincero até aqui. */
+  const mesDoUltimoLancamento = (() => {
+    const ultimo = expenses
+      .filter(confirmada)
+      .reduce((max, e) => (e.spentOn > max ? e.spentOn : max), '');
+    if (!ultimo) return null;
+    return MESES[Number(ultimo.slice(5, 7)) - 1] ?? null;
+  })();
+  /** Entradas e Saídas são do mês corrente: o hint diz isso com todas as letras
+   * ("isso foi de quando?", Rafaelle 27 ago). */
+  const nomeMesAtual = MESES[now.getMonth()] ?? '';
 
   /**
    * Compromissos: contas a pagar em aberto MAIS as cobranças previstas dos
@@ -249,29 +247,13 @@ function DashboardReady({
             <p className="dash-page__subtitle">{company.name}</p>
           </div>
         </div>
+        {/* Uma ação só no topo: as secundárias moram nas páginas delas e na
+            barra lateral. O CTA perdeu peso junto (classe --slim). */}
         <div className="dash-quick">
-          <button className="dash-quick__btn dash-quick__btn--primary" onClick={() => setModalOpen(true)}>
+          <button className="dash-quick__btn dash-quick__btn--primary dash-quick__btn--slim" onClick={() => setModalOpen(true)}>
             <IconPlus /> Registrar movimentação
           </button>
-          <MoreActions onNavigate={onNavigate} />
         </div>
-      </div>
-
-      {/* ── nível 2: o período que manda nos números abaixo ── */}
-      <div className="dash-monthnav">
-        <button className="dash-monthnav__arrow" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">
-          <IconChevronLeft />
-        </button>
-        <span className="dash-monthnav__label">{allTime ? 'Todo o período' : monthLabel}</span>
-        <button className="dash-monthnav__arrow" onClick={() => shiftMonth(1)} aria-label="Próximo mês">
-          <IconChevronRight />
-        </button>
-        <button
-          className={'dash-monthnav__all' + (allTime ? ' is-active' : '')}
-          onClick={() => setAllTime((v) => !v)}
-        >
-          Tudo
-        </button>
       </div>
 
       {/* ── nível 3: resumo do período. Rótulo e número; a frase de apoio só
@@ -280,39 +262,42 @@ function DashboardReady({
         {/* Quanto a empresa tem: tudo que entrou menos tudo que saiu, desde o
             começo. Não depende do período, por isso a comparação embaixo diz
             como o mês está mexendo nesse número. */}
+        {/* "Saldo atual" mostrava o resultado (−38k) com cara de saldo de conta,
+            e a Rafaelle estranhou com razão: saldo tem que ser o que a empresa
+            TEM. Agora o card é o caixa real (receita − o que o caixa pagou), e
+            o clique abre o relatório que explica as três contas. */}
         <StatCard
           icon={<IconWallet />}
-          tone={saldoAtualCents < 0 ? 'rose' : 'green'}
-          label="Saldo atual"
-          value={formatMoney(saldoAtualCents)}
-          hint={
-            allTime
-              ? 'desde o início'
-              : resultadoMes === 0
-                ? `sem movimento em ${monthName.toLowerCase()}`
-                : `${resultadoMes > 0 ? '+' : '−'} ${formatMoney(Math.abs(resultadoMes))} em ${monthName.toLowerCase()}`
-          }
+          tone={caixaCents < 0 ? 'rose' : 'green'}
+          label="Caixa da empresa"
+          value={formatMoney(caixaCents)}
+          // A legenda diz até onde o número é sincero: ele reflete o que está
+          // LANÇADO, não o extrato do banco (Rafaelle, 27 ago: "a verdade dos
+          // dados"). O resultado do mês mora em Movimentações e no relatório.
+          hint={mesDoUltimoLancamento ? `segundo os lançamentos até ${mesDoUltimoLancamento}` : 'nenhum lançamento ainda'}
+          info="É o que a conta da empresa tem, somando só o que foi lançado no Plim. Não entra aqui: o que os sócios pagaram do bolso nem os acertos entre vocês (quem deve a quem fica na página Acertos). Clique no card para ver o relatório completo."
+          onClick={() => onNavigate('/relatorios')}
         />
         <StatCard
           icon={<IconArrowIn />}
           tone="green"
-          label={allTime ? 'Entradas' : 'Entradas no mês'}
+          label="Entradas"
           value={formatMoney(entradasCents)}
           hint={
             entradasMes.length === 0
-              ? 'nenhum recebimento'
-              : `${entradasMes.length} ${entradasMes.length === 1 ? 'recebimento' : 'recebimentos'}`
+              ? `nenhum recebimento em ${nomeMesAtual}`
+              : `${entradasMes.length} ${entradasMes.length === 1 ? 'recebimento' : 'recebimentos'} em ${nomeMesAtual}`
           }
         />
         <StatCard
           icon={<IconArrowOut />}
           tone="rose"
-          label={allTime ? 'Saídas' : 'Saídas no mês'}
+          label="Saídas"
           value={formatMoney(saidasCents)}
           hint={
             saidasMes.length === 0
-              ? 'nenhum pagamento'
-              : `${saidasMes.length} ${saidasMes.length === 1 ? 'pagamento' : 'pagamentos'}`
+              ? `nenhum pagamento em ${nomeMesAtual}`
+              : `${saidasMes.length} ${saidasMes.length === 1 ? 'pagamento' : 'pagamentos'} em ${nomeMesAtual}`
           }
         />
         {/* Contas já previstas e ainda não pagas. Ignoram o período de
@@ -326,14 +311,10 @@ function DashboardReady({
           value={formatMoney(compromissosCents)}
           hint={
             compromissosCents === 0
-              ? 'nada previsto nos próximos 30 dias'
+              ? 'nada nos próximos 30 dias'
               : venceEmBreveCents > 0
                 ? `${formatMoney(venceEmBreveCents)} em até 7 dias`
-                : previstos30dCents > 0 && compromissosAbertoCents === 0
-                  ? 'previstos nos próximos 30 dias'
-                  : previstos30dCents > 0
-                    ? `${formatMoney(compromissosAbertoCents)} em aberto + previstos`
-                    : `${payable.length} ${payable.length === 1 ? 'conta em aberto' : 'contas em aberto'}`
+                : 'próximos 30 dias'
           }
           onClick={() => onNavigate('/financeiro?filtro=a-pagar')}
         />
@@ -429,23 +410,13 @@ function DashboardReady({
 
       {/* ── últimas movimentações ── */}
       <Panel
-        title={allTime ? 'Últimas movimentações' : `Últimas movimentações (${monthName.toLowerCase()})`}
-        // "Ver todas" respeita o que o painel está mostrando: no recorte de um
-        // mês, cai nas movimentações do mês vigente; em "Tudo", cai no ano.
-        action={
-          expenses.length > 0
-            ? { label: 'Ver todas', to: allTime ? '/financeiro' : '/financeiro?periodo=mes' }
-            : undefined
-        }
+        title="Últimas movimentações"
+        action={expenses.length > 0 ? { label: 'Ver todas', to: '/financeiro' } : undefined}
         onNavigate={onNavigate}
       >
-        {filteredExpenses.length === 0 ? (
+        {recentes.length === 0 ? (
           <EmptyRow
-            text={
-              allTime || expenses.length === 0
-                ? 'Você ainda não registrou nenhum gasto. Comece adicionando a primeira movimentação para o Plim calcular quanto já foi investido no negócio.'
-                : `Nenhuma movimentação em ${monthName.toLowerCase()}. Registre os gastos do mês para acompanhar o quanto a empresa consome.`
-            }
+            text="Você ainda não registrou nenhum gasto. Comece adicionando a primeira movimentação para o Plim calcular quanto já foi investido no negócio."
             cta={{ label: 'Registrar movimentação', onClick: () => setModalOpen(true) }}
           />
         ) : (
@@ -457,7 +428,7 @@ function DashboardReady({
               <span className="dash-table__h-payer">Quem pagou</span>
               <span className="dash-table__h-value">Valor</span>
             </div>
-            {filteredExpenses.slice(0, 5).map((e) => (
+            {recentes.map((e) => (
               <button
                 type="button"
                 className="dash-row dash-row--link"
@@ -624,6 +595,7 @@ function DashboardReady({
           />
         )}
       </Modal>
+
     </div>
   );
 }
@@ -645,12 +617,16 @@ function DashError({ message, onRetry }: { message: string; onRetry: () => void 
   );
 }
 
+/** Nomes dos meses para hints e legendas ("em agosto", "até agosto"). */
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
 function StatCard({
   icon,
   tone,
   label,
   value,
   hint,
+  info,
   badge,
   cta,
   onClick,
@@ -663,11 +639,33 @@ function StatCard({
   value?: string;
   /** Linha de apoio. Ausente quando o número se explica sozinho. */
   hint?: string;
+  /** Explicação sob demanda: vira um ⓘ no canto que abre um balão. Para número
+   *  que engana quem só bate o olho (ex.: caixa ≠ inclui acertos de sócio). */
+  info?: string;
   badge?: string;
   cta?: ReactNode;
   /** Torna o card clicável (ex.: Sociedade → /socios). */
   onClick?: () => void;
 }) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  // Balão aberto fecha como todo balão: clique em qualquer lugar fora ou Esc.
+  useEffect(() => {
+    if (!infoOpen) return;
+    const fechar = () => setInfoOpen(false);
+    const porTecla = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setInfoOpen(false);
+    };
+    // No próximo tick: o mesmo clique que abriu não pode fechar.
+    const id = setTimeout(() => {
+      document.addEventListener('click', fechar);
+      document.addEventListener('keydown', porTecla);
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener('click', fechar);
+      document.removeEventListener('keydown', porTecla);
+    };
+  }, [infoOpen]);
   const inner = (
     <>
       <div className={`dash-stat__icon dash-stat__icon--${tone}`}>{icon}</div>
@@ -683,18 +681,35 @@ function StatCard({
       {hint && <span className="dash-stat__hint">{hint}</span>}
     </>
   );
-  if (onClick) {
-    return (
-      <button type="button" className="dash-stat dash-stat--link" onClick={onClick}>
-        {inner}
+  const card = onClick ? (
+    <button type="button" className="dash-stat dash-stat--link" onClick={onClick}>
+      {inner}
+    </button>
+  ) : (
+    <div className="dash-stat">{inner}</div>
+  );
+  if (!info) return card;
+  // O ⓘ não pode morar DENTRO do card clicável (botão dentro de botão é HTML
+  // inválido e o clique vira loteria): irmãos num wrapper relativo.
+  return (
+    <div className="dash-stat__wrap">
+      {card}
+      <button
+        type="button"
+        className="dash-stat__infobtn"
+        aria-label={`O que conta em ${label}`}
+        aria-expanded={infoOpen}
+        onClick={() => setInfoOpen((v) => !v)}
+      >
+        <IconInfo />
       </button>
-    );
-  }
-  return <div className="dash-stat">{inner}</div>;
-}
-
-function capitalize(s: string): string {
-  return s.length ? s[0]!.toUpperCase() + s.slice(1) : s;
+      {infoOpen && (
+        <div className="dash-stat__infopop" role="note">
+          {info}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Panel({
@@ -766,124 +781,3 @@ function catLabel(id: string): string {
 function freqLabel(id: string): string {
   return recurringFrequencyCatalog.find((f) => f.id === id)?.label ?? id;
 }
-
-/**
- * Bloco "Próximos passos da empresa" na Home. Mostra ate 3 itens do checklist
- * ainda nao concluidos, com atalho para a tela completa. Busca o checklist por
- * conta propria (cache do apiFetch evita chamada repetida).
- */
-/**
- * "Mais ações": atalho enxuto para as áreas operacionais do Plim.
- * Não repete o menu lateral nem lista ações individuais: leva a Financeiro,
- * Equipe, Atividades e Empresa. Desktop = dropdown ancorado ao botão; mobile = bottom sheet
- * (a mesma folha do resto do app, via CSS).
- */
-const MORE_AREAS: {
-  key: string;
-  label: string;
-  description: string;
-  to: string;
-  icon: ReactNode;
-}[] = [
-  {
-    key: 'financeiro',
-    label: 'Financeiro',
-    description: 'Organize gastos, aportes, custos e acertos.',
-    to: '/financeiro',
-    icon: <IconWallet />,
-  },
-  {
-    key: 'equipe',
-    label: 'Equipe',
-    description: 'Veja sócios e papéis.',
-    to: '/socios',
-    icon: <IconUsers />,
-  },
-  {
-    key: 'acertos',
-    label: 'Acertos',
-    description: 'Veja quem precisa pagar quem e quite as dívidas.',
-    to: '/acertos',
-    icon: <IconExchange />,
-  },
-  {
-    key: 'atividades',
-    label: 'Atividades',
-    description: 'Organize o que cada sócio precisa fazer.',
-    to: '/atividades',
-    icon: <IconTasks />,
-  },
-  {
-    key: 'empresa',
-    label: 'Empresa',
-    description: 'Continue checklist, dados e identidade.',
-    to: '/empresa/checklist',
-    icon: <IconBuilding />,
-  },
-];
-
-function MoreActions({ onNavigate }: { onNavigate: (to: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  function go(to: string) {
-    setOpen(false);
-    onNavigate(to);
-  }
-
-  return (
-    <div className="dash-more" ref={ref}>
-      <button
-        className="dash-quick__btn dash-more__toggle"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        Mais ações <IconChevronDown />
-      </button>
-      {open && (
-        <>
-          <div className="dash-more__backdrop" onClick={() => setOpen(false)} />
-          <div className="dash-more__menu" role="menu">
-            <span className="dash-more__label">Ir para</span>
-            {MORE_AREAS.map((area) => (
-              <button
-                key={area.key}
-                type="button"
-                role="menuitem"
-                className="dash-more__item"
-                onClick={() => go(area.to)}
-              >
-                <span className="dash-more__icon" aria-hidden="true">
-                  {area.icon}
-                </span>
-                <span className="dash-more__texts">
-                  <span className="dash-more__item-title">{area.label}</span>
-                  <span className="dash-more__item-desc">{area.description}</span>
-                </span>
-                <IconChevronRight />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-

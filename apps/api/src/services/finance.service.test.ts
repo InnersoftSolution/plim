@@ -599,6 +599,34 @@ describe('FinanceService', () => {
     expect(await finance.getSettlements(companyId, 'u1')).toHaveLength(0);
   });
 
+  it('editar uma conta para "paga pela empresa" apaga o acerto que ela gerava', async () => {
+    // Registrada errada como paga por um sócio (caso EMBRAPII): a edição
+    // corrige para o caixa da empresa e a dívida entre sócios tem que sumir.
+    const criada = await finance.createExpense(
+      companyId,
+      { description: 'EMBRAPII', amountCents: 1906416, paidByMemberId: ownerId, splitMode: 'equity' },
+      'u1',
+    );
+    expect((await finance.getSettlements(companyId, 'u1')).length).toBeGreaterThan(0);
+
+    const editada = await finance.updateExpense(companyId, criada.id, { paidByCompany: true }, 'u1');
+    expect(editada.payments).toHaveLength(0);
+    expect(editada.paymentStatus).toBe('paid');
+    // As partes continuam existindo: o custo segue sendo de todos.
+    expect(editada.shares.length).toBeGreaterThan(0);
+    expect(await finance.getSettlements(companyId, 'u1')).toHaveLength(0);
+
+    // E o caminho de volta: um sócio pagou de verdade, o pagamento renasce.
+    const devolta = await finance.updateExpense(
+      companyId,
+      criada.id,
+      { paidByMemberId: ownerId, payments: [{ memberId: ownerId, amountCents: 1906416 }] },
+      'u1',
+    );
+    expect(devolta.payments).toHaveLength(1);
+    expect((await finance.getSettlements(companyId, 'u1')).length).toBeGreaterThan(0);
+  });
+
   it('não deixa pagar duas vezes', async () => {
     const created = await finance.createExpense(
       companyId,

@@ -47,6 +47,7 @@ const NAV: NavEntry[] = [
     children: [
       { to: '/financeiro', label: 'Movimentações' },
       { to: '/acertos', label: 'Acertos' },
+      { to: '/relatorios', label: 'Relatórios' },
     ],
   },
   {

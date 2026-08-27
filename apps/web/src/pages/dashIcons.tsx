@@ -130,6 +130,17 @@ export function IconClock() {
   );
 }
 
+/** ⓘ dos cards: abre a explicação de um número que engana à primeira vista. */
+export function IconInfo() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+
 export function IconUsers() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" {...base}>

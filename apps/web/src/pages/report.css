@@ -1,0 +1,292 @@
+/* Relatórios: a saúde da empresa explicada. Grade de 8, mesma família visual
+   dos painéis da Home. */
+.rep {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.rep--center {
+  align-items: center;
+  gap: 12px;
+  padding-top: 15vh;
+  color: var(--color-text-muted);
+}
+.rep-head h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-default);
+}
+.rep-head p {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.rep-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rep-card h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.rep-sub {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+/* número grande com a explicação colada nele */
+.rep-big {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rep-big > span:first-child {
+  font-family: var(--font-mono);
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.rep-big .is-neg { color: var(--color-status-negative-ink); }
+.rep-big .is-pos { color: var(--color-status-positive); }
+.rep-big__lab {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.rep-exp {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  max-width: 640px;
+}
+.rep-exp a {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+.rep-note {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.rep-good {
+  font-size: 13.5px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: var(--color-status-positive);
+  background: var(--color-status-positive-bg);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+/* tabela mês a mês */
+.rep-meses {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 12.5px;
+}
+.rep-meses__head,
+.rep-meses__row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  padding: 7px 14px;
+  align-items: baseline;
+}
+.rep-meses__head {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-default);
+}
+.rep-meses__head span:last-child { text-align: right; }
+.rep-meses__row {
+  border-top: 1px solid var(--color-border-default);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+.rep-meses__row span:last-child { text-align: right; font-weight: 700; }
+.rep-meses__mes {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.rep-meses .is-neg { color: var(--color-status-negative-ink); }
+.rep-meses .is-pos { color: var(--color-status-positive); }
+
+/* maiores gastos */
+.rep-tops {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rep-tops strong {
+  font-size: 12.5px;
+  color: var(--color-text-default);
+  margin-bottom: 4px;
+}
+.rep-tops__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.rep-tops__row:hover span:first-child { color: var(--color-brand-primary); }
+.rep-tops__row span:last-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-default);
+  white-space: nowrap;
+}
+
+/* quem financiou */
+.rep-fontes {
+  display: flex;
+  flex-direction: column;
+}
+.rep-fontes__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.rep-fontes__row span:last-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.rep-fontes__row--total {
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+
+/* acertos */
+.rep-acertos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rep-acertos__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-default);
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+.rep-acertos__row:hover { border-color: var(--color-brand-primary); }
+.rep-acertos__row strong { color: var(--color-text-default); }
+.rep-acertos__row b {
+  font-family: var(--font-mono);
+  color: var(--color-status-negative-ink);
+}
+.rep-acertos__paid {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-status-positive);
+  background: var(--color-status-positive-bg);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+@media (max-width: 560px) {
+  .rep { padding: 16px 16px 56px; }
+  .rep-card { padding: 16px; }
+  /* mês a mês: entrou/saiu descem para uma linha descritiva */
+  .rep-meses { grid-template-columns: auto 1fr; }
+  .rep-meses__head span:nth-child(2),
+  .rep-meses__head span:nth-child(3) { display: none; }
+  .rep-meses__row span:nth-child(2),
+  .rep-meses__row span:nth-child(3) {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: var(--color-text-subtle);
+  }
+  .rep-meses__row span:nth-child(2)::before { content: 'entrou '; }
+  .rep-meses__row span:nth-child(3)::before { content: 'saiu '; }
+}
+
+/* a conta de cada sócio */
+.rep-socios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.rep-socios__card {
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-bg-default);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rep-socios__card > strong {
+  font-size: 13.5px;
+  color: var(--color-text-default);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rep-socios__pct {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.rep-socios__linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.rep-socios__linha span:last-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.rep-socios__linha--net {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border-default);
+  font-weight: 700;
+}
+.rep-socios__linha--net.is-pos span { color: var(--color-status-positive); }
+.rep-socios__linha--net.is-neg span { color: var(--color-status-negative-ink); }

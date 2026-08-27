@@ -112,11 +112,53 @@ async function rawFetch<T>(path: string, init?: RequestInit, isRetry = false): P
       return new Promise<T>(() => {});
     }
     const code = (payload?.error as string) ?? 'UNKNOWN';
-    const message = (payload?.message as string) ?? 'Algo deu errado.';
+    // Resposta sem corpo da nossa API é gateway no meio de deploy ou limite de
+    // requisições: dizer o que está acontecendo poupa o "algo deu errado" seco.
+    const semCorpo =
+      response.status >= 500
+        ? 'O servidor está atualizando. Aguarde alguns segundos e tente de novo.'
+        : response.status === 429
+          ? 'Muitas requisições em sequência. Espere um instante e tente de novo.'
+          : 'Algo deu errado.';
+    const message = (payload?.message as string) ?? semCorpo;
     throw new ApiError(code, message, response.status);
   }
 
   return payload as T;
+}
+
+/**
+ * Falhas que CURAM SOZINHAS em segundos: queda de rede momentânea, a API
+ * reiniciando num deploy (502/503/504 do gateway) e o limite de requisições
+ * (429). Para leitura, vale tentar de novo antes de estampar "algo deu errado"
+ * na tela — a maioria dessas telas de erro em produção era só um deploy no
+ * meio do caminho. Mutação NÃO re-tenta: repetir um POST que talvez tenha
+ * chegado é arriscar registrar a despesa duas vezes.
+ */
+function falhaTransitoria(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 0 || err.status === 429) return true;
+  // 5xx SEM código nosso é gateway/proxy no meio do caminho (Vercel, Railway,
+  // ou o proxy do vite em dev, que devolve 500 seco). 5xx COM código é a nossa
+  // API dizendo que quebrou de verdade: isso estoura na hora, sem re-tentar.
+  return err.status >= 500 && err.code === 'UNKNOWN';
+}
+
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function getComRetentativa<T>(path: string, init?: RequestInit): Promise<T> {
+  // 3 tentativas ao todo, esperando 1s e depois 3s: cobre a janela típica de
+  // um deploy sem segurar um erro real por mais que alguns segundos.
+  const pausas = [1000, 3000];
+  for (let tentativa = 0; ; tentativa++) {
+    try {
+      return await rawFetch<T>(path, init);
+    } catch (err) {
+      const pausa = pausas[tentativa];
+      if (pausa == null || !falhaTransitoria(err)) throw err;
+      await espera(pausa);
+    }
+  }
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -138,7 +180,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const pending = inflight.get(path);
   if (pending) return pending as Promise<T>;
 
-  const promise = rawFetch<T>(path, init)
+  const promise = getComRetentativa<T>(path, init)
     .then((data) => {
       cache.set(path, { at: Date.now(), data });
       return data;

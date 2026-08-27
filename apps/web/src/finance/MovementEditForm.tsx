@@ -6,6 +6,7 @@ import { Select } from '../components/ui/Select';
 import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import {
+  EMPRESA_PAGOU,
   PayersField,
   payersError,
   payersToPayload,
@@ -50,7 +51,14 @@ export function MovementEditForm({
     centsToMaskedInput(expense.amountCents),
   );
   const [date, setDate] = useState(expense.spentOn);
-  const [paidBy, setPaidBy] = useState(expense.paidByMemberId);
+  /**
+   * Conta paga pelo caixa (paga + zero pagamentos de sócio): o formulário tem
+   * que abrir dizendo isso. Antes ele abria mostrando o sócio do vínculo, e a
+   * tela afirmava um pagador que não existiu.
+   */
+  const eraDaEmpresa =
+    expense.kind === 'expense' && expense.paymentStatus === 'paid' && expense.payments.length === 0;
+  const [paidBy, setPaidBy] = useState(eraDaEmpresa ? EMPRESA_PAGOU : expense.paidByMemberId);
   /**
    * Quem colocou o dinheiro. Abre em "mais de uma" quando a movimentação já
    * tem vários pagamentos, senão a edição esconderia o que foi registrado.
@@ -63,7 +71,7 @@ export function MovementEditForm({
             expense.payments.map((p) => [p.memberId, centsToMaskedInput(p.amountCents)]),
           ),
         }
-      : singlePayer(expense.paidByMemberId),
+      : singlePayer(eraDaEmpresa ? EMPRESA_PAGOU : expense.paidByMemberId),
   );
   const [splitMode, setSplitMode] = useState<ExpenseSplitMode>(
     expense.splitMode === 'custom' ? 'equity' : expense.splitMode,
@@ -128,6 +136,18 @@ export function MovementEditForm({
         const quemPagou = payersToPayload(payers, expense.paidByMemberId);
         patch.payments = quemPagou.payments;
         patch.paidByMemberId = quemPagou.paidByMemberId;
+      } else if (paidBy === EMPRESA_PAGOU) {
+        // O sentinela nunca viaja: a API recebe o marcador e um vínculo real.
+        if (!eraDaEmpresa) {
+          patch.paidByCompany = true;
+          patch.paidByMemberId = expense.paidByMemberId;
+        }
+      } else if (eraDaEmpresa) {
+        // Saiu do caixa para um sócio. O backend só recria pagamento sozinho
+        // quando já existia um; aqui existiam zero, então o pagamento integral
+        // do novo pagador vai explícito.
+        patch.paidByMemberId = paidBy;
+        patch.payments = [{ memberId: paidBy, amountCents: amountCents, paidOn: date }];
       } else if (paidBy !== expense.paidByMemberId) {
         patch.paidByMemberId = paidBy;
       }
@@ -259,6 +279,13 @@ export function MovementEditForm({
                 }}
                 amountCents={maskedMoneyToCents(amount)}
               />
+            )}
+            {payers.mode === 'single' && paidBy === EMPRESA_PAGOU && (
+              <p className="mw-hint" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                A conta foi paga pelo caixa da empresa: o gasto continua valendo e entra normalmente
+                no total da empresa. O que não existe é acerto, porque nenhum sócio tirou do próprio
+                bolso.
+              </p>
             )}
             {hasShares && !customBlocked && (
               <Select
