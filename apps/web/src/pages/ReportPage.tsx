@@ -150,10 +150,12 @@ export function ReportPage() {
           menos {formatMoney(soma(pagasPeloCaixa))} de contas que o próprio caixa pagou. O que os
           sócios pagaram do bolso não sai daqui, porque nunca esteve aqui.
         </p>
+        {/* Nada de citar meio de recebimento aqui: cada empresa usa o seu, e o
+            aviso tem que valer para todas. */}
         <p className="rep-note">
-          Confira com o saldo real no Asaas: se os números não baterem, falta registrar algo, quase
-          sempre as taxas do Asaas (mensalidade, taxa por cobrança, deságio de antecipação) ou um
-          repasse que ainda não caiu. Registrando, o Plim espelha o banco.
+          Compare com o saldo real da conta da empresa. Se os números não baterem, é sinal de que
+          falta registrar alguma coisa, quase sempre tarifas e taxas ou um recebimento que ainda não
+          caiu. Registrando, o Plim espelha a conta.
         </p>
       </section>
 
