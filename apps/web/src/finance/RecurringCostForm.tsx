@@ -156,12 +156,11 @@ export function RecurringCostForm({
 
   return (
     <form className="mw" onSubmit={handleSubmit} noValidate>
-      <p className="mw-hint" style={{ marginTop: 0 }}>
-        Cadastre assinaturas, ferramentas e serviços que se repetem. Na data da cobrança, o Plim gera
-        sozinho a conta a pagar já dividida entre os sócios, e o custo entra na estimativa mensal.
-      </p>
+      {/* O cabeçalho do modal já explica o que é um custo recorrente: repetir
+          aqui só empurrava o formulário para fora da tela. */}
       {error && <div className="form-error">{error}</div>}
       <div className="mw-form">
+        {/* 1. o que é */}
         <Input
           label="Nome do custo"
           placeholder="Ex.: Adobe, Google Workspace, contador, hospedagem…"
@@ -179,69 +178,84 @@ export function RecurringCostForm({
           />
           <MoneyField value={amount} onChange={setAmount} />
         </div>
-        <div className="rc-grid">
-          <Select
-            label="Frequência"
-            value={frequency}
-            onChange={(v) => setFrequency(v as RecurringFrequency)}
-            options={recurringFrequencyCatalog.map((f) => ({ value: f.id, label: f.label }))}
-          />
-          <Select
-            label="Quem paga"
-            value={paidBy}
-            onChange={setPaidBy}
-            options={[
-              {
-                value: EMPRESA_PAGOU,
-                label: 'A empresa (caixa)',
-                hint: 'sai do caixa: ninguém fica devendo',
-              },
-              ...members.map((m) => ({ value: m.id, label: m.fullName })),
-            ]}
-          />
-        </div>
-        {paidBy === EMPRESA_PAGOU && frequency !== 'once' && (
-          <p className="mw-hint" style={{ margin: 0 }}>
-            A conta sai do caixa da empresa. A cobrança gerada mostra a parte de cada sócio só como
-            referência de custo, sem gerar dívida entre vocês.
-          </p>
-        )}
-        {members.length > 1 && frequency !== 'once' && (
-          <Select
-            label="Como dividir entre os sócios"
-            value={splitMode}
-            onChange={(v) => setSplitMode(v as RecurringSplitMode)}
-            options={[
-              { value: 'equity', label: 'Pela participação de cada sócio' },
-              { value: 'equal', label: 'Partes iguais' },
-            ]}
-          />
-        )}
-        <div className="rc-grid">
-          <div className="field">
-            <label className="field__label">
-              {frequency === 'once' ? 'Data do pagamento (opcional)' : 'A partir de quando cobrar'}
-            </label>
-            <DateField
-              value={nextCharge}
-              onChange={setNextCharge}
-              clearable={frequency === 'once'}
-              placeholder={frequency === 'once' ? 'Sem data definida' : 'Escolha a data'}
+
+        {/* 2. quando se repete: frequência e as duas datas moram juntas, porque
+            respondem à mesma pergunta. Antes a frequência ficava colada em
+            "quem paga", que é assunto de dinheiro, não de calendário. */}
+        <section className="rc-sec">
+          <h4 className="rc-sec__lab">Quando se repete</h4>
+          <div className="rc-grid rc-grid--3">
+            <Select
+              label="Frequência"
+              value={frequency}
+              onChange={(v) => setFrequency(v as RecurringFrequency)}
+              options={recurringFrequencyCatalog.map((f) => ({ value: f.id, label: f.label }))}
             />
-          </div>
-          {frequency !== 'once' && (
             <div className="field">
-              <label className="field__label">Até quando (opcional)</label>
+              <label className="field__label">
+                {frequency === 'once' ? 'Data do pagamento' : 'A partir de'}
+              </label>
               <DateField
-                value={endsOn}
-                onChange={setEndsOn}
-                min={nextCharge || undefined}
-                clearable
-                placeholder="Sem data para acabar"
+                value={nextCharge}
+                onChange={setNextCharge}
+                clearable={frequency === 'once'}
+                compact
+                placeholder={frequency === 'once' ? 'Sem data definida' : 'Escolha a data'}
               />
             </div>
+            {frequency !== 'once' && (
+              <div className="field">
+                <label className="field__label">Até quando</label>
+                <DateField
+                  value={endsOn}
+                  onChange={setEndsOn}
+                  min={nextCharge || undefined}
+                  clearable
+                  compact
+                  placeholder="Sem fim"
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 3. quem paga e como se divide: uma pergunta só, dois campos. */}
+        <section className="rc-sec">
+          <h4 className="rc-sec__lab">Quem paga</h4>
+          <div className="rc-grid">
+            <Select
+              label="Sai de onde"
+              value={paidBy}
+              onChange={setPaidBy}
+              options={[
+                {
+                  value: EMPRESA_PAGOU,
+                  label: 'A empresa (caixa)',
+                  hint: 'sai do caixa: ninguém fica devendo',
+                },
+                ...members.map((m) => ({ value: m.id, label: m.fullName })),
+              ]}
+            />
+            {members.length > 1 && frequency !== 'once' && (
+              <Select
+                label="Como dividir"
+                value={splitMode}
+                onChange={(v) => setSplitMode(v as RecurringSplitMode)}
+                options={[
+                  { value: 'equity', label: 'Pela participação' },
+                  { value: 'equal', label: 'Partes iguais' },
+                ]}
+              />
+            )}
+          </div>
+          {paidBy === EMPRESA_PAGOU && frequency !== 'once' && (
+            <p className="mw-hint" style={{ margin: 0 }}>
+              A conta sai do caixa da empresa. A cobrança gerada mostra a parte de cada sócio só como
+              referência de custo, sem gerar dívida entre vocês.
+            </p>
           )}
-        </div>
+        </section>
+
         <div className="field">
           <label className="field__label">Observação (opcional)</label>
           <textarea

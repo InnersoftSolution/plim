@@ -20,6 +20,12 @@ export interface DateFieldProps {
   disabled?: boolean;
   /** Mostra o botão "Limpar" no rodapé do calendário. */
   clearable?: boolean;
+  /**
+   * Data curta ("20/09/2026") no lugar da forma por extenso. Para campo em
+   * coluna estreita, onde o extenso trunca e esconde o ano. A leitura em voz
+   * (aria-label) continua por extenso.
+   */
+  compact?: boolean;
 }
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -44,6 +50,12 @@ function formatLong(iso: string): string {
   if (!p) return '';
   return `${p.d} de ${MONTHS[p.m]} de ${p.y}`;
 }
+/** 20/09/2026 — cabe em coluna estreita sem perder o ano. */
+function formatShort(iso: string): string {
+  const p = parseISO(iso);
+  if (!p) return '';
+  return `${String(p.d).padStart(2, '0')}/${String(p.m + 1).padStart(2, '0')}/${p.y}`;
+}
 
 export function DateField({
   label,
@@ -54,6 +66,7 @@ export function DateField({
   placeholder = 'Selecionar data',
   disabled,
   clearable,
+  compact,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -129,7 +142,9 @@ export function DateField({
         aria-expanded={open}
         aria-label={label ? `${label}: ${value ? formatLong(value) : placeholder}` : undefined}
       >
-        <span className="datefield__value">{value ? formatLong(value) : placeholder}</span>
+        <span className="datefield__value">
+          {value ? (compact ? formatShort(value) : formatLong(value)) : placeholder}
+        </span>
         <CalendarIcon />
       </button>
 

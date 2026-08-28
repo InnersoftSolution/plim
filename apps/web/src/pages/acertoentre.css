@@ -64,6 +64,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
+  /* Cada pendência é um cartão como os outros da tela: fundo branco, e não o
+     cinza da página aparecendo por dentro da borda. */
+  background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-input);
 }

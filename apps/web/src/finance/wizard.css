@@ -378,8 +378,35 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+/* Frequência + as duas datas. Colunas que se acomodam sozinhas: em modal
+   estreito viram duas linhas em vez de estourar a borda. O minmax(0,…) é o que
+   impede o campo de data de empurrar a grade além da largura disponível. */
+.rc-grid--3 {
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+}
+.rc-grid > *,
+.rc-grid--3 > * {
+  min-width: 0;
+}
+/* Bloco de assunto: um rótulo miúdo e um filete separam "quando se repete" de
+   "quem paga", em vez de uma pilha de campos todos com o mesmo peso. */
+.rc-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-default);
+}
+.rc-sec__lab {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
 @media (max-width: 560px) {
-  .rc-grid {
+  .rc-grid,
+  .rc-grid--3 {
     grid-template-columns: 1fr;
   }
 }
