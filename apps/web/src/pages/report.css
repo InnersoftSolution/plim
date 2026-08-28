@@ -61,7 +61,11 @@
 .rep-big .is-neg { color: var(--color-status-negative-ink); }
 .rep-big .is-pos { color: var(--color-status-positive); }
 .rep-big__lab {
+  /* É frase, não cifra: sai da fonte de máquina que o data-financial do pai
+     aplica e volta para a de leitura. */
+  font-family: var(--font-sans);
   font-size: 13px;
+  margin-top: 2px;
   color: var(--color-text-muted);
 }
 .rep-exp {
@@ -95,19 +99,30 @@
 /* tabela mês a mês */
 .rep-meses {
   display: grid;
-  grid-template-columns: auto 1fr 1fr auto;
+  /* O mês fica com todo o vão (cabe "setembro 2025" sem abreviar) e os três
+     valores viajam juntos na direita, em colunas de largura fixa: comparar
+     entrou/saiu/resultado é um movimento curto de olho, não uma travessia. */
+  /* As três colunas de valor têm a largura do maior número que carregam (com
+     nowrap abaixo), então nenhum valor quebra em duas linhas e as três ficam
+     do mesmo tamanho relativo ao conteúdo real. */
+  grid-template-columns: 1fr repeat(3, minmax(104px, max-content));
+  /* O respiro entre as colunas mora AQUI, não nas linhas: com subgrid quem
+     define as trilhas é o contêiner, e o gap declarado no filho é ignorado
+     neste eixo. */
+  column-gap: 32px;
+  margin-top: 4px;
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .rep-meses__head,
 .rep-meses__row {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
-  gap: 12px;
-  padding: 7px 14px;
+  gap: 28px;
+  padding: 10px 16px;
   align-items: baseline;
 }
 .rep-meses__head {
@@ -118,13 +133,24 @@
   color: var(--color-text-subtle);
   background: var(--color-bg-default);
 }
-.rep-meses__head span:last-child { text-align: right; }
+/* Título e valor partem do MESMO ponto: a coluna tem largura fixa e ambos
+   alinham à esquerda dela, então "ENTROU" fica exatamente sobre o número que
+   descreve. A fonte é monoespaçada e tabular, o que mantém os algarismos em
+   trilhos mesmo com o alinhamento à esquerda. */
+.rep-meses__head span:not(:first-child),
+.rep-meses__row span:not(:first-child) {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .rep-meses__row {
   border-top: 1px solid var(--color-border-default);
   font-family: var(--font-mono);
   color: var(--color-text-muted);
 }
-.rep-meses__row span:last-child { text-align: right; font-weight: 700; }
+.rep-meses__row span:last-child { font-weight: 700; }
+/* Zebra suave: em 12 linhas o olho perde a altura sem uma âncora. */
+.rep-meses__row:nth-child(odd) { background: var(--color-bg-default); }
 .rep-meses__mes {
   font-family: var(--font-sans);
   font-weight: 600;
@@ -225,16 +251,29 @@
 @media (max-width: 560px) {
   .rep { padding: 16px 16px 56px; }
   .rep-card { padding: 16px; }
-  /* mês a mês: entrou/saiu descem para uma linha descritiva */
-  .rep-meses { grid-template-columns: auto 1fr; }
-  .rep-meses__head span:nth-child(2),
-  .rep-meses__head span:nth-child(3) { display: none; }
+  /* Mês a mês vira cartão de duas linhas: "mês … resultado" em cima e
+     "entrou … saiu" embaixo, miúdo. Compacto e com os números alinhados,
+     em vez das quatro linhas soltas que a grade do desktop virava aqui. */
+  .rep-meses { grid-template-columns: 1fr; }
+  .rep-meses__head { display: none; }
+  .rep-meses__row {
+    grid-template-columns: 1fr auto;
+    gap: 2px 12px;
+    padding: 10px 14px;
+  }
+  .rep-meses__row:first-of-type { border-top: 0; }
+  .rep-meses__mes { grid-area: 1 / 1; }
   .rep-meses__row span:nth-child(2),
   .rep-meses__row span:nth-child(3) {
-    grid-column: 1 / -1;
     font-size: 11px;
     color: var(--color-text-subtle);
   }
+  .rep-meses__row span:nth-child(2) {
+    grid-area: 2 / 1;
+    text-align: left;
+  }
+  .rep-meses__row span:nth-child(3) { grid-area: 2 / 2; }
+  .rep-meses__row span:last-child { grid-area: 1 / 2; }
   .rep-meses__row span:nth-child(2)::before { content: 'entrou '; }
   .rep-meses__row span:nth-child(3)::before { content: 'saiu '; }
 }

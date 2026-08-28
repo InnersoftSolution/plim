@@ -123,10 +123,12 @@ export function ReportPage() {
   const aReceber = settlements.reduce((t, s) => t + s.amountCents, 0);
   const jaAcertado = settlements.reduce((t, s) => t + (s.alreadyPaidCents ?? 0), 0);
 
+  /** "setembro 2025": a coluna do mês tem espaço de sobra, e o nome inteiro se
+   *  lê sem decifrar abreviação. */
   const rotuloMes = (m: string) => {
     const [ano, mm] = m.split('-');
-    const nome = new Date(Number(ano), Number(mm) - 1, 1).toLocaleDateString('pt-BR', { month: 'short' });
-    return `${nome.replace('.', '')}/${ano!.slice(2)}`;
+    const nome = new Date(Number(ano), Number(mm) - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
+    return `${nome} ${ano}`;
   };
 
   return (
