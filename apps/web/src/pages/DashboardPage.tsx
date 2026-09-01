@@ -21,7 +21,7 @@ import { PayExpenseDialog } from '../finance/PayExpenseDialog';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
 import { financeApi, formatMoney } from '../finance/financeApi';
-import { dueBucket, paidByCompany, payableExpenses } from '../finance/due';
+import { daysUntil, dueBucket, dueLabel, paidByCompany, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
 import {
   IconArrowIn,
@@ -153,6 +153,16 @@ function DashboardReady({
   const overdueBills = payable.filter((e) => dueBucket(e) === 'overdue');
   const dueSoonBills = payable.filter((e) => dueBucket(e) === 'soon');
   const billsAlert = overdueBills.length + dueSoonBills.length;
+  /**
+   * O que a Home mostra em "Contas a vencer": tudo que está vencido mais o que
+   * vence nos próximos 30 dias. Conta com vencimento lá na frente (a anual do
+   * ano que vem, por exemplo) não é assunto de hoje e polui a lista, então fica
+   * de fora daqui e continua inteira em Movimentações (Rafaelle, 1 set).
+   */
+  const JANELA_DIAS = 30;
+  const aVencer = payable
+    .filter((e) => e.dueDate != null && daysUntil(e.dueDate) <= JANELA_DIAS)
+    .slice(0, 8);
   // Atividades da semana (RP006: não afeta finanças; só organização).
   const weekStart = currentWeekStart();
   const weekActivities = activities.filter((a) => a.weekStartDate === weekStart && a.status !== 'cancelled');
@@ -345,33 +355,9 @@ function DashboardReady({
         </section>
       )}
 
-      {/* ── alerta: contas a pagar (vencidas + a vencer) ── */}
-      {billsAlert > 0 && (
-        <section className="dash-recommend dash-recommend--warn">
-          <div className="dash-recommend__body">
-            <span className="dash-recommend__kicker">
-              {overdueBills.length > 0 ? 'Conta vencida' : 'Conta a vencer'}
-            </span>
-            <h2 className="dash-recommend__title">
-              {overdueBills.length > 0
-                ? overdueBills.length === 1
-                  ? '1 conta venceu e não foi paga'
-                  : `${overdueBills.length} contas venceram e não foram pagas`
-                : dueSoonBills.length === 1
-                  ? '1 conta vence nos próximos dias'
-                  : `${dueSoonBills.length} contas vencem nos próximos dias`}
-            </h2>
-            <p className="dash-recommend__reason">
-              {overdueBills.length > 0
-                ? 'Contas vencidas podem gerar juros e multa. Marque como paga assim que quitar.'
-                : 'Programe-se para pagar e mantenha as contas em dia.'}
-            </p>
-          </div>
-          <div className="dash-recommend__actions">
-            <Button onClick={() => onNavigate('/financeiro?filtro=a-pagar')}>Ver contas a pagar</Button>
-          </div>
-        </section>
-      )}
+      {/* O aviso amarelo de "X contas vencem" saiu: ele anunciava a lista
+          sem mostrá-la, e a lista agora está logo abaixo, com a mesma cor
+          (Rafaelle, 1 set). */}
 
       {/* A orientação saiu da Home a pedido da Rafaelle (26 ago 2026): o
           "próximo passo recomendado", o painel de sugestões e os próximos
@@ -413,89 +399,62 @@ function DashboardReady({
           e mais, com o extrato de cada par. Repetir aqui era manter duas
           versões da mesma conta. O caminho está em "Mais ações" e no menu. */}
 
-      {/* ── últimas movimentações ── */}
+      {/* ── contas a vencer ──
+          Ocupa o lugar das "últimas movimentações": o que já passou não pede
+          ação, o que vence pede. Fundo amarelo, o mesmo do alerta que existia
+          acima, porque o painel É o alerta agora (Rafaelle, 1 set). */}
       <Panel
-        title="Últimas movimentações"
-        action={expenses.length > 0 ? { label: 'Ver todas', to: '/financeiro' } : undefined}
+        title="Contas a vencer"
+        tone="warn"
+        action={{ label: 'Ver todas', to: '/financeiro?filtro=a-pagar' }}
         onNavigate={onNavigate}
       >
-        {recentes.length === 0 ? (
-          <EmptyRow
-            text="Você ainda não registrou nenhum gasto. Comece adicionando a primeira movimentação para o Plim calcular quanto já foi investido no negócio."
-            cta={{ label: 'Registrar movimentação', onClick: () => setModalOpen(true) }}
-          />
+        {aVencer.length === 0 ? (
+          <EmptyRow text="Nenhuma conta a vencer nos próximos 30 dias. Está tudo em dia." />
         ) : (
-          <div className="dash-table">
-            <div className="dash-table__head" aria-hidden="true">
-              <span>Quando</span>
-              <span>O quê</span>
-              <span className="dash-table__h-type">Tipo</span>
-              <span className="dash-table__h-payer">Quem pagou</span>
-              <span className="dash-table__h-value">Valor</span>
-            </div>
-            {recentes.map((e) => {
-              /* Conta em aberto: a pergunta que ela levanta é "como foi paga?",
-               * não "onde ela está". O clique abre o diálogo de pagamento ali
-               * mesmo (Rafaelle, 1 set); o resto continua indo para a lista. */
-              const emAberto = e.kind === 'expense' && e.paymentStatus === 'unpaid';
+          <ul className="dash-bills">
+            {aVencer.map((e) => {
+              const dias = daysUntil(e.dueDate!);
+              const vencida = dias < 0;
               return (
-              <button
-                type="button"
-                className="dash-row dash-row--link"
-                key={e.id}
-                title={emAberto ? 'Registrar pagamento' : 'Ver nas movimentações'}
-                onClick={() =>
-                  emAberto ? setPaying(e) : onNavigate(`/financeiro?mov=${e.id}`)
-                }
-              >
-                <span className="dash-row__date">{formatDate(e.spentOn)}</span>
-                <span className="dash-row__desc">{e.description}</span>
-                {/* Entrada não é despesa: antes toda movimentação que não fosse
-                    aporte aparecia como "Despesa", e o dinheiro que entrou
-                    aparecia com a etiqueta errada. */}
-                <span
-                  className={
-                    'dash-row__type' +
-                    (e.kind === 'contribution'
-                      ? ' dash-row__type--aporte'
-                      : e.kind === 'revenue'
-                        ? ' dash-row__type--entrada'
-                        : '')
-                  }
-                >
-                  {e.kind === 'contribution' ? 'Aporte' : e.kind === 'revenue' ? 'Entrada' : 'Despesa'}
-                </span>
-                <span className="dash-row__payer">
-                  {/* Em entrada ninguém pagou: a coluna mostra onde o dinheiro
-                      caiu, e não um sócio que não desembolsou nada. */}
-                  {e.kind === 'revenue' ? (
-                    <span className="dash-row__company">{e.account || 'Conta da empresa'}</span>
-                  ) : paidByCompany(e) ? (
-                    <span className="dash-row__company">Empresa</span>
-                  ) : e.paymentStatus === 'unpaid' ? (
-                    /* Conta em aberto não tem pagador. O nome que aparecia aqui
-                       era o vínculo do registro, e lia como se o sócio tivesse
-                       bancado a conta (Rafaelle, 1 set). */
-                    <span className="dash-row__company">ainda não paga</span>
-                  ) : (
-                    <>
-                      <span className="dash-row__avatar" aria-hidden="true">
-                        {initials(nameOf(e.paidByMemberId))}
-                      </span>
-                      {nameOf(e.paidByMemberId)}
-                    </>
-                  )}
-                </span>
-                <span
-                  className={'dash-row__value' + (e.kind === 'revenue' ? ' dash-row__value--in' : '')}
-                >
-                  {e.kind === 'revenue' ? '+ ' : ''}
-                  {formatMoney(e.amountCents)}
-                </span>
-              </button>
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    className="dash-bill"
+                    /* O rótulo diz o que a linha É e o que o clique FAZ: quem
+                       usa leitor de tela ouvia só os dados grudados, sem saber
+                       que dava para pagar dali. */
+                    aria-label={`${e.description}, ${formatMoney(e.amountCents)}, ${dueLabel(e.dueDate!)}. Registrar pagamento.`}
+                    onClick={() => setPaying(e)}
+                  >
+                    <span className="dash-bill__date" aria-hidden="true">
+                      {formatDate(e.dueDate!)}
+                    </span>
+                    <span className="dash-bill__desc" title={e.description} aria-hidden="true">
+                      {e.description}
+                    </span>
+                    <span
+                      className={'dash-bill__when' + (vencida ? ' dash-bill__when--late' : '')}
+                      aria-hidden="true"
+                    >
+                      {dueLabel(e.dueDate!)}
+                    </span>
+                    <span className="dash-bill__value" aria-hidden="true">
+                      {formatMoney(e.amountCents)}
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
+        )}
+        {aVencer.length > 0 && (
+            <div className="dash-bills__foot">
+              <span>
+                {aVencer.length === 1 ? '1 conta' : `${aVencer.length} contas`} nos próximos 30 dias
+              </span>
+              <strong>{formatMoney(aVencer.reduce((t, e) => t + e.amountCents, 0))}</strong>
+            </div>
         )}
       </Panel>
 
@@ -747,15 +706,18 @@ function Panel({
   title,
   action,
   onNavigate,
+  tone,
   children,
 }: {
   title: string;
   action?: { label: string; to: string };
   onNavigate?: (to: string) => void;
+  /** 'warn' = painel de atenção (fundo amarelo), para o que pede ação. */
+  tone?: 'warn';
   children: ReactNode;
 }) {
   return (
-    <section className="dash-panel">
+    <section className={'dash-panel' + (tone === 'warn' ? ' dash-panel--warn' : '')}>
       <div className="dash-panel__head">
         <h2>{title}</h2>
         {action && onNavigate && (
