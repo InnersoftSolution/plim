@@ -17,6 +17,7 @@ import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { MovementWizard } from '../finance/MovementWizard';
+import { PayExpenseDialog } from '../finance/PayExpenseDialog';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
 import { financeApi, formatMoney } from '../finance/financeApi';
@@ -116,6 +117,10 @@ function DashboardReady({
   const showActiveCompany = companies.length > 1 || canCreateMultipleCompanies;
   const [modalOpen, setModalOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
+  /** Conta em aberto que o usuário clicou para registrar o pagamento. */
+  const [paying, setPaying] = useState<Expense | null>(null);
+  /** Custos que saem do caixa: o diálogo já abre com a empresa escolhida. */
+  const custosDoCaixa = new Set(recurring.costs.filter((c) => c.paidByCompany).map((c) => c.id));
   const activeCosts = recurring.costs.filter((c) => c.active);
   /* Custo do mês é só o que sai TODO mês (mensal, semanal, "outro"). O
    * trimestral e o anual não entram diluídos: eles pertencem ao mês em que a
@@ -428,13 +433,20 @@ function DashboardReady({
               <span className="dash-table__h-payer">Quem pagou</span>
               <span className="dash-table__h-value">Valor</span>
             </div>
-            {recentes.map((e) => (
+            {recentes.map((e) => {
+              /* Conta em aberto: a pergunta que ela levanta é "como foi paga?",
+               * não "onde ela está". O clique abre o diálogo de pagamento ali
+               * mesmo (Rafaelle, 1 set); o resto continua indo para a lista. */
+              const emAberto = e.kind === 'expense' && e.paymentStatus === 'unpaid';
+              return (
               <button
                 type="button"
                 className="dash-row dash-row--link"
                 key={e.id}
-                title="Ver nas movimentações"
-                onClick={() => onNavigate(`/financeiro?mov=${e.id}`)}
+                title={emAberto ? 'Registrar pagamento' : 'Ver nas movimentações'}
+                onClick={() =>
+                  emAberto ? setPaying(e) : onNavigate(`/financeiro?mov=${e.id}`)
+                }
               >
                 <span className="dash-row__date">{formatDate(e.spentOn)}</span>
                 <span className="dash-row__desc">{e.description}</span>
@@ -460,6 +472,11 @@ function DashboardReady({
                     <span className="dash-row__company">{e.account || 'Conta da empresa'}</span>
                   ) : paidByCompany(e) ? (
                     <span className="dash-row__company">Empresa</span>
+                  ) : e.paymentStatus === 'unpaid' ? (
+                    /* Conta em aberto não tem pagador. O nome que aparecia aqui
+                       era o vínculo do registro, e lia como se o sócio tivesse
+                       bancado a conta (Rafaelle, 1 set). */
+                    <span className="dash-row__company">ainda não paga</span>
                   ) : (
                     <>
                       <span className="dash-row__avatar" aria-hidden="true">
@@ -476,7 +493,8 @@ function DashboardReady({
                   {formatMoney(e.amountCents)}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </Panel>
@@ -596,6 +614,19 @@ function DashboardReady({
         )}
       </Modal>
 
+      {/* Clicar numa conta em aberto pergunta como ela foi paga: pelo caixa da
+          empresa (sem acerto) ou por um sócio (vira acerto). Mesmo diálogo do
+          Financeiro, para a regra viver num lugar só. */}
+      <PayExpenseDialog
+        companyId={company.id}
+        expense={paying}
+        members={members}
+        fromCompanyCash={
+          paying?.recurringCostId != null && custosDoCaixa.has(paying.recurringCostId)
+        }
+        onClose={() => setPaying(null)}
+        onPaid={() => onFinanceChange(company.id)}
+      />
     </div>
   );
 }

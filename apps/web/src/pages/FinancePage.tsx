@@ -33,6 +33,7 @@ import {
   type PartnerRow,
   type UpcomingItem,
 } from '../finance/FinanceView';
+import { PayExpenseDialog } from '../finance/PayExpenseDialog';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeApi';
 import { categoryApi } from '../finance/categoryApi';
@@ -172,8 +173,6 @@ export function FinancePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Conta sendo marcada como paga (abre o diálogo "quem pagou?"). */
   const [paying, setPaying] = useState<Expense | null>(null);
-  const [payWho, setPayWho] = useState('');
-  const [payDate, setPayDate] = useState(todayIso());
   /** Fluxo financeiro: barras do mês ou saldo acumulado. */
   const [fluxMode, setFluxMode] = useState<'mensal' | 'acumulado'>('mensal');
   /** Painel de filtros avançados (os pouco usados saem da faixa de chips). */
@@ -656,29 +655,9 @@ export function FinancePage() {
 
   /** Abre o diálogo "quem pagou?": pagar não é só trocar um status. */
   function markPaid(expense: Expense) {
-    setPayWho(saiDoCaixa(expense) ? EMPRESA_PAGOU : expense.paidByMemberId);
-    setPayDate(todayIso());
     setPaying(expense);
   }
 
-  async function confirmPay() {
-    if (!paying) return;
-    setBusyId(paying.id);
-    try {
-      const empresaPagou = payWho === EMPRESA_PAGOU;
-      await financeApi.payExpense(
-        company.id,
-        paying.id,
-        payDate,
-        empresaPagou ? undefined : payWho,
-        empresaPagou,
-      );
-      setPaying(null);
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   /* ── gráfico mensal ──
    * Padrão: FLUXO (entrou x saiu) + projeção de gastos do próximo mês.
@@ -1393,62 +1372,14 @@ export function FinancePage() {
       </Modal>
 
       {/* ── marcar como paga: quem pagou + quando ── */}
-      <Modal
-        open={paying != null}
-        title="Registrar pagamento"
-        subtitle={paying ? `${paying.description} · ${formatMoney(paying.amountCents)}` : undefined}
+      <PayExpenseDialog
+        companyId={company.id}
+        expense={paying}
+        members={members}
+        fromCompanyCash={paying ? saiDoCaixa(paying) : false}
         onClose={() => setPaying(null)}
-      >
-        {paying && (
-          <div className="fin2-paydialog">
-            <Select
-              label="Quem pagou esta despesa?"
-              value={payWho}
-              onChange={setPayWho}
-              options={[
-                {
-                  value: EMPRESA_PAGOU,
-                  label: 'A empresa pagou',
-                  hint: 'saiu do caixa: ninguém fica devendo',
-                },
-                ...members.map((m) => ({
-                  value: m.id,
-                  label: m.fullName,
-                  // Quando o custo sai do caixa, o sócio gravado é só registro:
-                  // rotulá-lo de "previsto" empurraria a escolha errada.
-                  hint:
-                    m.id === paying.paidByMemberId && !saiDoCaixa(paying)
-                      ? 'pagador previsto'
-                      : undefined,
-                })),
-              ]}
-            />
-            <label className="field">
-              <span className="field__label">Data do pagamento</span>
-              <input
-                className="field__input"
-                type="date"
-                value={payDate}
-                max={todayIso()}
-                onChange={(ev) => setPayDate(ev.target.value)}
-              />
-            </label>
-            <p className="fin2-paydialog__hint">
-              {payWho === EMPRESA_PAGOU
-                ? 'Conta paga pelo caixa da empresa: o gasto entra para a empresa e nenhum sócio fica devendo nada.'
-                : 'Quem pagou entra no acerto entre os sócios: as partes dos outros passam a ser devidas a essa pessoa.'}
-            </p>
-            <div className="fin2-paydialog__acts">
-              <Button onClick={() => void confirmPay()} disabled={busyId === paying.id || !payDate}>
-                Registrar pagamento
-              </Button>
-              <button type="button" className="fin2-ghostbtn" onClick={() => setPaying(null)}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onPaid={() => load()}
+      />
 
       {/* ── editar custo recorrente ── */}
       <Modal

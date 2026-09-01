@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
+  type Category,
   type Company,
   type CompanyMember,
   type RecurringCategory,
@@ -16,6 +17,7 @@ import { DateField } from '../components/ui/DateField';
 import { messageForError } from '../company/companyApi';
 import { centsToMaskedInput, maskedMoneyToCents, formatMoney } from './financeApi';
 import { EMPRESA_PAGOU } from './PayersField';
+import { categoryApi } from './categoryApi';
 import { recurringApi } from './recurringApi';
 import './wizard.css';
 import { MoneyField } from './MoneyField';
@@ -43,14 +45,30 @@ export function RecurringCostForm({
   const isEditing = !!cost;
   const [name, setName] = useState(cost?.name ?? '');
   const [category, setCategory] = useState<RecurringCategory | ''>(cost?.category ?? '');
+  /**
+   * Categoria DA EMPRESA. É ela que a cobrança gerada herda: um custo de
+   * Tecnologia gera conta de Tecnologia, mês após mês. A lista fixa antiga
+   * (Ferramentas, Infraestrutura…) não conversava com as categorias da empresa,
+   * e a conta nascia "Sem categoria".
+   */
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState(cost?.categoryId ?? '');
+  useEffect(() => {
+    categoryApi
+      .list(company.id)
+      .then((cats) => setCategories(cats.filter((c) => !c.archived)))
+      .catch(() => setCategories([]));
+  }, [company.id]);
   const [amount, setAmount] = useState(
     cost ? centsToMaskedInput(cost.amountCents) : '',
   );
   const [frequency, setFrequency] = useState<RecurringFrequency | ''>(cost?.frequency ?? 'monthly');
   // O sentinela EMPRESA_PAGOU vive só no estado da tela: no payload ele vira
   // paidByCompany true + um sócio de registro, igual ao wizard de movimentação.
+  // Custo novo nasce pago pela EMPRESA: é o caixa dela que banca as contas, e
+  // sócio pagando do bolso é a exceção, não a regra (Rafaelle, 1 set).
   const [paidBy, setPaidBy] = useState(
-    cost?.paidByCompany ? EMPRESA_PAGOU : cost?.paidByMemberId ?? members[0]?.id ?? '',
+    cost ? (cost.paidByCompany ? EMPRESA_PAGOU : cost.paidByMemberId) : EMPRESA_PAGOU,
   );
   const [splitMode, setSplitMode] = useState<RecurringSplitMode>(cost?.splitMode ?? 'equity');
   // Primeira cobrança já vem preenchida com hoje: o custo começa a cobrar de
@@ -69,6 +87,7 @@ export function RecurringCostForm({
   function reset() {
     setName('');
     setCategory('');
+    setCategoryId('');
     setAmount('');
     setFrequency('monthly');
     setNextCharge(new Date().toISOString().slice(0, 10));
@@ -82,7 +101,7 @@ export function RecurringCostForm({
     setError('');
     const amountCents = maskedMoneyToCents(amount);
     if (name.trim().length < 1) return setError('Dê um nome ao custo. Ex.: "Adobe".');
-    if (!category) return setError('Escolha uma categoria.');
+    if (!categoryId) return setError('Escolha uma categoria.');
     if (amountCents == null) return setError('Informe um valor válido, maior que zero.');
     if (!frequency) return setError('Escolha a frequência.');
     if (!paidBy) return setError('Escolha quem paga.');
@@ -94,7 +113,8 @@ export function RecurringCostForm({
       const empresaPaga = paidBy === EMPRESA_PAGOU;
       const payload = {
         name: name.trim(),
-        category,
+        category: category || 'other',
+        categoryId: categoryId || null,
         amountCents,
         frequency,
         paidByMemberId: empresaPaga ? members[0]!.id : paidBy,
@@ -171,10 +191,10 @@ export function RecurringCostForm({
         <div className="rc-grid">
           <Select
             label="Categoria"
-            value={category}
-            onChange={(v) => setCategory(v as RecurringCategory)}
-            placeholder="Selecione"
-            options={recurringCategoryCatalog.map((c) => ({ value: c.id, label: c.label }))}
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder={categories.length ? 'Selecione' : 'Carregando…'}
+            options={categories.map((c) => ({ value: c.id, label: c.name }))}
           />
           <MoneyField value={amount} onChange={setAmount} />
         </div>

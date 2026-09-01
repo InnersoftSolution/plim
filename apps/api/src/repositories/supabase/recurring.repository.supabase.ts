@@ -13,6 +13,7 @@ interface Row {
   frequency: RecurringFrequency;
   paid_by_member_id: string;
   paid_by_company: boolean | null;
+  category_id: string | null;
   split_mode: RecurringSplitMode | null;
   next_charge_on: string | null;
   ends_on: string | null;
@@ -33,6 +34,7 @@ function toCost(row: Row): RecurringCost {
     paidByMemberId: row.paid_by_member_id,
     // Nulo (linha anterior à migração 0035) é o comportamento antigo: sócio paga.
     paidByCompany: row.paid_by_company ?? false,
+    categoryId: row.category_id ?? null,
     splitMode: row.split_mode ?? 'equity',
     nextChargeOn: row.next_charge_on,
     endsOn: row.ends_on,
@@ -50,6 +52,7 @@ function patchToRow(patch: RecurringCostUpdate): Record<string, unknown> {
     frequency: 'frequency',
     paidByMemberId: 'paid_by_member_id',
     paidByCompany: 'paid_by_company',
+    categoryId: 'category_id',
     splitMode: 'split_mode',
     nextChargeOn: 'next_charge_on',
     endsOn: 'ends_on',
@@ -79,6 +82,7 @@ export class SupabaseRecurringRepository implements RecurringRepository {
         frequency: data.frequency,
         paid_by_member_id: data.paidByMemberId,
         paid_by_company: data.paidByCompany,
+        category_id: data.categoryId,
         split_mode: data.splitMode,
         next_charge_on: data.nextChargeOn,
         ends_on: data.endsOn,

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { AuditEvent, CompanyMember, Expense, SettlementPayment } from '@plim/shared';
+import type {
+  AuditEvent,
+  CompanyMember,
+  Expense,
+  RecurringCost,
+  SettlementPayment,
+} from '@plim/shared';
 import { Button } from '../components/ui/Button';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { companyApi, messageForError } from '../company/companyApi';
@@ -8,6 +14,7 @@ import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { financeApi, formatMoney } from './financeApi';
 import { acertosDaMovimentacao, totalPago } from './movimentacaoAcerto';
 import { paidByCompany } from './due';
+import { recurringApi } from './recurringApi';
 import './movementdetail.css';
 
 /**
@@ -36,18 +43,23 @@ export function MovementDetailPage() {
   const [busyMember, setBusyMember] = useState<string | null>(null);
   const [undoing, setUndoing] = useState<SettlementPayment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [recurring, setRecurring] = useState<RecurringCost[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [mov, mem, pays, trail] = await Promise.all([
+      const [mov, mem, pays, trail, rec] = await Promise.all([
         financeApi.getMovement(company.id, id),
         companyApi.listMembers(company.id),
         financeApi.listSettlementPayments(company.id),
         // Auditoria é acessório: se falhar, a página vive sem o histórico.
         financeApi.listMovementAudit(company.id, id).catch(() => []),
+        // Os recorrentes dizem se a conta VAI sair do caixa da empresa. Sem
+        // isso, a tela mostra rateio de sócio numa conta que não vira dívida.
+        recurringApi.list(company.id).catch(() => null),
       ]);
       setMovement(mov);
+      setRecurring(rec?.costs ?? []);
       setMembers(mem);
       setPayments(pays.filter((p) => p.expenseId === id && p.status === 'confirmed'));
       setAudit(trail);
@@ -81,6 +93,15 @@ export function MovementDetailPage() {
    * uma coluna obrigatória, não um fato sobre o dinheiro.
    */
   const pagouEmpresa = paidByCompany(movement);
+  /**
+   * Conta a pagar que JÁ SE SABE que vai sair do caixa: veio de um custo
+   * recorrente marcado como "a empresa paga". O rateio dela é referência de
+   * custo, nunca dívida entre sócios, e a tela precisa dizer isso antes do
+   * pagamento, não depois.
+   */
+  const vaiSairDoCaixa =
+    movement.recurringCostId != null &&
+    recurring.some((c) => c.id === movement.recurringCostId && c.paidByCompany);
 
   /**
    * PAGAMENTO: quem tirou dinheiro do bolso. Pode ser mais de uma pessoa, e não
@@ -392,9 +413,13 @@ export function MovementDetailPage() {
       {/* Conta a pagar: a divisão ainda é previsão, não dívida. */}
       {isExpense && toPay && movement.shares.length > 0 && (
         <section className="movp-card">
-          <h2 className="movp-card__title">Parte prevista de cada sócio</h2>
+          <h2 className="movp-card__title">
+            {vaiSairDoCaixa ? 'Quanto do custo cabe a cada sócio' : 'Parte prevista de cada sócio'}
+          </h2>
           <p className="movp-card__sub">
-            Ninguém pagou nada ainda. Marque a conta como paga para o acerto entre sócios existir.
+            {vaiSairDoCaixa
+              ? 'Esta conta sai do caixa da empresa. A divisão abaixo é só referência de custo: ninguém vai dever nada a ninguém.'
+              : 'Ninguém pagou nada ainda. Marque a conta como paga para o acerto entre sócios existir.'}
           </p>
           <div className="movp-people">
             {movement.shares
@@ -422,11 +447,16 @@ export function MovementDetailPage() {
             v={
               isRevenue
                 ? movement.account || payerName
-                : pagouEmpresa
-                  ? 'A empresa (caixa)'
-                  : varios
-                    ? movement.payments.map((p) => nameOf(p.memberId)).join(', ')
-                    : payerName
+                : // Conta em aberto não tem pagador: ninguém tirou dinheiro
+                  // ainda. O nome que aparecia aqui era só o vínculo do
+                  // registro, e lia como se o sócio tivesse bancado.
+                  toPay
+                  ? 'ninguém ainda: conta em aberto'
+                  : pagouEmpresa
+                    ? 'A empresa (caixa)'
+                    : varios
+                      ? movement.payments.map((p) => nameOf(p.memberId)).join(', ')
+                      : payerName
             }
           />
           {/* Sempre visível: é a trilha de "quem colocou isso aqui". Sem

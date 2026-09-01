@@ -375,7 +375,11 @@ export class FinanceService {
             createdByMemberId: null,
             recurringCostId: cost.id,
             recurringChargeOn: charge,
-            categoryId: null,
+            // A cobrança herda a categoria do custo: se o custo é Tecnologia, a
+            // conta nasce Tecnologia, e assim segue mês após mês. Antes nascia
+            // sem categoria e a lista de contas a pagar dizia "Sem categoria"
+            // mesmo o custo tendo uma (Rafaelle, 1 set).
+            categoryId: cost.categoryId,
             tags: [],
             contactId: null,
           });

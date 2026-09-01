@@ -60,6 +60,12 @@ export const createRecurringCostSchema = z.object({
    * cobrança gerada nasce sem pagador, sem gerar acerto entre sócios.
    */
   paidByCompany: z.boolean().optional(),
+  /**
+   * Categoria DA EMPRESA (tabela categories). A cobrança gerada herda: um custo
+   * de Tecnologia produz conta de Tecnologia, mês após mês. Null = o custo
+   * ainda usa só o enum antigo `category`.
+   */
+  categoryId: z.string().uuid().nullable().optional(),
   /** Como a cobrança gerada se divide entre os sócios. */
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().date().nullable().optional(), // opcional, mas recomendada
@@ -90,6 +96,8 @@ export const recurringCostSchema = z.object({
   paidByMemberId: z.string().uuid(),
   /** true = sai do caixa da empresa; o pagador previsto é só registro. */
   paidByCompany: z.boolean().default(false),
+  /** Categoria da empresa herdada por toda cobrança gerada. */
+  categoryId: z.string().uuid().nullable().default(null),
   splitMode: recurringSplitModeSchema.default('equity'),
   nextChargeOn: z.string().nullable(),
   endsOn: z.string().nullable().default(null),

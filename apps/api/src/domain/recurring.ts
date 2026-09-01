@@ -16,6 +16,11 @@ export interface RecurringCost {
    * cobrança gerada não cria acerto entre sócios.
    */
   paidByCompany: boolean;
+  /**
+   * Categoria da empresa (tabela categories) herdada por toda cobrança gerada.
+   * Null = custo antigo, que só tem o enum `category`.
+   */
+  categoryId: string | null;
   /** Como a cobrança gerada se divide entre os sócios. */
   splitMode: RecurringSplitMode;
   /** Próxima cobrança (YYYY-MM-DD). Opcional, mas recomendada. */
@@ -37,6 +42,7 @@ export type RecurringCostUpdate = Partial<
     | 'frequency'
     | 'paidByMemberId'
     | 'paidByCompany'
+    | 'categoryId'
     | 'splitMode'
     | 'nextChargeOn'
     | 'endsOn'
