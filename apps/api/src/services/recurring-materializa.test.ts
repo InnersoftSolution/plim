@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryCompanyRepository } from '../repositories/in-memory/company.repository.memory';
 import { InMemoryFinanceRepository } from '../repositories/in-memory/finance.repository.memory';
 import { InMemoryRecurringRepository } from '../repositories/in-memory/recurring.repository.memory';
@@ -38,6 +38,18 @@ describe('lastDayOfMonthIso', () => {
 });
 
 describe('Materialização de custos recorrentes', () => {
+  /**
+   * Relógio congelado num dia 15, no meio de um mês de 30 dias.
+   *
+   * Estes testes falavam em "ontem" e "daqui a um mês" contando a partir de
+   * hoje, e por isso quebravam sozinhos na virada: rodando num dia 1º, o
+   * "ontem" cai no mês anterior e o sistema gera CORRETAMENTE duas cobranças
+   * (a atrasada e a do mês corrente), contra a única que o teste esperava.
+   * Com a data fixa, o cenário é sempre o mesmo e uma falha volta a significar
+   * regressão de verdade.
+   */
+  const HOJE = new Date('2026-06-15T12:00:00.000Z');
+
   let companyService: CompanyService;
   let recurringRepo: InMemoryRecurringRepository;
   let recurring: RecurringService;
@@ -47,6 +59,8 @@ describe('Materialização de custos recorrentes', () => {
   let partnerId: string;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(HOJE);
     companyService = new CompanyService(new InMemoryCompanyRepository());
     recurringRepo = new InMemoryRecurringRepository();
     recurring = new RecurringService(companyService, recurringRepo);
@@ -64,6 +78,10 @@ describe('Materialização de custos recorrentes', () => {
       'u1',
     );
     partnerId = partner.id;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const createCost = (over: Partial<Parameters<RecurringService['create']>[1]> = {}) =>
