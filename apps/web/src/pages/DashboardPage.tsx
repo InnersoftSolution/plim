@@ -5,6 +5,7 @@ import {
   recurringCategoryCatalog,
   recurringFrequencyCatalog,
   type Activity,
+  type Category,
   type Company,
   type CompanyMember,
   type Expense,
@@ -17,10 +18,13 @@ import { Modal } from '../components/ui/Modal';
 import { companyApi, messageForError } from '../company/companyApi';
 import { useActiveCompany } from '../company/ActiveCompanyContext';
 import { MovementWizard } from '../finance/MovementWizard';
+import { SummaryStrip } from '../components/SummaryStrip';
+import { AttGroup, AttRow, somaContas } from '../finance/AttentionList';
 import { PayExpenseDialog } from '../finance/PayExpenseDialog';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { recurringApi } from '../finance/recurringApi';
 import { financeApi, formatMoney } from '../finance/financeApi';
+import { categoryApi } from '../finance/categoryApi';
 import { daysUntil, dueBucket, dueLabel, paidByCompany, payableExpenses } from '../finance/due';
 import { activityApi, currentWeekStart } from '../activities/activityApi';
 import {
@@ -30,14 +34,14 @@ import {
   IconClock,
   IconInfo,
   IconPlus,
-  IconRepeat,
-  IconWallet,
 } from './dashIcons';
 import './dashboard.css';
 
 type Data = {
   company: Company;
   members: CompanyMember[];
+  /** Para a lista de contas mostrar a categoria real, e não "Sem categoria". */
+  categories: Category[];
   expenses: Expense[];
   settlements: Settlement[];
   recurring: RecurringCostList;
@@ -68,15 +72,17 @@ export function DashboardPage() {
     setState({ status: 'loading' });
     try {
       const company = activeCompany;
-      const [members, expenses, settlements, recurring, activities] = await Promise.all([
+      const [members, expenses, settlements, recurring, activities, categories] = await Promise.all([
         companyApi.listMembers(company.id),
         financeApi.listExpenses(company.id),
         financeApi.getSettlements(company.id),
         recurringApi.list(company.id),
         // Atividades não podem derrubar a Home (ex.: módulo ainda sem migration).
         activityApi.list(company.id).catch(() => [] as Activity[]),
+        // Categoria é acessório na Home: sem ela a lista mostra o resto.
+        categoryApi.list(company.id).catch(() => [] as Category[]),
       ]);
-      setState({ status: 'ready', company, members, expenses, settlements, recurring, activities });
+      setState({ status: 'ready', company, members, expenses, settlements, recurring, activities, categories });
     } catch (err) {
       setState({ status: 'error', message: messageForError(err) });
     }
@@ -110,7 +116,7 @@ function DashboardReady({
   onNavigate: (to: string) => void;
   onFinanceChange: (companyId: string) => void;
 }) {
-  const { company, members, expenses, recurring, activities } = data;
+  const { company, members, expenses, recurring, activities, categories } = data;
   const { user } = useAuth();
   const { companies, canCreateMultipleCompanies } = useActiveCompany();
   // So mostra "trabalhando em X" para quem lida com multiempresa.
@@ -134,6 +140,7 @@ function DashboardReady({
 
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? '';
   const nameOf = (id: string) => members.find((m) => m.id === id)?.fullName ?? 'Sócio';
+  const categoryOf = (id: string | null) => categories.find((c) => c.id === id) ?? null;
 
   /* A Home não filtra período (Rafaelle, 27 ago): é a foto de AGORA. Mês, ano
    * e histórico moram no Financeiro. Os cards usam o mês corrente, fixo. */
@@ -163,6 +170,9 @@ function DashboardReady({
   const aVencer = payable
     .filter((e) => e.dueDate != null && daysUntil(e.dueDate) <= JANELA_DIAS)
     .slice(0, 8);
+  /** Vencida pede vermelho; o que só está chegando pede o amarelo de "a vencer". */
+  const vencidas = aVencer.filter((e) => daysUntil(e.dueDate!) < 0);
+  const chegando = aVencer.filter((e) => daysUntil(e.dueDate!) >= 0);
   // Atividades da semana (RP006: não afeta finanças; só organização).
   const weekStart = currentWeekStart();
   const weekActivities = activities.filter((a) => a.weekStartDate === weekStart && a.status !== 'cancelled');
@@ -273,67 +283,67 @@ function DashboardReady({
 
       {/* ── nível 3: resumo do período. Rótulo e número; a frase de apoio só
              aparece quando muda o que a pessoa faria. ── */}
-      <div className="dash-cards">
-        {/* Quanto a empresa tem: tudo que entrou menos tudo que saiu, desde o
-            começo. Não depende do período, por isso a comparação embaixo diz
-            como o mês está mexendo nesse número. */}
-        {/* "Saldo atual" mostrava o resultado (−38k) com cara de saldo de conta,
-            e a Rafaelle estranhou com razão: saldo tem que ser o que a empresa
-            TEM. Agora o card é o caixa real (receita − o que o caixa pagou), e
-            o clique abre o relatório que explica as três contas. */}
-        <StatCard
-          icon={<IconWallet />}
-          tone={caixaCents < 0 ? 'rose' : 'green'}
-          label="Caixa da empresa"
-          value={formatMoney(caixaCents)}
-          // A legenda diz até onde o número é sincero: ele reflete o que está
-          // LANÇADO, não o extrato do banco (Rafaelle, 27 ago: "a verdade dos
-          // dados"). O resultado do mês mora em Movimentações e no relatório.
-          hint={mesDoUltimoLancamento ? `segundo os lançamentos até ${mesDoUltimoLancamento}` : 'nenhum lançamento ainda'}
-          info="É o que a conta da empresa tem, somando só o que foi lançado no Plim. Não entra aqui: o que os sócios pagaram do bolso nem os acertos entre vocês (quem deve a quem fica na página Acertos). Clique no card para ver o relatório completo."
-          onClick={() => onNavigate('/relatorios')}
-        />
-        <StatCard
-          icon={<IconArrowIn />}
-          tone="green"
-          label="Entradas"
-          value={formatMoney(entradasCents)}
-          hint={
-            entradasMes.length === 0
-              ? `nenhum recebimento em ${nomeMesAtual}`
-              : `${entradasMes.length} ${entradasMes.length === 1 ? 'recebimento' : 'recebimentos'} em ${nomeMesAtual}`
-          }
-        />
-        <StatCard
-          icon={<IconArrowOut />}
-          tone="rose"
-          label="Saídas"
-          value={formatMoney(saidasCents)}
-          hint={
-            saidasMes.length === 0
-              ? `nenhum pagamento em ${nomeMesAtual}`
-              : `${saidasMes.length} ${saidasMes.length === 1 ? 'pagamento' : 'pagamentos'} em ${nomeMesAtual}`
-          }
-        />
-        {/* Contas já previstas e ainda não pagas. Ignoram o período de
-            propósito: dívida em aberto não some porque o filtro é outro mês. */}
-        <StatCard
-          icon={<IconClock />}
-          // Âmbar quando há compromisso vindo: é a cor de "previsto/a vencer"
-          // no resto do app. Cinza era o único ícone sem cor da fileira.
-          tone={compromissosCents > 0 ? 'amber' : 'green'}
-          label="Compromissos futuros"
-          value={formatMoney(compromissosCents)}
-          hint={
-            compromissosCents === 0
-              ? 'nada nos próximos 30 dias'
-              : venceEmBreveCents > 0
-                ? `${formatMoney(venceEmBreveCents)} em até 7 dias`
-                : 'próximos 30 dias'
-          }
-          onClick={() => onNavigate('/financeiro?filtro=a-pagar')}
-        />
-      </div>
+      {/* Os números do topo usam a MESMA faixa do resumo de Movimentações: eram
+          dois componentes desenhando a mesma coisa de jeitos diferentes, e as
+          telas foram divergindo (Rafaelle, 1 set). O caixa é o hero: é a
+          resposta da Home, e o clique abre o relatório que o explica. */}
+      <SummaryStrip
+        ariaLabel="Resumo da empresa"
+        items={[
+          {
+            key: 'caixa',
+            label: 'Caixa da empresa',
+            hero: true,
+            value: formatMoney(caixaCents),
+            tone: caixaCents < 0 ? 'neg' : undefined,
+            // A legenda diz até onde o número é sincero: ele reflete o que está
+            // LANÇADO, não o extrato do banco ("a verdade dos dados").
+            note: mesDoUltimoLancamento
+              ? `segundo os lançamentos até ${mesDoUltimoLancamento}`
+              : 'nenhum lançamento ainda',
+            onClick: () => onNavigate('/relatorios'),
+            corner: <CaixaInfo />,
+          },
+          {
+            key: 'in',
+            label: 'Entradas',
+            icon: <IconArrowIn />,
+            iconTone: 'in',
+            value: formatMoney(entradasCents),
+            note:
+              entradasMes.length === 0
+                ? `nenhum recebimento em ${nomeMesAtual}`
+                : `${entradasMes.length} ${entradasMes.length === 1 ? 'recebimento' : 'recebimentos'} em ${nomeMesAtual}`,
+          },
+          {
+            key: 'out',
+            label: 'Saídas',
+            icon: <IconArrowOut />,
+            iconTone: 'out',
+            value: formatMoney(saidasCents),
+            note:
+              saidasMes.length === 0
+                ? `nenhum pagamento em ${nomeMesAtual}`
+                : `${saidasMes.length} ${saidasMes.length === 1 ? 'pagamento' : 'pagamentos'} em ${nomeMesAtual}`,
+          },
+          {
+            // Contas previstas e ainda não pagas. Ignoram o período de
+            // propósito: dívida em aberto não some porque o filtro é outro mês.
+            key: 'futuro',
+            label: 'Compromissos futuros',
+            icon: <IconClock />,
+            iconTone: compromissosCents > 0 ? 'late' : undefined,
+            value: formatMoney(compromissosCents),
+            note:
+              compromissosCents === 0
+                ? 'nada nos próximos 30 dias'
+                : venceEmBreveCents > 0
+                  ? `${formatMoney(venceEmBreveCents)} em até 7 dias`
+                  : 'próximos 30 dias',
+            onClick: () => onNavigate('/financeiro?filtro=a-pagar'),
+          },
+        ]}
+      />
 
       {/* ── pagamentos aguardando minha confirmação (prioridade máxima) ── */}
       {awaitingMine > 0 && (
@@ -403,58 +413,51 @@ function DashboardReady({
           Ocupa o lugar das "últimas movimentações": o que já passou não pede
           ação, o que vence pede. Fundo amarelo, o mesmo do alerta que existia
           acima, porque o painel É o alerta agora (Rafaelle, 1 set). */}
+      {/* Contas a vencer, com o MESMO componente de Movimentações: cartão com
+          tarja lateral e as linhas de conta. Aqui a tarja é amarela, porque a
+          lista é sobre o que está chegando, não sobre atraso. */}
       <Panel
         title="Contas a vencer"
-        tone="warn"
         action={{ label: 'Ver todas', to: '/financeiro?filtro=a-pagar' }}
         onNavigate={onNavigate}
       >
         {aVencer.length === 0 ? (
           <EmptyRow text="Nenhuma conta a vencer nos próximos 30 dias. Está tudo em dia." />
         ) : (
-          <ul className="dash-bills">
-            {aVencer.map((e) => {
-              const dias = daysUntil(e.dueDate!);
-              const vencida = dias < 0;
-              return (
-                <li key={e.id}>
-                  <button
-                    type="button"
-                    className="dash-bill"
-                    /* O rótulo diz o que a linha É e o que o clique FAZ: quem
-                       usa leitor de tela ouvia só os dados grudados, sem saber
-                       que dava para pagar dali. */
-                    aria-label={`${e.description}, ${formatMoney(e.amountCents)}, ${dueLabel(e.dueDate!)}. Registrar pagamento.`}
-                    onClick={() => setPaying(e)}
-                  >
-                    <span className="dash-bill__date" aria-hidden="true">
-                      {formatDate(e.dueDate!)}
-                    </span>
-                    <span className="dash-bill__desc" title={e.description} aria-hidden="true">
-                      {e.description}
-                    </span>
-                    <span
-                      className={'dash-bill__when' + (vencida ? ' dash-bill__when--late' : '')}
-                      aria-hidden="true"
-                    >
-                      {dueLabel(e.dueDate!)}
-                    </span>
-                    <span className="dash-bill__value" aria-hidden="true">
-                      {formatMoney(e.amountCents)}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {aVencer.length > 0 && (
-            <div className="dash-bills__foot">
-              <span>
-                {aVencer.length === 1 ? '1 conta' : `${aVencer.length} contas`} nos próximos 30 dias
-              </span>
-              <strong>{formatMoney(aVencer.reduce((t, e) => t + e.amountCents, 0))}</strong>
-            </div>
+          <>
+            {vencidas.length > 0 && (
+              <AttGroup tone="overdue" title="Em atraso" totalCents={somaContas(vencidas)}>
+                {vencidas.map((e) => (
+                  <AttRow
+                    key={e.id}
+                    e={e}
+                    nameOf={nameOf}
+                    categoryOf={categoryOf}
+                    busy={false}
+                    empresa={e.recurringCostId != null && custosDoCaixa.has(e.recurringCostId)}
+                    onOpen={() => onNavigate(`/financeiro/movimentacao/${e.id}`)}
+                    onPay={() => setPaying(e)}
+                  />
+                ))}
+              </AttGroup>
+            )}
+            {chegando.length > 0 && (
+              <AttGroup tone="warn" title="Próximos 30 dias" totalCents={somaContas(chegando)}>
+                {chegando.map((e) => (
+                  <AttRow
+                    key={e.id}
+                    e={e}
+                    nameOf={nameOf}
+                    categoryOf={categoryOf}
+                    busy={false}
+                    empresa={e.recurringCostId != null && custosDoCaixa.has(e.recurringCostId)}
+                    onOpen={() => onNavigate(`/financeiro/movimentacao/${e.id}`)}
+                    onPay={() => setPaying(e)}
+                  />
+                ))}
+              </AttGroup>
+            )}
+          </>
         )}
       </Panel>
 
@@ -591,6 +594,53 @@ function DashboardReady({
 }
 
 /* ── subcomponentes ── */
+
+/**
+ * O ⓘ do caixa: explica, para quem quiser, que o número é o da conta da
+ * empresa e não inclui o que os sócios pagaram do bolso nem os acertos.
+ * Vive à parte porque o botão não pode ficar DENTRO da coluna clicável
+ * (botão dentro de botão é HTML inválido e o clique vira loteria).
+ */
+function CaixaInfo() {
+  const [aberto, setAberto] = useState(false);
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = () => setAberto(false);
+    const porTecla = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setAberto(false);
+    };
+    // No próximo tick: o mesmo clique que abriu não pode fechar.
+    const id = setTimeout(() => {
+      document.addEventListener('click', fechar);
+      document.addEventListener('keydown', porTecla);
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener('click', fechar);
+      document.removeEventListener('keydown', porTecla);
+    };
+  }, [aberto]);
+  return (
+    <>
+      <button
+        type="button"
+        className="dash-stat__infobtn"
+        aria-label="O que conta no caixa da empresa"
+        aria-expanded={aberto}
+        onClick={() => setAberto((v) => !v)}
+      >
+        <IconInfo />
+      </button>
+      {aberto && (
+        <div className="dash-stat__infopop" role="note">
+          É o que a conta da empresa tem, somando só o que foi lançado no Plim. Não entra aqui: o
+          que os sócios pagaram do bolso nem os acertos entre vocês (quem deve a quem fica na
+          página Acertos). Clique no card para ver o relatório completo.
+        </div>
+      )}
+    </>
+  );
+}
 function DashError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="dash-error">
@@ -609,98 +659,6 @@ function DashError({ message, onRetry }: { message: string; onRetry: () => void 
 
 /** Nomes dos meses para hints e legendas ("em agosto", "até agosto"). */
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-
-function StatCard({
-  icon,
-  tone,
-  label,
-  value,
-  hint,
-  info,
-  badge,
-  cta,
-  onClick,
-}: {
-  icon: ReactNode;
-  /** Uma cor por significado: rosa sai dinheiro, indigo é recorrência da marca,
-   *  verde está resolvido, âmbar pede atenção, cinza não pede nada. */
-  tone: 'indigo' | 'rose' | 'green' | 'amber' | 'muted';
-  label: string;
-  value?: string;
-  /** Linha de apoio. Ausente quando o número se explica sozinho. */
-  hint?: string;
-  /** Explicação sob demanda: vira um ⓘ no canto que abre um balão. Para número
-   *  que engana quem só bate o olho (ex.: caixa ≠ inclui acertos de sócio). */
-  info?: string;
-  badge?: string;
-  cta?: ReactNode;
-  /** Torna o card clicável (ex.: Sociedade → /socios). */
-  onClick?: () => void;
-}) {
-  const [infoOpen, setInfoOpen] = useState(false);
-  // Balão aberto fecha como todo balão: clique em qualquer lugar fora ou Esc.
-  useEffect(() => {
-    if (!infoOpen) return;
-    const fechar = () => setInfoOpen(false);
-    const porTecla = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') setInfoOpen(false);
-    };
-    // No próximo tick: o mesmo clique que abriu não pode fechar.
-    const id = setTimeout(() => {
-      document.addEventListener('click', fechar);
-      document.addEventListener('keydown', porTecla);
-    }, 0);
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener('click', fechar);
-      document.removeEventListener('keydown', porTecla);
-    };
-  }, [infoOpen]);
-  const inner = (
-    <>
-      <div className={`dash-stat__icon dash-stat__icon--${tone}`}>{icon}</div>
-      <span className="dash-stat__label">
-        {label}
-        {badge && <span className="dash-stat__badge">{badge}</span>}
-      </span>
-      {cta ?? (
-        <span className="dash-stat__value" data-financial>
-          {value}
-        </span>
-      )}
-      {hint && <span className="dash-stat__hint">{hint}</span>}
-    </>
-  );
-  const card = onClick ? (
-    <button type="button" className="dash-stat dash-stat--link" onClick={onClick}>
-      {inner}
-    </button>
-  ) : (
-    <div className="dash-stat">{inner}</div>
-  );
-  if (!info) return card;
-  // O ⓘ não pode morar DENTRO do card clicável (botão dentro de botão é HTML
-  // inválido e o clique vira loteria): irmãos num wrapper relativo.
-  return (
-    <div className="dash-stat__wrap">
-      {card}
-      <button
-        type="button"
-        className="dash-stat__infobtn"
-        aria-label={`O que conta em ${label}`}
-        aria-expanded={infoOpen}
-        onClick={() => setInfoOpen((v) => !v)}
-      >
-        <IconInfo />
-      </button>
-      {infoOpen && (
-        <div className="dash-stat__infopop" role="note">
-          {info}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function Panel({
   title,

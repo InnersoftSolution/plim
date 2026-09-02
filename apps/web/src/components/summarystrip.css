@@ -1,0 +1,288 @@
+/* ── faixa de resumo (SummaryStrip) ──
+   Compartilhada entre Movimentações e a Home. As medidas respondem ao
+   CONTAINER, não à janela: a mesma faixa vive em telas com e sem barra
+   lateral aberta, e medir a janela dava colisão numa e sobra na outra.
+   Quem usa precisa declarar `container-type: inline-size` no pai. */
+
+.fin2-sum {
+  display: grid;
+  /* Entrou | Saiu | Saldo: a ordem da própria conta. Três colunas iguais com
+     o conteúdo centrado em cada uma: encostado à esquerda, o terço direito da
+     faixa ficava vazio e ela parecia pender para um lado. */
+  grid-template-columns: 1fr 1fr 1fr;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-card);
+  padding: 20px 6px;
+}
+.fin2-sum > div {
+  display: flex;
+  flex-direction: column;
+  /* Alinhado pelo TOPO, não pelo centro: com centralização, cada coluna
+     "flutuava" numa altura conforme o tamanho da própria nota, e os quatro
+     rótulos ficavam em linhas diferentes. Rótulo com rótulo, valor com valor. */
+  justify-content: flex-start;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 2px 22px;
+  border-left: 1px solid var(--color-border-default);
+  min-width: 0;
+}
+.fin2-sum > div:first-child {
+  border-left: none;
+}
+.fin2-sum__lab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Mesma altura com ou sem ícone: o rótulo do saldo não tem ícone e ficava
+     1px mais baixo que os vizinhos, o bastante para parecer torto. */
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+/* A cor mora no ícone, não no número: verde e vermelho dizem a direção do
+   dinheiro sem transformar a faixa inteira em semáforo. */
+.fin2-sum__ic {
+  display: inline-flex;
+  /* Ícone que carrega significado segue a regra de contraste de gráfico: o tom
+     mais claro ficava em 2:1 e sumia. */
+  color: var(--color-text-muted);
+}
+.fin2-sum__ic--in {
+  color: var(--color-status-positive);
+}
+.fin2-sum__ic--out,
+.fin2-sum__ic--late {
+  color: var(--color-status-negative-ink);
+}
+.fin2-sum__val {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-default);
+  white-space: nowrap;
+}
+.fin2-sum__val--big {
+  font-size: 27px;
+  font-weight: 700;
+}
+/* Tom fechado, não o vermelho claro: sobre o fundo do saldo o tom claro caía
+   para 3,95:1, apertado demais para o número principal da página. */
+.fin2-sum__val.is-neg {
+  color: var(--color-status-negative-ink);
+}
+.fin2-sum__val.is-pos {
+  color: var(--color-status-positive-ink, var(--color-status-positive));
+}
+.fin2-sum__note {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.fin2-sum__note strong {
+  color: var(--color-status-negative-ink);
+  font-weight: 600;
+}
+
+/* ── a faixa em estágios, medidos pelo espaço disponível ──
+   Primeiro os números cedem: entre 1040px e o limite eles encolhem junto com
+   a largura, em vez de esperar a quebra. Medindo, quatro colunas com o corpo
+   cheio exigem 820px de largura mínima; encolhendo a fonte esse mínimo cai
+   junto, e a faixa chega inteira até bem perto do ponto de virada. */
+@container (max-width: 1040px) {
+  .fin2-sum__val {
+    font-size: clamp(17px, 2.2cqi, 22px);
+  }
+  .fin2-sum__val--big {
+    font-size: clamp(20px, 2.75cqi, 27px);
+  }
+}
+
+/* Aqui nem encolhendo cabe. Duas linhas com papéis claros: Entrou e Saiu
+   dividem a de cima (são o par que se compara) e o saldo fecha embaixo com a
+   linha inteira, grande, porque é a resposta. */
+@container (max-width: 860px) {
+  .fin2-sum {
+    grid-template-columns: 1fr 1fr;
+    padding: 0 16px;
+  }
+  .fin2-sum > div {
+    padding: 14px 0;
+    border-left: none;
+  }
+  .fin2-sum > div:nth-child(2) {
+    border-left: 1px solid var(--color-border-default);
+    padding-left: 16px;
+  }
+  .fin2-sum > div:first-child {
+    padding-right: 16px;
+  }
+  .fin2-sum > .fin2-sum__hero {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--color-border-default);
+  }
+  /* Hero na primeira posição (Home) não tem nada acima para separar. */
+  .fin2-sum > .fin2-sum__hero:first-child {
+    border-top: none;
+  }
+  /* Uma linha inteira para ele: o saldo pode ser grande sem colidir. */
+  .fin2-sum__val {
+    font-size: clamp(16px, 4.6cqi, 21px);
+  }
+  .fin2-sum__val--big {
+    font-size: clamp(22px, 7cqi, 28px);
+  }
+}
+
+/* Coluna estreita de verdade (celular): o rótulo encolhe para caber numa
+   linha só, e o saldo abre mão do tamanho maior, senão "− R$ 23.864,68"
+   atravessa a divisória. Ele continua liderando pela cor, pelo peso e pelo
+   fundo próprio, que é o bastante. */
+/* Celular estreito: só o rótulo encolhe. O saldo mantém o corpo grande,
+   porque a linha inteira é dele. */
+@container (max-width: 440px) {
+  .fin2-sum__lab {
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    gap: 5px;
+  }
+  /* O :not() é necessário: sem ele esta regra, que vem depois no arquivo,
+     empata em especificidade com a do --big e rouba o corpo do saldo. */
+  .fin2-sum__val:not(.fin2-sum__val--big) {
+    font-size: clamp(14px, 4.9cqi, 18px);
+  }
+}
+
+/* ── quatro colunas (Home) ──
+   A faixa nasceu com três (Entrou | Saiu | Saldo). Na Home são quatro números,
+   e a contagem vem da própria lista, sem cada tela reescrever a grade. */
+.fin2-sum--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+@container (max-width: 860px) {
+  /* Quatro números em tela estreita viram três linhas: o hero abre sozinho, o
+     par que se compara (entrou/saiu) divide a do meio, e o último fecha com a
+     linha inteira. Deixá-lo em meia largura abria um vazio ao lado e uma
+     divisória solta. */
+  .fin2-sum--4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fin2-sum--4 > div:nth-child(2) {
+    padding-right: 16px;
+    padding-left: 0;
+    border-left: none;
+  }
+  .fin2-sum--4 > div:nth-child(3) {
+    padding-left: 16px;
+    border-left: 1px solid var(--color-border-default);
+  }
+  .fin2-sum--4 > div:nth-child(2),
+  .fin2-sum--4 > div:nth-child(3) {
+    border-top: 1px solid var(--color-border-default);
+  }
+  .fin2-sum--4 > div:nth-child(4) {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--color-border-default);
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+/* Coluna clicável: o botão veste a coluna inteira, sem cara de botão, mas com
+   alvo, foco e resposta ao passar o mouse. */
+.fin2-sum__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.fin2-sum__btn:hover {
+  background: var(--color-bg-default);
+}
+.fin2-sum__btn:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+/* A coluna vira referência para o canto (o ⓘ de ajuda). */
+.fin2-sum > div {
+  position: relative;
+}
+
+/* ── quatro colunas pedem menos corpo e mais ar ──
+   Com três colunas o número podia ser grande; com quatro, o mesmo corpo deixa
+   tudo espremido e o rótulo longo ("Compromissos futuros") quebra em duas
+   linhas, derrubando o valor daquela coluna para baixo das outras. */
+.fin2-sum--4 {
+  padding: 22px 8px;
+  row-gap: 4px;
+}
+.fin2-sum--4 > div {
+  padding: 2px 14px;
+  /* Rótulo, valor e nota em três faixas de altura fixa: assim os quatro
+     números ficam na mesma linha mesmo quando um rótulo ou uma nota ocupa duas
+     linhas. É o que fazia a faixa parecer torta. */
+  display: grid;
+  grid-template-rows: 30px auto 1fr;
+  align-content: start;
+}
+.fin2-sum--4 .fin2-sum__btn {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: 1 / -1;
+  height: 100%;
+  padding: 0;
+}
+.fin2-sum--4 .fin2-sum__lab {
+  align-self: start;
+  justify-content: center;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+}
+.fin2-sum--4 .fin2-sum__val {
+  align-self: center;
+  font-size: clamp(17px, 2.1cqi, 21px);
+}
+.fin2-sum--4 .fin2-sum__val--big {
+  font-size: clamp(19px, 2.5cqi, 24px);
+}
+.fin2-sum--4 .fin2-sum__note {
+  align-self: start;
+  margin-top: 2px;
+  font-size: 11.5px;
+  /* A nota quebra em duas linhas em vez de esticar a coluna inteira: linha
+     longa demais empurra as divisórias e faz a faixa parecer apertada. Com as
+     faixas de altura fixa acima, quebrar não desalinha os números. */
+  max-width: 24ch;
+  margin-left: auto;
+  margin-right: auto;
+  text-wrap: balance;
+}
+@container (max-width: 860px) {
+  /* Empilhado, cada bloco volta a ter a altura do próprio conteúdo. */
+  .fin2-sum--4 > div {
+    grid-template-rows: auto auto auto;
+    padding: 14px 8px;
+  }
+  .fin2-sum--4 .fin2-sum__val {
+    font-size: clamp(16px, 4.6cqi, 21px);
+  }
+  .fin2-sum--4 .fin2-sum__val--big {
+    font-size: clamp(20px, 6cqi, 26px);
+  }
+}

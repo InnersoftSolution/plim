@@ -37,7 +37,7 @@ export const WIDGET_CATALOG: {
      "Onde gastamos" vem antes de "O que vem aí" porque é a pergunta que a
      pessoa faz primeiro ao abrir o financeiro. */
   { id: 'categorias', label: 'Gastos por categoria', question: 'Onde estamos gastando?', span: 6 },
-  { id: 'proximos', label: 'Próximos pagamentos', question: 'O que está chegando?', span: 4 },
+  { id: 'proximos', label: 'Mais adiante', question: 'O que vem depois desta semana?', span: 4 },
   { id: 'fluxo', label: 'Fluxo de caixa', question: 'Como nossa situação evoluiu?', span: 8 },
   { id: 'aportes', label: 'Aportes dos sócios', question: 'Quanto cada sócio colocou?', span: 6 },
   { id: 'entradas-saidas', label: 'Entradas e saídas', question: 'Quanto entrou e quanto saiu por mês?', span: 8 },
@@ -306,11 +306,14 @@ export function UpcomingWidget({
   const total = items.reduce((s, i) => s + i.amountCents, 0);
   const mostrados = items.slice(0, 5);
   const temPrevisto = mostrados.some((i) => i.tipo === 'previsto');
+  // O que vence nos próximos dias mora no bloco "Atenção", com o botão de
+  // pagar. Aqui é o horizonte: o que vem DEPOIS, incluindo a cobrança que um
+  // custo recorrente ainda vai gerar.
   return (
-    <Widget id="proximos" title="Próximos pagamentos" subtitle="O que está chegando">
+    <Widget id="proximos" title="Mais adiante" subtitle="Depois desta semana">
       {mostrados.length === 0 ? (
         <p className="fw__empty">
-          Nenhuma conta a vencer e nenhum custo recorrente com cobrança próxima.
+          Nada além desta semana: o que está próximo aparece em "Atenção", logo abaixo.
         </p>
       ) : (
         <>

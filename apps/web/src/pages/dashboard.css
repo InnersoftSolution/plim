@@ -1,6 +1,9 @@
 .dash {
   max-width: 1080px;
   margin: 0 auto;
+  /* A faixa de resumo mede o CONTAINER, não a janela: com a barra lateral
+     aberta a largura real é menor, e medir a janela dava colisão. */
+  container-type: inline-size;
   /* Grade de 8: 24 no topo, 24 nas laterais, 64 embaixo. O gap caiu para 16
      na reforma de 27 ago: mais conteúdo na primeira dobra. */
   padding: 24px 24px 64px;
@@ -938,30 +941,6 @@
   padding: 20px 22px;
   box-shadow: 0 1px 2px rgba(13, 17, 36, 0.04);
 }
-/* Painel de atenção montado como tabela: o cabeçalho é UMA linha amarela e o
-   conteúdo fica branco, dividido por filetes. Pintar o painel todo (ou o bloco
-   das contas) de amarelo achatava a leitura. */
-.dash-panel--warn {
-  padding: 0;
-  overflow: hidden;
-}
-/* A faixa do cabeçalho: sangra até as bordas do painel, como a primeira linha
-   de uma tabela. */
-.dash-panel--warn .dash-panel__head {
-  margin-bottom: 0;
-  padding: 16px 24px;
-  background: color-mix(in srgb, var(--yellow-400) 34%, var(--paper-0));
-  border-bottom: 1px solid color-mix(in srgb, var(--yellow-400) 55%, transparent);
-}
-
-/* Roxo sobre amarelo brigava: na faixa amarela o link veste o dourado escuro
-   da própria família, que combina e ainda ganha contraste (4,58 → 7,4). */
-.dash-panel--warn .dash-panel__action {
-  color: var(--color-status-warning);
-}
-.dash-panel--warn .dash-panel__action:hover {
-  color: var(--color-text-default);
-}
 .dash-panel__head {
   display: flex;
   align-items: center;
@@ -970,118 +949,6 @@
 }
 
 /* ── contas a vencer (linhas do painel amarelo) ── */
-.dash-bills {
-  display: flex;
-  flex-direction: column;
-  list-style: none;
-  margin: 0;
-  /* Alinhado à faixa do cabeçalho (24px): as divisórias nascem e terminam no
-     mesmo lugar que o título, e não coladas na borda do painel. */
-  padding: 0 24px;
-}
-.dash-bill {
-  display: grid;
-  grid-template-columns: 52px 1fr auto auto;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  /* 56px: o alvo de toque do HIG são 44, e a linha ainda ganha ar para o nome
-     e o valor não se encostarem nas divisórias. */
-  min-height: 56px;
-  padding: 12px 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font-size: 13.5px;
-  color: var(--color-text-default);
-}
-/* Sem isto, quem navega por teclado não enxerga onde está: a linha recebia o
-   foco e nada mudava na tela (WCAG 2.4.7). */
-.dash-bill:focus-visible {
-  outline: 2px solid var(--color-brand-primary);
-  outline-offset: -2px;
-}
-.dash-bills li + li .dash-bill {
-  border-top: 1px solid var(--color-border-default);
-  border-radius: 0;
-}
-.dash-bill:hover {
-  background: color-mix(in srgb, var(--yellow-400) 18%, var(--paper-0));
-}
-/* Ao clicar, a linha acende de vez: confirma qual conta abriu o pagamento. */
-.dash-bill:active {
-  background: color-mix(in srgb, var(--yellow-400) 34%, var(--paper-0));
-}
-.dash-bill__date {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--color-text-muted);
-}
-.dash-bill__desc {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dash-bill__when {
-  font-size: 12px;
-  /* Apoio, não veredito: em dourado competia com o valor. Só a conta VENCIDA
-     ganha cor, logo abaixo, porque aí a cor significa alguma coisa. O tom é o
-     muted: o subtle reprova em contraste neste tamanho (2,08). */
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-/* Vencida não é "a vencer": muda a cor para o vermelho de dívida. */
-.dash-bill__when--late {
-  color: var(--color-status-negative-ink);
-  font-weight: 600;
-}
-.dash-bill__value {
-  font-family: var(--font-mono);
-  font-size: 14.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.dash-bills__foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-top: 0;
-  padding: 16px 24px 20px;
-  border-top: 1px solid var(--color-border-default);
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-}
-.dash-bills__foot strong {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--color-text-default);
-}
-@media (max-width: 640px) {
-  /* No celular a data e o "vence em X dias" dizem a mesma coisa: fica o prazo,
-     que é o que faz agir, e a linha cabe em duas colunas. */
-  .dash-bill {
-    grid-template-columns: 1fr auto;
-    gap: 2px 12px;
-    padding: 10px;
-  }
-  .dash-bill__date {
-    display: none;
-  }
-  .dash-bill__desc {
-    grid-area: 1 / 1;
-  }
-  .dash-bill__value {
-    grid-area: 1 / 2;
-  }
-  .dash-bill__when {
-    grid-area: 2 / 1 / 2 / -1;
-  }
-}
 .dash-panel__head h2 {
   font-size: 15px;
   font-weight: 800;

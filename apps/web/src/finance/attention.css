@@ -1,0 +1,165 @@
+/* ── bloco de atenção (AttentionList) ──
+   Cartão com tarja lateral por criticidade e as linhas de conta a pagar.
+   Compartilhado entre Movimentações e a Home: eram dois desenhos para a mesma
+   informação, e o sistema perdia o padrão (Rafaelle, 1 set). */
+
+.fin2-attg {
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  background: var(--color-bg-surface);
+  overflow: hidden;
+}
+.fin2-attg--overdue {
+  border-left: 4px solid var(--color-status-negative);
+}
+.fin2-attg--today {
+  border-left: 4px solid var(--color-status-warning-accent);
+}
+.fin2-attg--soon {
+  /* Amarelo, como o resto do sistema marca "a vencer". Cinza aqui não dizia
+     nada: era a única tarja sem cor num bloco chamado Atenção. */
+  border-left: 4px solid color-mix(in srgb, var(--yellow-400) 70%, transparent);
+}
+.fin2-attg__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px 0;
+}
+/* Quanto sai se tudo deste grupo for pago: a pergunta que vem logo depois de
+   "o que vence", e que obrigava a somar de cabeça. */
+.fin2-attg__total {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.fin2-attg__total b {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+.fin2-attg__cap {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.fin2-attg--overdue .fin2-attg__cap {
+  color: var(--color-status-negative-ink);
+}
+.fin2-attg--today .fin2-attg__cap {
+  color: var(--color-status-warning);
+}
+.fin2-attg--soon .fin2-attg__cap {
+  color: var(--color-status-warning);
+}
+.fin2-attrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+}
+.fin2-attrow + .fin2-attrow {
+  border-top: 1px solid var(--color-bg-elevated);
+}
+.fin2-attrow__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.fin2-attrow__t {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-default);
+}
+.fin2-attrow__info:hover .fin2-attrow__t {
+  color: var(--color-brand-primary-deep);
+}
+.fin2-attrow__c {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.fin2-attrow__v {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fin2-ghostbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-brand-primary-deep);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fin2-ghostbtn:hover {
+  border-color: var(--color-brand-primary);
+}
+.fin2-att__later {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.fin2-att__later:hover {
+  color: var(--color-brand-primary-deep);
+}
+
+/* chips de status (texto + ícone + cor de apoio) */
+.fin2-st {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.fin2-st svg {
+  flex-shrink: 0;
+}
+.fin2-st--overdue {
+  background: var(--color-status-negative-bg);
+  color: var(--color-status-negative-ink);
+}
+.fin2-st--today {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+.fin2-st--soon {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+/* cabeçalho do bloco de movimentações + busca */
+
+/* Tarja amarela: "a vencer" na Home, onde a lista não é sobre atraso, e sim
+   sobre o que está chegando. Mesmo cartão, cor do estado certo. */
+.fin2-attg--warn {
+  border-left: 4px solid var(--color-status-warning-accent);
+}
+.fin2-attg--warn .fin2-attg__cap {
+  color: var(--color-status-warning);
+}

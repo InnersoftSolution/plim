@@ -33,6 +33,8 @@ import {
   type PartnerRow,
   type UpcomingItem,
 } from '../finance/FinanceView';
+import { SummaryStrip } from '../components/SummaryStrip';
+import { AttGroup, AttRow, somaContas } from '../finance/AttentionList';
 import { PayExpenseDialog } from '../finance/PayExpenseDialog';
 import { RecurringCostForm } from '../finance/RecurringCostForm';
 import { centsToMaskedInput, financeApi, formatMoney } from '../finance/financeApi';
@@ -380,7 +382,10 @@ export function FinancePage() {
   const HORIZONTE_PREVISTO = 60;
   const upcoming: UpcomingItem[] = [
     ...payable
-      .filter((e) => dueBucket(e) !== 'overdue')
+      // Só o que o bloco "Atenção" NÃO mostra. Os dois listavam as mesmas
+      // contas, um do lado do outro: lá é o que pede ação agora (vencidas e
+      // até 7 dias), aqui é o horizonte à frente (Rafaelle, 1 set).
+      .filter((e) => dueBucket(e) === 'later')
       .map<UpcomingItem>((e) => ({
         tipo: 'conta',
         id: e.id,
@@ -885,53 +890,98 @@ export function FinancePage() {
           têm o bloco de Atenção e o card da Home.
           Regra de cor: DIREÇÃO é ícone, VEREDITO é cor. Entrou e Saiu são
           fatos neutros; colorido fica só o saldo, que muda de sinal. */}
-      <section className="fin2-sum" aria-label="Resumo financeiro do período">
-        <div>
-          <span className="fin2-sum__lab">
-            <span className="fin2-sum__ic fin2-sum__ic--in"><IconIn /></span>Entrou
-          </span>
-          <span className="fin2-sum__val" data-financial>{formatMoney(receitaCents)}</span>
-          <span className="fin2-sum__note">
-            {entradasCount === 0 ? 'nenhuma entrada' : `${entradasCount} ${entradasCount === 1 ? 'entrada' : 'entradas'}`}
-          </span>
-        </div>
-        <div>
-          <span className="fin2-sum__lab">
-            <span className="fin2-sum__ic fin2-sum__ic--out"><IconOut /></span>Saiu
-          </span>
-          <span className="fin2-sum__val" data-financial>{formatMoney(gastoCents)}</span>
-          <span className="fin2-sum__note">
-            {despesasCount === 0 ? 'nenhuma despesa paga' : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`}
-          </span>
-        </div>
-        <div className="fin2-sum__hero">
-          {/* Empate técnico não é alerta: um mês que fecha a menos de 3% da
-              própria entrada (ago/26: −621 sobre 24.871) é zero a zero na
-              prática, e pintá-lo do vermelho de "problema" fazia a tela
-              contradizer o caixa saudável da Home (Rafaelle, 27 ago). */}
-          <span className="fin2-sum__lab">Saldo do período</span>
-          <span
-            className={
-              'fin2-sum__val fin2-sum__val--big' +
-              (quaseEmpate ? '' : resultadoCents < 0 ? ' is-neg' : resultadoCents > 0 ? ' is-pos' : '')
-            }
-            data-financial
-          >
-            {resultadoCents < 0 ? '− ' : ''}{formatMoney(Math.abs(resultadoCents))}
-          </span>
-          {/* O sinal não pode viver só na cor: quem não distingue vermelho de
-              verde lê a palavra. */}
-          <span className="fin2-sum__note">
-            {quaseEmpate
+      <SummaryStrip
+        ariaLabel="Resumo financeiro do período"
+        items={[
+          {
+            key: 'in',
+            label: 'Entrou',
+            icon: <IconIn />,
+            iconTone: 'in',
+            value: formatMoney(receitaCents),
+            note:
+              entradasCount === 0
+                ? 'nenhuma entrada'
+                : `${entradasCount} ${entradasCount === 1 ? 'entrada' : 'entradas'}`,
+          },
+          {
+            key: 'out',
+            label: 'Saiu',
+            icon: <IconOut />,
+            iconTone: 'out',
+            value: formatMoney(gastoCents),
+            note:
+              despesasCount === 0
+                ? 'nenhuma despesa paga'
+                : `${despesasCount} ${despesasCount === 1 ? 'despesa' : 'despesas'}`,
+          },
+          {
+            key: 'saldo',
+            label: 'Saldo do período',
+            hero: true,
+            value: `${resultadoCents < 0 ? '− ' : ''}${formatMoney(Math.abs(resultadoCents))}`,
+            // Empate técnico não é alerta: mês que fecha a menos de 3% da
+            // própria entrada é zero a zero, e o vermelho de "problema" fazia a
+            // tela contradizer o caixa saudável da Home (Rafaelle, 27 ago).
+            tone: quaseEmpate ? undefined : resultadoCents < 0 ? 'neg' : resultadoCents > 0 ? 'pos' : undefined,
+            // O sinal não vive só na cor: quem não distingue vermelho de verde
+            // lê a palavra.
+            note: quaseEmpate
               ? 'praticamente empatado'
               : resultadoCents < 0
                 ? 'saiu mais do que entrou'
                 : resultadoCents > 0
                   ? 'entrou mais do que saiu'
-                  : 'entrou − saiu'}
-          </span>
-        </div>
-      </section>
+                  : 'entrou − saiu',
+          },
+        ]}
+      />
+      {/* ── Atenção: pendências por criticidade (vencidas → hoje → 7 dias) ── */}
+      {/* Sem pendência não há aviso: o cartão "A pagar" já diz que está zerado,
+          e um bloco inteiro para confirmar isso só empurra a lista para baixo. */}
+      {!archiveYear && payable.length > 0 && (
+          <section aria-label="Pagamentos que precisam de atenção" className="fin2-att">
+            <div className="fin2-att__head">
+              <h2>Atenção</h2>
+              {dueOverdue.length > 0 && (
+                <span className="fin2-att__count">
+                  {dueOverdue.length} {dueOverdue.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}
+                </span>
+              )}
+            </div>
+            {dueOverdue.length > 0 && (
+              <AttGroup tone="overdue" title="Em atraso" totalCents={somaContas(dueOverdue)}>
+                {dueOverdue.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueToday.length > 0 && (
+              <AttGroup tone="today" title="Vence hoje" totalCents={somaContas(dueToday)}>
+                {dueToday.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueSoon.length > 0 && (
+              <AttGroup tone="soon" title={`Próximos ${DUE_SOON_DAYS} dias`} totalCents={somaContas(dueSoon)}>
+                {dueSoon.map((e) => (
+                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
+                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
+                ))}
+              </AttGroup>
+            )}
+            {dueLater.length > 0 && (
+              <button type="button" className="fin2-att__later" onClick={() => setFilter('a-pagar')}>
+                {dueLater.length} {dueLater.length === 1 ? 'outra conta a vencer' : 'outras contas a vencer'} ·{' '}
+                <span data-financial>{formatMoney(dueLater.reduce((sum, e) => sum + e.amountCents, 0))}</span> → ver na lista
+              </button>
+            )}
+          </section>
+      )}
+
       {/* A quebra entre receita e aporte só informa quando existe aporte: sem
           ele, "Receitas" repetiria o cartão Entrou palavra por palavra. */}
       {aportesPeriodoCents > 0 && (
@@ -990,51 +1040,6 @@ export function FinancePage() {
         </section>
       )}
 
-      {/* ── Atenção: pendências por criticidade (vencidas → hoje → 7 dias) ── */}
-      {/* Sem pendência não há aviso: o cartão "A pagar" já diz que está zerado,
-          e um bloco inteiro para confirmar isso só empurra a lista para baixo. */}
-      {!archiveYear && payable.length > 0 && (
-          <section aria-label="Pagamentos que precisam de atenção" className="fin2-att">
-            <div className="fin2-att__head">
-              <h2>Atenção</h2>
-              {dueOverdue.length > 0 && (
-                <span className="fin2-att__count">
-                  {dueOverdue.length} {dueOverdue.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}
-                </span>
-              )}
-            </div>
-            {dueOverdue.length > 0 && (
-              <AttGroup tone="overdue" title="Em atraso">
-                {dueOverdue.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
-                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
-                ))}
-              </AttGroup>
-            )}
-            {dueToday.length > 0 && (
-              <AttGroup tone="today" title="Vence hoje">
-                {dueToday.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
-                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
-                ))}
-              </AttGroup>
-            )}
-            {dueSoon.length > 0 && (
-              <AttGroup tone="soon" title={`Próximos ${DUE_SOON_DAYS} dias`}>
-                {dueSoon.map((e) => (
-                  <AttRow key={e.id} e={e} nameOf={nameOf} categoryOf={categoryOf} busy={busyId === e.id} empresa={saiDoCaixa(e)}
-                    onOpen={() => navigate(`/financeiro/movimentacao/${e.id}`)} onPay={() => markPaid(e)} />
-                ))}
-              </AttGroup>
-            )}
-            {dueLater.length > 0 && (
-              <button type="button" className="fin2-att__later" onClick={() => setFilter('a-pagar')}>
-                {dueLater.length} {dueLater.length === 1 ? 'outra conta a vencer' : 'outras contas a vencer'} ·{' '}
-                <span data-financial>{formatMoney(dueLater.reduce((sum, e) => sum + e.amountCents, 0))}</span> → ver na lista
-              </button>
-            )}
-          </section>
-      )}
 
       {/* ── movimentações: o conteúdo principal da página ── */}
       <div className="fin2-movhead" id="lista-movimentacoes">
@@ -1421,89 +1426,6 @@ export function FinancePage() {
 }
 
 /* ── Atenção: grupo por criticidade, com fio lateral ── */
-function AttGroup({
-  tone,
-  title,
-  children,
-}: {
-  tone: 'overdue' | 'today' | 'soon';
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`fin2-attg fin2-attg--${tone}`}>
-      <span className="fin2-attg__cap">{title}</span>
-      {children}
-    </div>
-  );
-}
-
-function AttRow({
-  e,
-  nameOf,
-  categoryOf,
-  busy,
-  empresa,
-  onOpen,
-  onPay,
-}: {
-  e: Expense;
-  nameOf: (id: string) => string;
-  categoryOf: (id: string | null) => Category | null;
-  busy: boolean;
-  /** true = a cobrança vem de um custo recorrente pago pelo caixa da empresa. */
-  empresa?: boolean;
-  onOpen: () => void;
-  onPay: () => void;
-}) {
-  return (
-    <div className="fin2-attrow">
-      <button type="button" className="fin2-attrow__info" onClick={onOpen}>
-        <span className="fin2-attrow__t">{e.description}</span>
-        <span className="fin2-attrow__c">
-          {categoryOf(e.categoryId)?.name ?? 'Sem categoria'} ·{' '}
-          {empresa ? 'sai do caixa da empresa' : `pagador previsto ${nameOf(e.paidByMemberId)}`}
-        </span>
-      </button>
-      {e.dueDate && <StChip dueDate={e.dueDate} />}
-      <span className="fin2-attrow__v" data-financial>{formatMoney(e.amountCents)}</span>
-      <button type="button" className="fin2-ghostbtn" onClick={onPay} disabled={busy}>
-        Marcar como paga
-      </button>
-    </div>
-  );
-}
-
-/**
- * Chip de status de vencimento: sempre texto + ícone + cor de apoio, nunca só
- * cor (quem não distingue vermelho de verde lê a palavra).
- */
-function StChip({ dueDate }: { dueDate: string }) {
-  const d = daysUntil(dueDate);
-  if (d < 0) {
-    return (
-      <span className="fin2-st fin2-st--overdue">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 8v5M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
-        {-d} {-d === 1 ? 'dia' : 'dias'} em atraso
-      </span>
-    );
-  }
-  if (d === 0) {
-    return (
-      <span className="fin2-st fin2-st--today">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="6" /></svg>
-        Vence hoje
-      </span>
-    );
-  }
-  return (
-    <span className="fin2-st fin2-st--soon">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-      {d === 1 ? 'Vence amanhã' : `Vence em ${d} dias`}
-    </span>
-  );
-}
-
 /* ── linha da lista ── */
 function MovRow({
   item,
