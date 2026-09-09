@@ -573,6 +573,126 @@ describe('Pagamento × responsabilidade', () => {
   });
   /* ── Acertos por origem com mais de um pagador (fatia G) ── */
 
+  describe('sócia que já tinha parte e cuja participação mudou', () => {
+    /** Despesa antiga de R$ 2.000, paga pela Rafaelle, dividida 50/50. */
+    async function despesaAntiga() {
+      return finance.createExpense(
+        companyId,
+        {
+          description: 'Advogado',
+          amountCents: 200000,
+          paidByMemberId: rafaelle,
+          splitMode: 'equal',
+          spentOn: '2026-07-01',
+        },
+        'u1',
+      );
+    }
+
+    /** Vanessa entra com 20% e assume o passado; depois a sociedade vira 1/3 cada. */
+    async function vanessaEntraEDepoisSobe() {
+      await companyService.setMemberEquity(companyId, rafaelle, 40, 'u1');
+      await companyService.setMemberEquity(companyId, gabi, 40, 'u1');
+      vanessa = (
+        await companyService.addMember(
+          companyId,
+          { fullName: 'Vanessa', email: 'vanessa@plim.work', equityPercent: 20 },
+          'u1',
+        )
+      ).id;
+      await finance.applyInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-08-01', mode: 'equity' },
+        'u1',
+      );
+      await companyService.setMemberEquity(companyId, rafaelle, 33.33, 'u1');
+      await companyService.setMemberEquity(companyId, gabi, 33.33, 'u1');
+      await companyService.setMemberEquity(companyId, vanessa, 33.34, 'u1');
+    }
+
+    it('a prévia mostra só o DIFERENCIAL, e diz que ela já tinha parte', async () => {
+      const despesa = await despesaAntiga();
+      await vanessaEntraEDepoisSobe();
+
+      const antes = await finance.getMovement(companyId, despesa.id, 'u1');
+      const parteAntiga = antes.shares.find((sh) => sh.memberId === vanessa)!.shareCents;
+      expect(parteAntiga).toBe(40000); // os 20% de antes
+
+      const previa = await finance.previewInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-09-01', mode: 'equity' },
+        'u1',
+      );
+      expect(previa.alreadyHadShare).toBe(true);
+      expect(previa.expenseCount).toBe(1);
+      // Só a diferença entre a parte nova (~33,34%) e a antiga (20%).
+      expect(previa.totalCents).toBeGreaterThan(0);
+      expect(previa.totalCents).toBeLessThan(40000);
+      expect(previa.totalCents).toBe(Math.round(200000 * 0.3334) - 40000);
+      // Vai inteira para quem adiantou o dinheiro: a Rafaelle.
+      expect(previa.owedTo).toEqual([
+        { memberId: rafaelle, fullName: 'Rafaelle', amountCents: previa.totalCents },
+      ]);
+      // Prévia não escreve.
+      const depois = await finance.getMovement(companyId, despesa.id, 'u1');
+      expect(depois.shares.find((sh) => sh.memberId === vanessa)!.shareCents).toBe(40000);
+    });
+
+    it('aplicar refaz a divisão do passado e os acertos acompanham', async () => {
+      const despesa = await despesaAntiga();
+      await vanessaEntraEDepoisSobe();
+      const previa = await finance.applyInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-09-01', mode: 'equity' },
+        'u1',
+      );
+
+      const atual = await finance.getMovement(companyId, despesa.id, 'u1');
+      // Pagamento intocado (RN1): a Rafaelle continua sendo quem pagou tudo.
+      expect(atual.payments).toHaveLength(1);
+      expect(atual.payments[0]).toMatchObject({ memberId: rafaelle, amountCents: 200000 });
+      // Responsabilidade refeita a 1/3 cada, fechando no valor.
+      expect(atual.shares.reduce((soma, sh) => soma + sh.shareCents, 0)).toBe(200000);
+      const parteVanessa = atual.shares.find((sh) => sh.memberId === vanessa)!.shareCents;
+      expect(parteVanessa).toBe(40000 + previa.totalCents);
+      // Vanessa deve a parte nova inteira; Gabi a dela; Rafaelle recebe o resto.
+      expect((await saldo(vanessa)).netCents).toBe(-parteVanessa);
+      expect((await saldo(rafaelle)).netCents).toBe(200000 - (atual.shares.find((sh) => sh.memberId === rafaelle)!.shareCents));
+      expect(await somaDosSaldos()).toBe(0);
+    });
+
+    it('aplicar de novo sem nada ter mudado não conta nada em dobro', async () => {
+      await despesaAntiga();
+      await vanessaEntraEDepoisSobe();
+      await finance.applyInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-09-01', mode: 'equity' },
+        'u1',
+      );
+      const segunda = await finance.previewInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-09-01', mode: 'equity' },
+        'u1',
+      );
+      // A despesa continua no passado em jogo; só não há mais o que ajustar.
+      expect(segunda.expenseCount).toBe(1);
+      expect(segunda.totalCents).toBe(0);
+      expect(segunda.lines).toHaveLength(0);
+    });
+
+    it('"não participa" continua sem escrever nada, mesmo para quem já tem parte', async () => {
+      const despesa = await despesaAntiga();
+      await vanessaEntraEDepoisSobe();
+      await finance.applyInheritance(
+        companyId,
+        { memberId: vanessa, since: '2026-09-01', mode: 'none' },
+        'u1',
+      );
+      const atual = await finance.getMovement(companyId, despesa.id, 'u1');
+      expect(atual.shares.find((sh) => sh.memberId === vanessa)!.shareCents).toBe(40000);
+    });
+  });
+
   describe('acertos por movimentação', () => {
     it('cada credor vira um bloco próprio, com a dívida certa', async () => {
       await companyService.setMemberEquity(companyId, rafaelle, 40, 'u1');

@@ -337,8 +337,8 @@ export function SociedadePage() {
       <Modal
         open={heranca != null}
         onClose={() => setHeranca(null)}
-        title="Despesas anteriores à entrada"
-        subtitle="Decida se essa pessoa assume parte do que foi gasto antes de ela entrar."
+        title="Despesas anteriores"
+        subtitle="Para quem entrou depois, ou para quem mudou de participação: decida como o passado fica dividido."
       >
         {heranca && (
           <HerancaDialog
@@ -530,6 +530,12 @@ function MemberForm({
   const [email, setEmail] = useState(member?.email ?? '');
   const [functionalRole, setFunctionalRole] = useState(member?.functionalRole ?? '');
   const [pct, setPct] = useState(member?.equityPercent != null ? String(member.equityPercent) : '');
+  /** Sócio que já existe e cujo percentual foi alterado neste formulário. */
+  const mudouParticipacao =
+    isEdit &&
+    member?.equityPercent != null &&
+    pct.trim() !== '' &&
+    Number(pct.replace(',', '.')) !== member.equityPercent;
   const [notes, setNotes] = useState(member?.notes ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
@@ -629,6 +635,18 @@ function MemberForm({
           hint="Ainda não sabe? Deixe em branco e complete depois."
         />
       </div>
+      {/* Mudar a participação não mexe no que já foi lançado: cada despesa
+          guarda a divisão do dia em que foi criada, e é assim que tem que ser,
+          porque aquele gasto foi combinado sob a sociedade da época. Sem este
+          aviso a pessoa muda o percentual e estranha o acerto não se mexer
+          (Rafaelle, 9 set). */}
+      {mudouParticipacao && (
+        <p className="soc-histnote">
+          A nova participação vale para o que for lançado <strong>daqui para frente</strong>. As
+          despesas já registradas continuam divididas como estavam quando foram lançadas, e os
+          acertos entre sócios não mudam por causa desta alteração.
+        </p>
+      )}
       <div className="field">
         <label className="field__label">Observação (opcional)</label>
         <textarea

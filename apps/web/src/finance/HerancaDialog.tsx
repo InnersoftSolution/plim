@@ -95,7 +95,9 @@ export function HerancaDialog({
         <p className="her__ok">
           {mode === 'none'
             ? `${member.fullName} não participa das despesas anteriores. Nada foi alterado.`
-            : `Pronto. ${member.fullName} passou a assumir ${formatMoney(preview?.totalCents ?? 0)} das despesas anteriores.`}
+            : preview?.alreadyHadShare
+              ? `Pronto. A divisão do passado foi refeita: ${member.fullName} passou a dever ${formatMoney(preview.totalCents)} a mais.`
+              : `Pronto. ${member.fullName} passou a assumir ${formatMoney(preview?.totalCents ?? 0)} das despesas anteriores.`}
         </p>
         <Button block onClick={onClose}>
           Fechar
@@ -105,17 +107,39 @@ export function HerancaDialog({
   }
 
   const nenhuma = preview != null && preview.expenseCount === 0;
+  /** Há passado em jogo, mas o modo escolhido não muda nada: a divisão já
+   *  está conforme a participação de hoje. Sem isto, o "Aplicar" prometia
+   *  uma alteração que não existiria. */
+  const semMudanca =
+    preview != null && !nenhuma && mode !== 'none' && preview.totalCents === 0;
+  /**
+   * Dois casos na mesma tela: quem entrou do zero e quem já tinha parte mas
+   * mudou de participação (20% → 33%). A conta é a mesma máquina; o que muda
+   * é a história que a tela conta, senão "passa a assumir R$ 266" lê como se
+   * fosse a parte inteira, e é só a diferença (Rafaelle, 9 set).
+   */
+  const ajuste = preview?.alreadyHadShare === true;
 
   return (
     <div className="her">
       <p className="her__intro">
-        Despesas registradas antes da entrada de <strong>{member.fullName}</strong> foram divididas
-        sem ela. Você decide se ela assume uma parte desse passado. Quem pagou cada despesa não muda:
-        o que muda é de quem é o custo.
+        {ajuste ? (
+          <>
+            A participação de <strong>{member.fullName}</strong> mudou, mas as despesas anteriores
+            continuam divididas com a participação antiga. Aqui você aplica a divisão nova a esse
+            passado: ela passa a dever só a diferença. Quem pagou cada despesa não muda.
+          </>
+        ) : (
+          <>
+            Despesas registradas antes da entrada de <strong>{member.fullName}</strong> foram
+            divididas sem ela. Você decide se ela assume uma parte desse passado. Quem pagou cada
+            despesa não muda: o que muda é de quem é o custo.
+          </>
+        )}
       </p>
 
       <div className="field">
-        <label className="field__label">A partir de quando ela é sócia</label>
+        <label className="field__label">{ajuste ? 'Despesas anteriores a' : 'A partir de quando ela é sócia'}</label>
         <DateField value={since} onChange={setSince} />
         <p className="her__hint">Só entram na conta as despesas anteriores a esta data.</p>
       </div>
@@ -137,9 +161,11 @@ export function HerancaDialog({
               ativa={mode === 'equity'}
               titulo="Participa conforme a participação societária"
               texto={
-                member.equityPercent != null
-                  ? `As despesas anteriores são redivididas incluindo ela, com os ${fmtPct(member.equityPercent)} dela.`
-                  : 'Defina a participação dela antes de usar esta opção.'
+                member.equityPercent == null
+                  ? 'Defina a participação dela antes de usar esta opção.'
+                  : ajuste
+                    ? `As despesas anteriores são redivididas com os ${fmtPct(member.equityPercent)} de hoje. Ela passa a dever só a diferença.`
+                    : `As despesas anteriores são redivididas incluindo ela, com os ${fmtPct(member.equityPercent)} dela.`
               }
               onClick={() => setMode('equity')}
             />
@@ -178,7 +204,7 @@ export function HerancaDialog({
                   </strong>
                 </p>
                 <p className="her__linha her__linha--destaque">
-                  <span>{member.fullName} passa a assumir</span>
+                  <span>{member.fullName} passa a {ajuste ? 'dever a mais' : 'assumir'}</span>
                   <strong data-financial>{formatMoney(preview.totalCents)}</strong>
                 </p>
                 {preview.owedTo.length > 0 && (
@@ -195,6 +221,11 @@ export function HerancaDialog({
                     Vira acerto entre sócios, não pagamento de despesa: as despesas continuam pagas.
                   </p>
                 )}
+                {semMudanca && (
+                  <p className="her__hint">
+                    Nada a mudar: essas despesas já estão divididas conforme a participação de hoje.
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -207,7 +238,7 @@ export function HerancaDialog({
         <Button
           block
           onClick={aplicar}
-          disabled={saving || loading || nenhuma || percentInvalido}
+          disabled={saving || loading || nenhuma || percentInvalido || semMudanca}
         >
           {saving ? 'Aplicando…' : mode === 'none' ? 'Confirmar que não participa' : 'Aplicar'}
         </Button>

@@ -334,3 +334,17 @@
     justify-content: space-between;
   }
 }
+
+/* Aviso de histórico ao mudar a participação: o passado fica como está. */
+.soc-histnote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.soc-histnote strong {
+  font-weight: 700;
+}

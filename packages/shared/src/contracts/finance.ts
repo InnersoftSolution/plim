@@ -537,7 +537,7 @@ export const inheritanceLineSchema = z.object({
   description: z.string(),
   spentOn: z.string(),
   amountCents: z.number().int(),
-  /** Parte que o sócio novo passa a ter (centavos). */
+  /** Quanto o sócio passa a dever a mais nesta despesa (centavos). */
   shareCents: z.number().int().nonnegative(),
 });
 export type InheritanceLine = z.infer<typeof inheritanceLineSchema>;
@@ -552,8 +552,14 @@ export const inheritancePreviewSchema = z.object({
   expenseCount: z.number().int().nonnegative(),
   /** Soma das despesas do período (centavos). */
   periodTotalCents: z.number().int().nonnegative(),
-  /** Quanto o sócio novo passa a assumir no total (centavos). */
+  /** Quanto o sócio passa a assumir A MAIS no total (centavos). */
   totalCents: z.number().int().nonnegative(),
+  /**
+   * true = o sócio já tinha parte nessas despesas e a participação dele mudou:
+   * o total é o diferencial, não a parte inteira. A tela troca os textos de
+   * "entrou agora" para "a divisão mudou".
+   */
+  alreadyHadShare: z.boolean().default(false),
   /** Para quem ele fica devendo, e quanto de cada. */
   owedTo: z.array(
     z.object({

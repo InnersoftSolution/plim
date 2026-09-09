@@ -1094,21 +1094,46 @@ export class FinanceService {
    * reembolsável não gera dívida, e conta a pagar ainda não tem dinheiro
    * envolvido. Quem já tem parte na despesa não entra de novo.
    */
-  private async despesasHerdaveis(
-    companyId: string,
-    memberId: string,
-    since: string,
-  ): Promise<Expense[]> {
+  private async despesasHerdaveis(companyId: string, since: string): Promise<Expense[]> {
     const todas = await this.repo.listExpenses(companyId);
+    // Quem JÁ tem parte também entra: é o caso do sócio cuja fatia mudou
+    // (20% → 33%) e que passa a dever o diferencial sobre o passado (Rafaelle,
+    // 9 set). O que não muda de fato é descartado depois, em ajustesDeHeranca,
+    // e não aqui: a lista precisa existir para a pessoa poder escolher o modo.
     return todas.filter(
       (e) =>
         e.spentOn < since &&
         e.confirmationStatus === 'confirmed' &&
         e.shares.length > 0 &&
         (e.kind === 'expense' || e.kind === 'contribution') &&
-        paymentStatusOf(e) !== 'unpaid' &&
-        !e.shares.some((sh) => sh.memberId === memberId && sh.shareCents > 0),
+        paymentStatusOf(e) !== 'unpaid',
     );
+  }
+
+  /**
+   * O que muda em cada despesa para o sócio: o novo rateio e o DIFERENCIAL
+   * entre a parte nova e a que ele já tinha (zero para quem entra do zero).
+   *
+   * Preview e apply passam por aqui para enxergarem a mesma lista: só entra
+   * despesa em que o sócio passa a dever algo a mais. Diferencial negativo
+   * (participação que caiu) não vira crédito por este caminho, porque o
+   * rateio redividido já devolve a diferença aos outros nos acertos.
+   */
+  private ajustesDeHeranca(
+    despesas: Expense[],
+    members: CompanyMember[],
+    input: InheritanceInput,
+  ): { expense: Expense; shares: ExpenseShare[]; difCents: number; jaTinhaParte: boolean }[] {
+    const ajustes: { expense: Expense; shares: ExpenseShare[]; difCents: number; jaTinhaParte: boolean }[] = [];
+    for (const e of despesas) {
+      const shares = this.rateioComHerdeiro(e, members, input.memberId, input);
+      const nova = shares.find((sh) => sh.memberId === input.memberId)?.shareCents ?? 0;
+      const atual = e.shares.find((sh) => sh.memberId === input.memberId)?.shareCents ?? 0;
+      const difCents = nova - atual;
+      if (difCents <= 0) continue;
+      ajustes.push({ expense: e, shares, difCents, jaTinhaParte: atual > 0 });
+    }
+    return ajustes;
   }
 
   /**
@@ -1177,31 +1202,31 @@ export class FinanceService {
     const novo = members.find((m) => m.id === input.memberId);
     if (!novo) throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
 
-    const despesas = await this.despesasHerdaveis(companyId, input.memberId, input.since);
+    const despesas = await this.despesasHerdaveis(companyId, input.since);
     const lines: InheritanceLine[] = [];
     const devePara = new Map<string, number>();
     let totalCents = 0;
-    let periodTotalCents = 0;
+    let alreadyHadShare = false;
+    // expenseCount/periodTotal dizem quanto passado está em jogo, em qualquer
+    // modo. lines/total/owedTo dizem o que muda de fato no modo escolhido.
+    const ajustes = input.mode === 'none' ? [] : this.ajustesDeHeranca(despesas, members, input);
+    const periodTotalCents = despesas.reduce((t, e) => t + e.amountCents, 0);
 
-    for (const e of despesas) {
-      periodTotalCents += e.amountCents;
-      if (input.mode === 'none') continue;
-      const novasPartes = this.rateioComHerdeiro(e, members, input.memberId, input);
-      const parte = novasPartes.find((sh) => sh.memberId === input.memberId)?.shareCents ?? 0;
-      if (parte <= 0) continue;
-      totalCents += parte;
+    for (const { expense: e, difCents, jaTinhaParte } of ajustes) {
+      if (jaTinhaParte) alreadyHadShare = true;
+      totalCents += difCents;
       lines.push({
         expenseId: e.id,
         description: e.description,
         spentOn: e.spentOn,
         amountCents: e.amountCents,
-        shareCents: parte,
+        shareCents: difCents,
       });
       // A dívida vai para quem adiantou o dinheiro NAQUELA despesa, na mesma
       // proporção do que cada um pagou (RN6). Maior resto para fechar exato.
       const pagos = e.payments.length > 0 ? e.payments : [];
       const fatias = computeSplit(
-        parte,
+        difCents,
         pagos.map((p) => p.amountCents),
       );
       pagos.forEach((p, i) => {
@@ -1215,6 +1240,7 @@ export class FinanceService {
       expenseCount: despesas.length,
       periodTotalCents,
       totalCents,
+      alreadyHadShare,
       owedTo: [...devePara.entries()]
         .filter(([, cents]) => cents > 0)
         .map(([memberId, amountCents]) => ({
@@ -1240,13 +1266,13 @@ export class FinanceService {
     if (input.mode === 'none') return previa;
 
     const { members } = await this.companyService.getOverview(companyId, actingUserId);
-    const despesas = await this.despesasHerdaveis(companyId, input.memberId, input.since);
+    const despesas = await this.despesasHerdaveis(companyId, input.since);
     const acertos = (await this.repo.listPayments(companyId)).filter(
       (p) => p.status === 'confirmed',
     );
 
-    for (const e of despesas) {
-      const shares = this.rateioComHerdeiro(e, members, input.memberId, input);
+    // A mesma lista da prévia: o que a pessoa viu é o que muda, nem mais.
+    for (const { expense: e, shares } of this.ajustesDeHeranca(despesas, members, input)) {
       if (shares.reduce((soma, sh) => soma + sh.shareCents, 0) !== e.amountCents) {
         throw new DomainError(
           'SPLIT_SUM_MISMATCH',
