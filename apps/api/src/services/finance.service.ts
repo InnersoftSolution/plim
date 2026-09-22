@@ -1348,6 +1348,32 @@ export class FinanceService {
     }
   }
 
+  /**
+   * A sociedade mudou (participação, sócio que entrou ou saiu). O passado fica
+   * como está: despesa já paga tem acerto amarrado e não se reescreve. Mas
+   * conta em aberto ainda não é passado: ninguém pagou, não existe acerto, e a
+   * parte de cada sócio é só uma previsão. Essa previsão passa a seguir a
+   * sociedade atual. Divisão feita à mão (custom) é decisão da pessoa e fica.
+   * Devolve quantas contas foram realinhadas.
+   */
+  async realinhaContasEmAberto(companyId: string): Promise<number> {
+    const members = await this.companyService.listMembers(companyId, null);
+    const expenses = await this.repo.listExpenses(companyId);
+    let realinhadas = 0;
+    for (const e of expenses) {
+      if (e.kind !== 'expense' || e.paymentStatus !== 'unpaid') continue;
+      if (e.splitMode === 'custom' || e.shares.length === 0) continue;
+      const shares = this.recomputeShares(e.amountCents, e.splitMode, undefined, members);
+      const iguais =
+        shares.length === e.shares.length &&
+        shares.every((s) => e.shares.some((a) => a.memberId === s.memberId && a.shareCents === s.shareCents));
+      if (iguais) continue;
+      await this.repo.updateExpense(e.id, { shares });
+      realinhadas += 1;
+    }
+    return realinhadas;
+  }
+
   /** Recalcula as partes conforme o modo de rateio (equity/equal/custom). */
   private recomputeShares(
     amountCents: number,

@@ -65,12 +65,38 @@ export interface ActingOwner {
  * Estas regras existem SOMENTE aqui — o front apenas exibe o resultado.
  */
 export class CompanyService {
+  /**
+   * Quem quer saber quando a sociedade muda (participação, sócio que entra ou
+   * sai). O financeiro se inscreve aqui para realinhar as contas em aberto,
+   * sem que este serviço precise conhecê-lo.
+   */
+  private readonly ouvintesDeSociedade: Array<(companyId: string) => Promise<void>> = [];
+
   constructor(
     private readonly repo: CompanyRepository,
     private readonly logoStorage?: LogoStorage,
     private readonly inviteSender?: InviteSender,
     private readonly logger?: ServiceLogger,
   ) {}
+
+  /** Registra quem deve ser avisado quando a sociedade muda. */
+  onSociedadeMudou(ouvinte: (companyId: string) => Promise<void>): void {
+    this.ouvintesDeSociedade.push(ouvinte);
+  }
+
+  /**
+   * Avisa os inscritos. Uma falha no ouvinte é logada e não derruba a mudança
+   * de sociedade, que já foi gravada.
+   */
+  private async avisaSociedadeMudou(companyId: string): Promise<void> {
+    for (const ouvinte of this.ouvintesDeSociedade) {
+      try {
+        await ouvinte(companyId);
+      } catch (err) {
+        this.logger?.error({ err, companyId }, 'sociedade mudou: ouvinte falhou');
+      }
+    }
+  }
 
   /**
    * Logo da empresa (identidade visual, nao comprovante). Valida membro,
@@ -289,6 +315,8 @@ export class CompanyService {
       status: 'invited',
       invitationStatus: 'not_invited',
     });
+    // Sócio novo com parte entra no rateio das contas ainda em aberto.
+    if (member.equityPercent != null) await this.avisaSociedadeMudou(companyId);
 
     // Cadastrou com e-mail? O convite sai na hora. Se o envio falhar, o
     // cadastro NAO falha junto: fica "não convidado", loga o motivo real e
@@ -381,6 +409,7 @@ export class CompanyService {
       );
     }
     await this.repo.deleteMember(memberId);
+    await this.avisaSociedadeMudou(companyId);
   }
 
   async listMembers(companyId: string, actingUserId?: string | null): Promise<CompanyMember[]> {
@@ -436,7 +465,9 @@ export class CompanyService {
       throw new NotFoundError('MEMBER_NOT_FOUND', 'Sócio não encontrado.');
     }
     await this.assertEquitySumWithinLimit(companyId, equityPercent, memberId);
-    return this.repo.updateMemberEquity(memberId, equityPercent);
+    const updated = await this.repo.updateMemberEquity(memberId, equityPercent);
+    if (member.equityPercent !== equityPercent) await this.avisaSociedadeMudou(companyId);
+    return updated;
   }
 
   /**
@@ -464,7 +495,11 @@ export class CompanyService {
         throw new DomainError('MEMBER_ALREADY_EXISTS', 'Esse e-mail já faz parte da sociedade.');
       }
     }
-    return this.repo.updateMember(memberId, input);
+    const updated = await this.repo.updateMember(memberId, input);
+    if (input.equityPercent !== undefined && input.equityPercent !== member.equityPercent) {
+      await this.avisaSociedadeMudou(companyId);
+    }
+    return updated;
   }
 
   /**

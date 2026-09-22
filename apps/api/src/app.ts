@@ -186,6 +186,10 @@ export function buildApp(): FastifyInstance {
     recurringRepository,
     auditService,
   );
+  // Sociedade mudou? As contas em aberto passam a seguir a participação nova.
+  companyService.onSociedadeMudou((companyId) =>
+    financeService.realinhaContasEmAberto(companyId).then(() => undefined),
+  );
 
   const activityRepository: ActivityRepository = isSupabaseConfigured
     ? new SupabaseActivityRepository(getSupabaseAdmin())

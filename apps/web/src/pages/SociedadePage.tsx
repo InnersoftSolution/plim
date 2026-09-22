@@ -642,9 +642,9 @@ function MemberForm({
           (Rafaelle, 9 set). */}
       {mudouParticipacao && (
         <p className="soc-histnote">
-          A nova participação vale para o que for lançado <strong>daqui para frente</strong>. As
-          despesas já registradas continuam divididas como estavam quando foram lançadas, e os
-          acertos entre sócios não mudam por causa desta alteração.
+          A nova participação vale para o que for lançado <strong>daqui para frente</strong> e para
+          as <strong>contas ainda em aberto</strong>. As despesas já pagas continuam divididas como
+          estavam, e os acertos entre sócios não mudam por causa desta alteração.
         </p>
       )}
       <div className="field">
