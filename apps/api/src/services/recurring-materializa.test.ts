@@ -116,6 +116,22 @@ describe('Materialização de custos recorrentes', () => {
     expect(costs[0]!.nextChargeOn).toBe(nextChargeDate(daysAgo(1), 'monthly'));
   });
 
+  it('cobrança gerada pode ter o valor do mês editado, sem perder o vínculo nem duplicar', async () => {
+    const cost = await createCost();
+    const antes = (await finance.listExpenses(companyId, 'u1')).find((e) => e.recurringCostId === cost.id)!;
+
+    const editada = await finance.updateExpense(companyId, antes.id, { amountCents: 10368 }, 'u1');
+    expect(editada.amountCents).toBe(10368);
+    expect(editada.recurringCostId).toBe(cost.id);
+    expect(editada.shares.reduce((t, s) => t + s.shareCents, 0)).toBe(10368);
+
+    // O custo base continua o mesmo e o mês não é gerado de novo.
+    const { costs } = await recurring.list(companyId, 'u1');
+    expect(costs[0]!.amountCents).toBe(10000);
+    const cobrancas = (await finance.listExpenses(companyId, 'u1')).filter((e) => e.recurringCostId === cost.id);
+    expect(cobrancas).toHaveLength(1);
+  });
+
   it('recorrente sem data começa a cobrar hoje (vira conta a pagar dividida)', async () => {
     const today = new Date().toISOString().slice(0, 10);
     // Passa nextChargeOn nulo explicitamente; o service deve assumir hoje.

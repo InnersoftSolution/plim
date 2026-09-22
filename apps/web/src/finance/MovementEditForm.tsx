@@ -224,6 +224,12 @@ export function MovementEditForm({
           mudou de mão de verdade: nesse caso confira o saldo depois.
         </p>
       )}
+      {expense.recurringCostId != null && (
+        <p className="mw-hint" style={{ marginTop: 0 }}>
+          Esta cobrança vem de um custo recorrente. O que você mudar aqui vale só para ela. Para
+          mudar todos os meses, edite o custo recorrente.
+        </p>
+      )}
       {error && <div className="form-error">{error}</div>}
       <div className="mw-form">
         <Input

@@ -923,13 +923,10 @@ export class FinanceService {
     if (!expense) {
       throw new NotFoundError('MOVEMENT_NOT_FOUND', 'Movimentação não encontrada.');
     }
-    if (expense.recurringCostId != null) {
-      throw new DomainError(
-        'RECURRING_MOVEMENT',
-        'Essa cobrança vem de um custo recorrente. Edite pelo custo recorrente.',
-        409,
-      );
-    }
+    // Cobrança gerada por custo recorrente pode ser editada: o valor de um mês
+    // varia (coworking, luz, comissão). A mudança vale só para esta cobrança e
+    // o vínculo com o custo fica, para o mês não ser gerado de novo. Mudar
+    // todos os meses continua sendo pelo custo recorrente.
 
     const isRevenue = expense.kind === 'revenue';
     // Muda o "esqueleto" do rateio? (valor, divisão ou quem pagou)
